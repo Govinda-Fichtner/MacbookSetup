@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Enable strict error handling
+set -e
+
+# Source zshrc to load environment
+source ~/.zshrc
+
+# Array of commands to verify
+declare -A verify_commands=(
+  ["brew"]="Homebrew installation"
+  ["git"]="Git installation"
+  ["rbenv"]="rbenv installation"
+  ["pyenv"]="pyenv installation"
+  ["direnv"]="direnv installation"
+)
+
+# Counter for successful checks
+success_count=0
+total_checks=${#verify_commands[@]}
+
+echo "=== VERIFICATION TESTS ==="
+
+# Check each command
+for cmd in "${!verify_commands[@]}"; do
+  description=${verify_commands[$cmd]}
+  printf "%-30s ... " "$description"
+  
+  if command -v $cmd &>/dev/null; then
+    echo "✅ PASS"
+    success_count=$((success_count + 1))
+  else
+    echo "❌ FAIL"
+  fi
+done
+
+# Check if rbenv is properly configured
+printf "%-30s ... " "rbenv configuration"
+if rbenv --version &>/dev/null; then
+  echo "✅ PASS"
+  success_count=$((success_count + 1))
+else
+  echo "❌ FAIL"
+fi
+
+# Check if pyenv is properly configured
+printf "%-30s ... " "pyenv configuration"
+if pyenv --version &>/dev/null; then
+  echo "✅ PASS"
+  success_count=$((success_count + 1))
+else
+  echo "❌ FAIL"
+fi
+
+# Calculate final result
+total_checks=$((total_checks + 2))  # Adding the configuration checks
+echo "=== SUMMARY ==="
+echo "$success_count of $total_checks checks passed"
+
+# Determine exit code based on success
+if [ $success_count -eq $total_checks ]; then
+  echo "🎉 Verification successful! All components installed and configured correctly."
+  exit 0
+else
+  echo "❌ Verification failed! Some components were not installed or configured correctly."
+  exit 1
+fi
+

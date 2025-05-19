@@ -11,6 +11,61 @@ env:
   CI: true
   NONINTERACTIVE: 1
 
+# Daily scheduled validation build
+# This task runs every day at midnight UTC to ensure ongoing compatibility
+# with the latest macOS updates and Homebrew formula changes
+daily_validation_task:
+  name: daily_compatibility_check
+  trigger_type: scheduled
+  cron: "0 0 * * *"  # Run at midnight UTC every day
+  
+  # Use macOS Ventura on Apple Silicon
+  macos_instance:
+    image: ghcr.io/cirruslabs/macos-ventura-base:latest
+    cpu: 4
+    memory: 8G
+  
+  # Set a timeout for the entire task (3 hours)
+  timeout_in: 180m
+  
+  # Clone the repository
+  clone_script:
+    - git clone $CIRRUS_REPO_CLONE_URL .
+  
+  # Generate CI setup script by patching the original setup.sh
+  prepare_script:
+    - |
+      # Source the CI modifiers
+      source ci_modifiers.sh
+      
+      # Generate the CI setup script from the original setup.sh
+      patch_for_ci setup.sh ci_setup.sh
+      
+      # Verify the script was created successfully
+      if [[ ! -f ci_setup.sh ]]; then
+        echo "Failed to generate CI setup script"
+        exit 1
+      fi
+      
+  # Create a test script to verify installations
+  create_test_script:
+    - cp verify_setup.sh.template verify_setup.sh
+    - chmod +x verify_setup.sh
+  
+  # Run the actual setup
+  setup_script:
+    - ./ci_setup.sh
+
+  # Verify the installation
+  verify_script:
+    - zsh ./verify_setup.sh
+  
+  # Always collect logs for debugging
+  always:
+    logs_artifacts:
+      path: "*.log"
+      type: text/plain
+
 # Task for testing the setup script on macOS ARM
 macos_arm_test_task:
   # Use macOS Ventura on Apple Silicon
@@ -26,203 +81,25 @@ macos_arm_test_task:
   clone_script:
     - git clone $CIRRUS_REPO_CLONE_URL .
   
-  # Create a modified version of setup.sh for CI environment
+  # Generate CI setup script by patching the original setup.sh
   prepare_script:
     - |
-      cat > ci_setup.sh << 'EOL'
-      #!/bin/bash
-      # Modified setup script for CI environment
+      # Source the CI modifiers
+      source ci_modifiers.sh
       
-      # Enable strict error handling
-      set -e
+      # Generate the CI setup script from the original setup.sh
+      patch_for_ci setup.sh ci_setup.sh
       
-      # Log formatting
-      RED='\033[0;31m'
-      GREEN='\033[0;32m'
-      BLUE='\033[0;34m'
-      YELLOW='\033[0;33m'
-      NC='\033[0m' # No Color
-      
-      # Logging functions
-      log_info() {
-        echo -e "${BLUE}[INFO]${NC} $1"
-      }
-      
-      log_success() {
-        echo -e "${GREEN}[SUCCESS]${NC} $1"
-      }
-      
-      log_warning() {
-        echo -e "${YELLOW}[WARNING]${NC} $1"
-      }
-      
-      log_error() {
-        echo -e "${RED}[ERROR]${NC} $1"
-      }
-      
-      log_info "Starting CI setup process..."
-      
-      # Create a backup of .zshrc if it exists
-      ZSHRC_PATH="$HOME/.zshrc"
-      if [[ ! -f "$ZSHRC_PATH" ]]; then
-        touch "$ZSHRC_PATH"
+      # Verify the script was created successfully
+      if [[ ! -f ci_setup.sh ]]; then
+        echo "Failed to generate CI setup script"
+        exit 1
       fi
-      
-      # Check if Homebrew is installed, install if needed
-      install_homebrew() {
-        log_info "Checking for Homebrew installation..."
-        if command -v brew >/dev/null 2>&1; then
-          log_success "Homebrew is already installed."
-        else
-          log_info "Installing Homebrew..."
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
-            log_error "Failed to install Homebrew"
-            exit 1
-          }
-          
-          # Add Homebrew to PATH based on architecture
-          if [[ "$(uname -m)" == "arm64" ]]; then
-            # For Apple Silicon
-            echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$ZSHRC_PATH"
-            eval "$(/opt/homebrew/bin/brew shellenv)"
-          else
-            # For Intel Mac
-            echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$ZSHRC_PATH"
-            eval "$(/usr/local/bin/brew shellenv)"
-          fi
-          
-          log_success "Homebrew installed successfully."
-        fi
-      }
-      
-      # Install subset of packages from Brewfile for CI testing
-      install_packages() {
-        log_info "Installing essential packages for testing..."
-        
-        # Install core packages directly (faster than full Brewfile)
-        brew install git zinit rbenv pyenv direnv
-        
-        # Skip casks in CI to speed up testing
-        log_success "Essential packages installed successfully."
-      }
-      
-      # Configure shell with required tool integrations
-      configure_shell() {
-        log_info "Configuring shell environment in .zshrc..."
-        
-        # Function to add configuration if it doesn't exist
-        add_to_zshrc() {
-          local search_pattern="$1"
-          local config_block="$2"
-          local comment="$3"
-          
-          if ! grep -q "$search_pattern" "$ZSHRC_PATH" 2>/dev/null; then
-            log_info "Adding $comment configuration to .zshrc"
-            echo -e "\n# $comment\n$config_block" >> "$ZSHRC_PATH"
-          else
-            log_info "$comment configuration already exists in .zshrc"
-          fi
-        }
-        
-        # Add tool configurations
-        add_to_zshrc "source.*zinit.zsh" "source \$(brew --prefix)/opt/zinit/zinit.zsh" "zinit setup"
-        add_to_zshrc "rbenv init" 'eval "$(rbenv init -)"' "rbenv setup"
-        add_to_zshrc "pyenv init" 'export PATH="$HOME/.pyenv/bin:$PATH"
-      eval "$(pyenv init --path)"
-      eval "$(pyenv init -)"' "pyenv setup"
-        add_to_zshrc "direnv hook" 'eval "$(direnv hook zsh)"' "direnv setup"
-        
-        log_success "Shell configuration completed."
-      }
-      
-      # Main execution
-      main() {
-        install_homebrew
-        install_packages
-        configure_shell
-        
-        log_success "CI Setup completed successfully!"
-      }
-      
-      main "$@"
-      EOL
-      
-      chmod +x ci_setup.sh
       
   # Create a test script to verify installations
   create_test_script:
-    - |
-      cat > verify_setup.sh << 'EOL'
-      #!/bin/bash
-      
-      # Enable strict error handling
-      set -e
-      
-      # Source zshrc to load environment
-      source ~/.zshrc
-      
-      # Array of commands to verify
-      declare -A verify_commands=(
-        ["brew"]="Homebrew installation"
-        ["git"]="Git installation"
-        ["rbenv"]="rbenv installation"
-        ["pyenv"]="pyenv installation"
-        ["direnv"]="direnv installation"
-      )
-      
-      # Counter for successful checks
-      success_count=0
-      total_checks=${#verify_commands[@]}
-      
-      echo "=== VERIFICATION TESTS ==="
-      
-      # Check each command
-      for cmd in "${!verify_commands[@]}"; do
-        description=${verify_commands[$cmd]}
-        printf "%-30s ... " "$description"
-        
-        if command -v $cmd &>/dev/null; then
-          echo "✅ PASS"
-          success_count=$((success_count + 1))
-        else
-          echo "❌ FAIL"
-        fi
-      done
-      
-      # Check if rbenv is properly configured
-      printf "%-30s ... " "rbenv configuration"
-      if rbenv --version &>/dev/null; then
-        echo "✅ PASS"
-        success_count=$((success_count + 1))
-      else
-        echo "❌ FAIL"
-      fi
-      
-      # Check if pyenv is properly configured
-      printf "%-30s ... " "pyenv configuration"
-      if pyenv --version &>/dev/null; then
-        echo "✅ PASS"
-        success_count=$((success_count + 1))
-      else
-        echo "❌ FAIL"
-      fi
-      
-      # Calculate final result
-      total_checks=$((total_checks + 2))  # Adding the configuration checks
-      echo "=== SUMMARY ==="
-      echo "$success_count of $total_checks checks passed"
-      
-      # Determine exit code based on success
-      if [ $success_count -eq $total_checks ]; then
-        echo "🎉 Verification successful! All components installed and configured correctly."
-        exit 0
-      else
-        echo "❌ Verification failed! Some components were not installed or configured correctly."
-        exit 1
-      fi
-      EOL
-      
-      chmod +x verify_setup.sh
+    - cp verify_setup.sh.template verify_setup.sh
+    - chmod +x verify_setup.sh
   
   # Run the actual setup
   setup_script:
