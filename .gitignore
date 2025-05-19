@@ -1,0 +1,62 @@
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+logs/
+temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+*~
+*.swp
+*.swo
+
+# Local environment files
+.env
+.env.local
+.envrc.local
+
+# User-specific files
+.zshrc.backup*
+.bash_history
+.zsh_history
+.zcompdump*
+
+# CI/Build artifacts
+ci_setup.sh
+verify_setup.sh
+*.artifact
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
