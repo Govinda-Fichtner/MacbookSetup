@@ -38,12 +38,18 @@ This setup automates the installation and configuration of:
 - **Warp**: Modern terminal with AI features
 - **Zinit**: Z shell plugin manager
 - **Starship**: Cross-shell customizable prompt
+- **Nerd Fonts**: Special fonts that include icons needed for Starship prompt
 - **Other tools**: See the Brewfile for the complete list
 
 ### Configuration
 - Shell environment configuration (.zshrc)
 - Tool initialization and setup
 - Path configuration
+
+### Terminal Appearance
+- **Starship Prompt**: A customizable command-line prompt that displays relevant information while you work
+- **Nerd Fonts**: After installation, you'll need to configure your terminal (iTerm2 or Warp) to use one of the 
+  installed Nerd Fonts (like FiraCode Nerd Font or JetBrains Mono Nerd Font) to see all Starship icons correctly
 
 ## 🔧 Usage
 
