@@ -317,9 +317,20 @@ install_latest_python() {
   pyenv global "$latest_python"
   log_success "Python $latest_python is now the global version."
   
+  # Initialize pyenv in the current shell to make the python command available
+  log_info "Initializing pyenv in the current shell..."
+  export PATH="$HOME/.pyenv/bin:$PATH"
+  eval "$(pyenv init --path)"
+  eval "$(pyenv init -)"
+  
   # Verify installation
-  python_version=$(python --version)
-  log_info "Installed Python version: $python_version"
+  log_info "Verifying Python installation..."
+  if command -v python >/dev/null 2>&1; then
+    python_version=$(python --version)
+    log_info "Installed Python version: $python_version"
+  else
+    log_warning "Python command not found. You may need to restart your shell or source your .zshrc"
+  fi
 }
 
 # Main execution
