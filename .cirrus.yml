@@ -43,23 +43,23 @@ daily_validation_task:
       cd "$TEMP_DIR" || exit 1
       
       # Determine the correct binary for the platform
+      # Download the standalone binary directly
       if [[ "$(uname -m)" == "arm64" ]]; then
-        # For Apple Silicon
-        SHELLCHECK_URL="https://github.com/koalaman/shellcheck/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.aarch64.tar.xz"
+        # For Apple Silicon - use direct binary URL
+        echo "Downloading ShellCheck binary for Apple Silicon..."
+        curl -sSL "https://github.com/vscode-shellcheck/shellcheck-binaries/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.aarch64" -o shellcheck
       else
-        # For Intel Mac
-        SHELLCHECK_URL="https://github.com/koalaman/shellcheck/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.x86_64.tar.xz"
+        # For Intel Mac - use direct binary URL
+        echo "Downloading ShellCheck binary for Intel Mac..."
+        curl -sSL "https://github.com/vscode-shellcheck/shellcheck-binaries/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.x86_64" -o shellcheck
       fi
       
-      # Download and extract the ShellCheck binary
-      echo "Downloading ShellCheck from $SHELLCHECK_URL"
-      curl -sSL "$SHELLCHECK_URL" -o shellcheck.tar.xz
-      tar -xf shellcheck.tar.xz
+      # Make the binary executable
+      chmod +x shellcheck
       
       # Move the shellcheck binary to a directory in PATH
       mkdir -p "$HOME/bin"
-      cp shellcheck-v0.9.0/shellcheck "$HOME/bin/"
-      chmod +x "$HOME/bin/shellcheck"
+      cp shellcheck "$HOME/bin/"
       export PATH="$HOME/bin:$PATH"
       
       # Verify installation
@@ -150,23 +150,23 @@ macos_arm_test_task:
       cd "$TEMP_DIR" || exit 1
       
       # Determine the correct binary for the platform
+      # Download the standalone binary directly
       if [[ "$(uname -m)" == "arm64" ]]; then
-        # For Apple Silicon
-        SHELLCHECK_URL="https://github.com/koalaman/shellcheck/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.aarch64.tar.xz"
+        # For Apple Silicon - use direct binary URL
+        echo "Downloading ShellCheck binary for Apple Silicon..."
+        curl -sSL "https://github.com/vscode-shellcheck/shellcheck-binaries/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.aarch64" -o shellcheck
       else
-        # For Intel Mac
-        SHELLCHECK_URL="https://github.com/koalaman/shellcheck/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.x86_64.tar.xz"
+        # For Intel Mac - use direct binary URL
+        echo "Downloading ShellCheck binary for Intel Mac..."
+        curl -sSL "https://github.com/vscode-shellcheck/shellcheck-binaries/releases/download/v0.9.0/shellcheck-v0.9.0.darwin.x86_64" -o shellcheck
       fi
       
-      # Download and extract the ShellCheck binary
-      echo "Downloading ShellCheck from $SHELLCHECK_URL"
-      curl -sSL "$SHELLCHECK_URL" -o shellcheck.tar.xz
-      tar -xf shellcheck.tar.xz
+      # Make the binary executable
+      chmod +x shellcheck
       
       # Move the shellcheck binary to a directory in PATH
       mkdir -p "$HOME/bin"
-      cp shellcheck-v0.9.0/shellcheck "$HOME/bin/"
-      chmod +x "$HOME/bin/shellcheck"
+      cp shellcheck "$HOME/bin/"
       export PATH="$HOME/bin:$PATH"
       
       # Verify installation
