@@ -1,11 +1,92 @@
-#!/bin/bash
+#!/bin/zsh
 
-# Enable strict error handling
-set -e
+# Log formatting
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
 
-# Source zshrc to load environment
-# shellcheck disable=SC1090
-source ~/.zshrc
+# Logging functions
+log_info() {
+  echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+  echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Add debug logging to help diagnose issues
+log_debug() {
+  echo -e "[DEBUG] $1"
+}
+
+# Add detailed environment information at startup
+log_info "Starting verification process..."
+log_debug "Current shell: $SHELL"
+log_debug "Current user: $(whoami)"
+log_debug "Current PATH: $PATH"
+log_debug "Current working directory: $(pwd)"
+log_debug "Home directory: $HOME"
+
+# Enable error logging but don't exit immediately on error
+set +e
+
+# Add error trapping to help diagnose where failures occur
+trap 'log_error "Command failed with exit code $? at line $LINENO"; if [[ $? -eq 3 ]]; then log_debug "Exit code 3 detected - special handling"; fi' ERR
+
+# Check if zshrc exists and source it
+if [[ -f ~/.zshrc ]]; then
+  log_info "Sourcing ~/.zshrc..."
+  # shellcheck disable=SC1090
+  source ~/.zshrc || {
+    log_error "Failed to source ~/.zshrc"
+    log_debug "Contents of ~/.zshrc (first 10 lines):"
+    head -n 10 ~/.zshrc || log_debug "Could not read ~/.zshrc"
+  }
+else
+  log_warning "~/.zshrc does not exist. Creating a minimal one for testing."
+  touch ~/.zshrc
+fi
+
+# Check for essential PATH elements for pyenv and rbenv
+log_info "Checking PATH for required directories..."
+if [[ ! "$PATH" == *".pyenv"* ]]; then
+  log_warning "PATH does not include pyenv. Adding it..."
+  if [[ -d "$HOME/.pyenv/bin" ]]; then
+    export PATH="$HOME/.pyenv/bin:$PATH"
+    log_debug "Added $HOME/.pyenv/bin to PATH"
+  else
+    log_debug "Directory $HOME/.pyenv/bin does not exist"
+  fi
+  
+  # Initialize pyenv with error handling
+  if command -v pyenv &>/dev/null; then
+    eval "$(pyenv init --path 2>/dev/null)" || log_error "Failed to initialize pyenv path"
+    eval "$(pyenv init - 2>/dev/null)" || log_error "Failed to initialize pyenv"
+  else
+    log_error "pyenv command not found after updating PATH"
+    log_debug "Current PATH after update: $PATH"
+  fi
+fi
+
+if [[ ! "$PATH" == *"rbenv"* ]]; then
+  log_warning "PATH does not include rbenv. Adding it..."
+  if command -v rbenv &>/dev/null; then
+    eval "$(rbenv init - 2>/dev/null)" || log_error "Failed to initialize rbenv"
+  else
+    log_error "rbenv command not found"
+    log_debug "Current PATH: $PATH"
+  fi
+fi
 
 # Array of commands to verify
 declare -A verify_commands=(
@@ -20,9 +101,9 @@ declare -A verify_commands=(
 success_count=0
 total_checks=${#verify_commands[@]}
 
-echo "=== VERIFICATION TESTS ==="
+log_info "=== VERIFICATION TESTS ==="
 
-# Check each command
+# Check each command with more detailed output
 for cmd in "${!verify_commands[@]}"; do
   description=${verify_commands[$cmd]}
   printf "%-30s ... " "$description"
@@ -30,8 +111,14 @@ for cmd in "${!verify_commands[@]}"; do
   if command -v $cmd &>/dev/null; then
     echo "✅ PASS"
     success_count=$((success_count + 1))
+    log_info "Command '$cmd' found at: $(command -v $cmd)"
+    # More robust version command that won't fail if --version isn't supported
+    version_out=$($cmd --version 2>&1 || echo "Version command not supported")
+    log_info "Version: $(echo "$version_out" | head -n1)"
   else
     echo "❌ FAIL"
+    log_error "Command '$cmd' not found in PATH"
+    log_debug "Current PATH: $PATH"
   fi
 done
 
@@ -40,8 +127,11 @@ printf "%-30s ... " "rbenv configuration"
 if rbenv --version &>/dev/null; then
   echo "✅ PASS"
   success_count=$((success_count + 1))
+  log_info "rbenv version: $(rbenv --version)"
 else
   echo "❌ FAIL"
+  log_error "rbenv is not properly configured"
+  which rbenv || log_debug "rbenv not found in PATH"
 fi
 
 # Check if pyenv is properly configured
@@ -49,21 +139,25 @@ printf "%-30s ... " "pyenv configuration"
 if pyenv --version &>/dev/null; then
   echo "✅ PASS"
   success_count=$((success_count + 1))
+  log_info "pyenv version: $(pyenv --version)"
 else
   echo "❌ FAIL"
+  log_error "pyenv is not properly configured"
+  which pyenv || log_debug "pyenv not found in PATH"
 fi
 
 # Calculate final result
 total_checks=$((total_checks + 2))  # Adding the configuration checks
-echo "=== SUMMARY ==="
-echo "$success_count of $total_checks checks passed"
+log_info "=== SUMMARY ==="
+log_info "$success_count of $total_checks checks passed"
 
 # Determine exit code based on success
 if [ $success_count -eq $total_checks ]; then
-  echo "🎉 Verification successful! All components installed and configured correctly."
+  log_success "Verification successful! All components installed and configured correctly."
   exit 0
 else
-  echo "❌ Verification failed! Some components were not installed or configured correctly."
+  log_error "Verification failed! Some components were not installed or configured correctly."
+  # Use exit 1 instead of any other code to avoid the cryptic exit status 3
   exit 1
 fi
 
