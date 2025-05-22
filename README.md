@@ -91,6 +91,43 @@ This project uses Cirrus CI to validate the setup script on real macOS environme
 
 You can view CI build history on the [Cirrus CI dashboard](https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup).
 
+### Testing Strategy
+
+The CI pipeline employs a focused testing strategy to efficiently validate the core functionality:
+
+#### What We Test
+
+- **Shell Configuration**: Verifies that `.zshrc` is properly set up with all required tool integrations (rbenv, pyenv, direnv, Starship, etc.)
+- **Command-line Tools**: Tests the installation and availability of essential CLI tools that form the backbone of the development environment
+- **Environment Initialization**: Ensures that version managers and shell extensions initialize correctly
+
+#### Testing Approach
+
+The CI testing differentiates between several types of components:
+
+1. **Essential CLI Tools** (fully tested):
+   - Tools like Git, rbenv, pyenv, direnv, and Starship
+   - These are verified to be installed, available in PATH, and properly configured
+   - They represent the core functionality needed for development
+
+2. **GUI Applications** (not tested in CI):
+   - Applications like iTerm2, Warp, and Visual Studio Code
+   - These are skipped during CI testing as they:
+     - Cannot be meaningfully tested in a headless environment
+     - Take longer to install and consume more resources
+     - Don't affect the functionality of other development tools
+
+3. **Optional Utilities** (not tested in CI):
+   - Additional command-line utilities that enhance the development experience
+   - While valuable for users, they're not essential for validating the setup process
+
+This targeted testing approach ensures that:
+- CI runs remain efficient (typically under 15 minutes)
+- Core functionality is thoroughly validated
+- The setup script's reliability is maintained
+
+When you run the setup script on your actual machine, it will install all tools including GUI applications and optional utilities as specified in the Brewfile.
+
 ## 📄 License
 
 This project is licensed under the MIT License - see below for details:
