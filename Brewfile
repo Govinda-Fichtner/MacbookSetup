@@ -11,6 +11,7 @@ brew "zinit"
 brew "rbenv"
 brew "pyenv"
 brew "direnv"
+brew "starship"         # Cross-shell customizable prompt
 
 # Kubernetes and Container Tools
 brew "kubectl"          # Kubernetes command-line tool
