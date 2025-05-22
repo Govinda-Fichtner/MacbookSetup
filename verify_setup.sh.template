@@ -50,11 +50,11 @@ if [[ -f ~/.zshrc ]]; then
   # shellcheck disable=SC1090
   source ~/.zshrc || {
     log_error "Failed to source ~/.zshrc"
-    log_debug "Contents of ~/.zshrc (first 10 lines):"
-    head -n 10 ~/.zshrc || log_debug "Could not read ~/.zshrc"
+    log_debug "Contents of $HOME/.zshrc (first 10 lines):"
+    head -n 10 ~/.zshrc || log_debug "Could not read $HOME/.zshrc"
   }
 else
-  log_warning "~/.zshrc does not exist. Creating a minimal one for testing."
+  log_warning "$HOME/.zshrc does not exist. Creating a minimal one for testing."
   touch ~/.zshrc
 fi
 
