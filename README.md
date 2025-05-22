@@ -30,6 +30,7 @@ This setup automates the installation and configuration of:
 - **iTerm2**: Enhanced terminal emulator
 - **Warp**: Modern terminal with AI features
 - **Zinit**: Z shell plugin manager
+- **Starship**: Cross-shell customizable prompt
 - **Other tools**: See the Brewfile for the complete list
 
 ### Configuration

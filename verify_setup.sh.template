@@ -97,6 +97,7 @@ verify_commands=(
   ["rbenv"]="rbenv installation"
   ["pyenv"]="pyenv installation"
   ["direnv"]="direnv installation"
+  ["starship"]="Starship prompt"
 )
 
 # Counter for successful checks

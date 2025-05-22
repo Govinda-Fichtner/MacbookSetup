@@ -153,6 +153,9 @@ eval "$(pyenv init -)"' "pyenv setup"
   # Add direnv configuration
   add_to_zshrc "direnv hook" 'eval "$(direnv hook zsh)"' "direnv setup"
   
+  # Add Starship prompt configuration
+  add_to_zshrc "starship init" 'eval "$(starship init zsh)"' "Starship prompt setup"
+  
   log_success "Shell configuration completed."
 }
 
