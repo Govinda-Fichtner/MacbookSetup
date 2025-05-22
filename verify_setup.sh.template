@@ -90,7 +90,8 @@ if [[ ! "$PATH" == *"rbenv"* ]]; then
 fi
 
 # Array of commands to verify
-declare -A verify_commands=(
+typeset -A verify_commands
+verify_commands=(
   ["brew"]="Homebrew installation"
   ["git"]="Git installation"
   ["rbenv"]="rbenv installation"
@@ -105,7 +106,7 @@ total_checks=${#verify_commands[@]}
 log_info "=== VERIFICATION TESTS ==="
 
 # Check each command with more detailed output
-for cmd in "${!verify_commands[@]}"; do
+for cmd in ${(k)verify_commands}; do
   description=${verify_commands[$cmd]}
   printf "%-30s ... " "$description"
   
