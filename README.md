@@ -33,6 +33,29 @@ This setup automates the installation and configuration of:
 - **Infrastructure as Code**: Terraform, Packer
 - **System Monitoring**: htop for process monitoring
 
+### About Packer Installation
+
+#### Why Packer is Installed Directly (Not via Homebrew)
+
+HashiCorp's Packer is installed directly from the official HashiCorp releases rather than through Homebrew. This is because:
+
+- HashiCorp changed Packer's license to BUSL (Business Source License)
+- This license change conflicts with Homebrew's requirement for open-source licenses
+- Homebrew has disabled the Packer formula with the message: "Disabled because it will change its license to BUSL on the next release!"
+
+Our setup script handles this by automatically downloading the official binary from HashiCorp's release page, verifying it, and installing it to your system.
+
+#### Packer as a Complementary Tool for OrbStack
+
+Packer serves as an important companion to OrbStack by:
+
+- **Creating custom VM images** that can be used with OrbStack's VM capabilities
+- **Standardizing development environments** across your team with versioned machine images
+- **Automating the creation of test environments** with predefined configurations and software
+- **Supporting infrastructure as code practices** alongside Terraform for complete VM lifecycle management
+
+This powerful combination enables you to create reproducible development and testing environments using the same tools you would use in production cloud deployments.
+
 ### Terminal and Editor Tools
 - **iTerm2**: Enhanced terminal emulator
 - **Warp**: Modern terminal with AI features
@@ -47,9 +70,41 @@ This setup automates the installation and configuration of:
 - Path configuration
 
 ### Terminal Appearance
-- **Starship Prompt**: A customizable command-line prompt that displays relevant information while you work
-- **Nerd Fonts**: After installation, you'll need to configure your terminal (iTerm2 or Warp) to use one of the 
-  installed Nerd Fonts (like FiraCode Nerd Font or JetBrains Mono Nerd Font) to see all Starship icons correctly
+
+#### Starship Prompt and Nerd Fonts
+
+Starship provides a customizable command-line prompt that displays contextual information while you work. To get the full visual experience with all icons and symbols:
+
+1. **Install Nerd Fonts** (done automatically by the setup script)
+   - The setup includes FiraCode Nerd Font and JetBrains Mono Nerd Font
+
+2. **Configure Your Terminal**:
+
+   **For iTerm2:**
+   - Open iTerm2 Preferences (⌘,)
+   - Go to Profiles > Text
+   - Click on Font and select one of:
+     - `FiraCode Nerd Font`
+     - `FiraCode Nerd Font Mono` (fixed width)
+     - `JetBrainsMono Nerd Font`
+     - `JetBrainsMono Nerd Font Mono` (fixed width)
+   - Adjust the font size as needed
+
+   **For Warp:**
+   - Open Settings (⌘,)
+   - Navigate to Appearance > Fonts
+   - Click on the font dropdown and select one of the Nerd Fonts
+   - You may need to restart Warp for changes to take effect
+
+3. **Verify Starship Icons**
+   - Once configured, you should see icons for Git branches, programming languages, and other status indicators in your prompt
+   - If you see squares or question marks instead of icons, your terminal is not using a Nerd Font
+
+#### Troubleshooting Font Issues
+
+- If icons aren't displaying correctly after installing fonts, try restarting your terminal application
+- Some terminal applications might require the "Mono" variant of the font
+- You may need to log out and back in for the fonts to be fully recognized by the system
 
 ## 🔧 Usage
 

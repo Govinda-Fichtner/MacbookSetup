@@ -98,6 +98,7 @@ verify_commands=(
   ["pyenv"]="pyenv installation"
   ["direnv"]="direnv installation"
   ["starship"]="Starship prompt"
+  ["packer"]="HashiCorp Packer"
 )
 
 # Counter for successful checks
@@ -151,7 +152,7 @@ else
 fi
 
 # Calculate final result
-total_checks=$((total_checks + 2))  # Adding the configuration checks
+total_checks=$((total_checks + 3))  # Adding the configuration checks including Packer
 log_info "=== SUMMARY ==="
 log_info "$success_count of $total_checks checks passed"
 

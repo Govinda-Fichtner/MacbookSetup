@@ -344,10 +344,80 @@ install_latest_python() {
   fi
 }
 
+# Install HashiCorp Packer directly from official release
+install_packer() {
+  log_info "Checking if Packer is installed..."
+  if command -v packer >/dev/null 2>&1; then
+    packer_version=$(packer --version 2>/dev/null)
+    log_success "Packer is already installed (version: $packer_version)."
+    return 0
+  fi
+
+  log_info "Installing HashiCorp Packer directly (version 1.12.0)..."
+  
+  # Create a temporary directory for the download
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  log_info "Created temporary directory: $tmp_dir"
+  
+  # Determine the architecture
+  local arch
+  if [[ "$(uname -m)" == "arm64" ]]; then
+    arch="arm64"
+  else
+    arch="amd64"
+  fi
+  
+  # Set the download URL
+  local download_url="https://releases.hashicorp.com/packer/1.12.0/packer_1.12.0_darwin_${arch}.zip"
+  local zip_file="$tmp_dir/packer.zip"
+  
+  # Download the Packer zip file
+  log_info "Downloading Packer from: $download_url"
+  if ! curl -sSL "$download_url" -o "$zip_file"; then
+    log_error "Failed to download Packer from $download_url"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  
+  # Extract the zip file
+  log_info "Extracting Packer..."
+  if ! unzip -q "$zip_file" -d "$tmp_dir"; then
+    log_error "Failed to extract Packer"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  
+  # Move the packer binary to /usr/local/bin
+  log_info "Installing Packer to /usr/local/bin..."
+  if ! sudo mv "$tmp_dir/packer" /usr/local/bin/; then
+    log_error "Failed to move Packer binary to /usr/local/bin/"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  
+  # Set appropriate permissions
+  sudo chmod +x /usr/local/bin/packer
+  
+  # Clean up the temporary directory
+  rm -rf "$tmp_dir"
+  
+  # Verify the installation
+  if command -v packer >/dev/null 2>&1; then
+    packer_version=$(packer --version)
+    log_success "Packer $packer_version installed successfully."
+    return 0
+  else
+    log_error "Packer installation failed. Please check the logs."
+    return 1
+  fi
+}
+
 # Main execution
 main() {
   install_homebrew
   install_packages
+  install_packer
   configure_shell
   install_latest_ruby
   install_latest_python
