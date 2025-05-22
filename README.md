@@ -26,6 +26,13 @@ This setup automates the installation and configuration of:
 - **Ruby** (via rbenv): Ruby version manager with latest stable Ruby
 - **Python** (via pyenv): Python version manager with latest stable Python
 
+### Containerization and Infrastructure
+- **OrbStack**: Fast Docker & Linux VM manager with Kubernetes support
+- **Kubernetes Tools**: kubectl, helm, k9s, kubectx, kustomize
+- **Container Utilities**: dive, ctop, buildkit
+- **Infrastructure as Code**: Terraform, Packer
+- **System Monitoring**: htop for process monitoring
+
 ### Terminal and Editor Tools
 - **iTerm2**: Enhanced terminal emulator
 - **Warp**: Modern terminal with AI features

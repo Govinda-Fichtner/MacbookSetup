@@ -156,6 +156,14 @@ eval "$(pyenv init -)"' "pyenv setup"
   # Add Starship prompt configuration
   add_to_zshrc "starship init" 'eval "$(starship init zsh)"' "Starship prompt setup"
   
+  # Add Kubernetes tools completions
+  add_to_zshrc "kubectl completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectl completion"
+  add_to_zshrc "helm completion" 'source <(helm completion zsh 2>/dev/null)' "helm completion" 
+  add_to_zshrc "kubectx completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectx completion"
+  
+  # Add Terraform completion if available
+  add_to_zshrc "terraform completion" 'complete -o nospace -C $(which terraform) terraform' "terraform completion"
+  
   log_success "Shell configuration completed."
 }
 

@@ -27,7 +27,7 @@ install_packages() {\
   log_info "Installing essential packages for CI testing..."\
 \
   # Install core packages directly (faster than full Brewfile)\
-  brew install git zinit rbenv pyenv direnv starship\
+  brew install git zinit rbenv pyenv direnv starship kubectl helm\
 \
   # Skip casks in CI to speed up testing\
   log_success "Essential packages installed successfully."\
