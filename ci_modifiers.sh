@@ -38,7 +38,8 @@ install_packages() {\
   sed -i.bak '/ZSHRC_PATH=.*$/a\
 if [[ ! -f "$ZSHRC_PATH" ]]; then\
   touch "$ZSHRC_PATH"\
-fi' "$output_file"
+fi\
+' "$output_file"
 
   # 4. Remove any interactive prompts
   sed -i.bak 's/read -p/echo "CI mode: skipping prompt" #read -p/g' "$output_file"
