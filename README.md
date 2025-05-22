@@ -1,6 +1,6 @@
 # MacbookSetup
 
-[![Build Status](https://api.cirrus-ci.com/github/yourusername/MacbookSetup.svg)](https://cirrus-ci.com/github/yourusername/MacbookSetup)
+[![Build Status](https://api.cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup.svg)](https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup)
 
 A streamlined, automated setup script for macOS development environments. Get your Mac ready for development in minutes, not hours.
 
@@ -43,7 +43,7 @@ This setup automates the installation and configuration of:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/MacbookSetup.git
+git clone https://github.com/Govinda-Fichtner/MacbookSetup.git
 cd MacbookSetup
 
 # Make the script executable
@@ -88,7 +88,7 @@ This project uses Cirrus CI to validate the setup script on real macOS environme
 - The setup script is executed in a clean environment
 - Installation of tools and configuration is verified
 
-You can view CI build history on the [Cirrus CI dashboard](https://cirrus-ci.com/github/yourusername/MacbookSetup).
+You can view CI build history on the [Cirrus CI dashboard](https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup).
 
 ## 📄 License
 
