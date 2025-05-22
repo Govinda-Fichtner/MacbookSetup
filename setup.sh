@@ -162,7 +162,18 @@ eval "$(pyenv init -)"' "pyenv setup"
   add_to_zshrc "kubectx completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectx completion"
   
   # Add Terraform completion if available
-  add_to_zshrc "terraform completion" 'complete -o nospace -C $(which terraform) terraform' "terraform completion"
+  # More robust terraform completion setup
+  add_to_zshrc "terraform completion" '# Properly initialize bash completion in zsh
+autoload -Uz +X compinit && compinit
+autoload -Uz +X bashcompinit && bashcompinit
+
+# Only use complete command if it exists
+if type complete &>/dev/null; then
+  complete -o nospace -C $(which terraform) terraform
+else
+  # Alternative approach using terraform'"'"'s built-in completion
+  terraform -install-autocomplete 2>/dev/null || true
+fi' "terraform completion"
   
   log_success "Shell configuration completed."
 }
