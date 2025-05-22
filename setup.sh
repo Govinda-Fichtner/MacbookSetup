@@ -220,7 +220,8 @@ install_latest_ruby() {
     log_info "Installing Ruby $latest_ruby..."
     
     # Set environment variables to help rbenv find the installed dependencies
-    export RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl) --with-readline-dir=$(brew --prefix readline) --with-libyaml-dir=$(brew --prefix libyaml) --with-zlib-dir=$(brew --prefix zlib)"
+    RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl) --with-readline-dir=$(brew --prefix readline) --with-libyaml-dir=$(brew --prefix libyaml) --with-zlib-dir=$(brew --prefix zlib)"
+    export RUBY_CONFIGURE_OPTS
     
     # Install Ruby with rbenv
     rbenv install "$latest_ruby"
@@ -301,8 +302,10 @@ install_latest_python() {
     log_info "Installing Python $latest_python..."
     # Set CPPFLAGS and LDFLAGS to ensure the build can find the dependencies
     # These environment variables help pyenv find the installed dependencies
-    export CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix bzip2)/include -I$(brew --prefix readline)/include -I$(brew --prefix sqlite3)/include -I$(brew --prefix zlib)/include -I$(brew --prefix xz)/include"
-    export LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix readline)/lib -L$(brew --prefix sqlite3)/lib -L$(brew --prefix zlib)/lib -L$(brew --prefix bzip2)/lib -L$(brew --prefix xz)/lib"
+    CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix bzip2)/include -I$(brew --prefix readline)/include -I$(brew --prefix sqlite3)/include -I$(brew --prefix zlib)/include -I$(brew --prefix xz)/include"
+    export CPPFLAGS
+    LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix readline)/lib -L$(brew --prefix sqlite3)/lib -L$(brew --prefix zlib)/lib -L$(brew --prefix bzip2)/lib -L$(brew --prefix xz)/lib"
+    export LDFLAGS
     
     # Install Python with pyenv
     pyenv install "$latest_python"
