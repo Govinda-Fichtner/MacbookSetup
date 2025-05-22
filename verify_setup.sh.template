@@ -1,4 +1,5 @@
 #!/bin/zsh
+# shellcheck shell=bash
 
 # Log formatting
 RED='\033[0;31m'
