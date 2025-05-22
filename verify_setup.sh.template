@@ -152,7 +152,7 @@ else
 fi
 
 # Calculate final result
-total_checks=$((total_checks + 3))  # Adding the configuration checks including Packer
+total_checks=$((total_checks + 2))  # Adding the rbenv and pyenv configuration checks
 log_info "=== SUMMARY ==="
 log_info "$success_count of $total_checks checks passed"
 
