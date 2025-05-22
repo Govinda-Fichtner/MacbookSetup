@@ -101,7 +101,7 @@ verify_commands=(
 
 # Counter for successful checks
 success_count=0
-total_checks=${#verify_commands[@]}
+total_checks=${#verify_commands}
 
 log_info "=== VERIFICATION TESTS ==="
 
@@ -154,7 +154,7 @@ log_info "=== SUMMARY ==="
 log_info "$success_count of $total_checks checks passed"
 
 # Determine exit code based on success
-if [ $success_count -eq $total_checks ]; then
+if [[ $success_count -eq $total_checks ]]; then
   log_success "Verification successful! All components installed and configured correctly."
   exit 0
 else
