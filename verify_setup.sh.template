@@ -4,6 +4,7 @@
 set -e
 
 # Source zshrc to load environment
+# shellcheck disable=SC1090
 source ~/.zshrc
 
 # Array of commands to verify
