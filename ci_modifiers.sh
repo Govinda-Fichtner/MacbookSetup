@@ -18,7 +18,6 @@ patch_for_ci() {
   # 1. Add CI environment marker near the top
   sed -i.bak '4i\
 # Modified for CI environment\
-CI_MODE=true\
 ' "$output_file"
 
   # 2. Modify the install_packages function to use a subset of packages
