@@ -118,7 +118,13 @@ configure_shell() {
   }
   
   # Add zinit configuration
-  add_to_zshrc "source.*zinit.zsh" "source \$(brew --prefix)/opt/zinit/zinit.zsh" "zinit setup"
+  # Add zinit configuration
+  add_to_zshrc "source.*zinit.zsh" "source $(brew --prefix)/opt/zinit/zinit.zsh
+
+# Load zinit plugins
+zinit light zdharma/fast-syntax-highlighting
+zinit light zsh-users/zsh-autosuggestions
+zinit light macunha1/zsh-terraform" "zinit setup"
   
   # Add rbenv configuration
   add_to_zshrc "rbenv init" 'eval "$(rbenv init -)"' "rbenv setup"
@@ -141,17 +147,6 @@ eval "$(pyenv init -)"' "pyenv setup"
   
   # Add Terraform completion if available
   # More robust terraform completion setup
-  add_to_zshrc "terraform completion" '# Properly initialize bash completion in zsh
-autoload -Uz +X compinit && compinit
-autoload -Uz +X bashcompinit && bashcompinit
-
-# Only use complete command if it exists
-if type complete &>/dev/null; then
-  complete -o nospace -C $(which terraform) terraform
-else
-  # Alternative approach using terraform'"'"'s built-in completion
-  terraform -install-autocomplete 2>/dev/null || true
-fi' "terraform completion"
   
   log_success "Shell configuration completed."
 }
