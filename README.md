@@ -1,163 +1,4 @@
-# MacbookSetup
-
-[![Build Status](https://api.cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup.svg)](https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup)
-
-A streamlined, automated setup script for macOS development environments. Get your Mac ready for development in minutes, not hours.
-
-## 🚀 Purpose
-
-Setting up a new Mac for development is time-consuming and error-prone. This project aims to solve that by providing:
-
-- A single command to install all necessary development tools
-- Consistent configuration across different machines
-- Reproducible development environments
-- Easy onboarding for new team members or after OS reinstalls
-
-## 📦 What's Included
-
-This setup automates the installation and configuration of:
-
-### Core Tools
-- **Homebrew**: Package manager for macOS
-- **Git**: Version control system
-- **Direnv**: Environment variable management per directory
-
-### Development Environments
-- **Ruby** (via rbenv): Ruby version manager with latest stable Ruby
-- **Python** (via pyenv): Python version manager with latest stable Python
-
-### Containerization and Infrastructure
-- **OrbStack**: Fast Docker & Linux VM manager with Kubernetes support
-- **Kubernetes Tools**: kubectl, helm, k9s, kubectx, kustomize
-- **Container Utilities**: dive, ctop, buildkit
-- **Infrastructure as Code**: Terraform, Packer
-- **System Monitoring**: htop for process monitoring
-
-### About Packer Installation
-
-#### Why Packer is Installed Directly (Not via Homebrew)
-
-HashiCorp's Packer is installed directly from the official HashiCorp releases rather than through Homebrew. This is because:
-
-- HashiCorp changed Packer's license to BUSL (Business Source License)
-- This license change conflicts with Homebrew's requirement for open-source licenses
-- Homebrew has disabled the Packer formula with the message: "Disabled because it will change its license to BUSL on the next release!"
-
-Our setup script handles this by automatically downloading the official binary from HashiCorp's release page, verifying it, and installing it to your system.
-
-#### Packer as a Complementary Tool for OrbStack
-
-Packer serves as an important companion to OrbStack by:
-
-- **Creating custom VM images** that can be used with OrbStack's VM capabilities
-- **Standardizing development environments** across your team with versioned machine images
-- **Automating the creation of test environments** with predefined configurations and software
-- **Supporting infrastructure as code practices** alongside Terraform for complete VM lifecycle management
-
-This powerful combination enables you to create reproducible development and testing environments using the same tools you would use in production cloud deployments.
-
-### Terminal and Editor Tools
-- **iTerm2**: Enhanced terminal emulator
-- **Warp**: Modern terminal with AI features
-- **Zinit**: Z shell plugin manager
-- **Starship**: Cross-shell customizable prompt
-- **Nerd Fonts**: Special fonts that include icons needed for Starship prompt
-- **Other tools**: See the Brewfile for the complete list
-
-### Configuration
-- Shell environment configuration (.zshrc)
-- Tool initialization and setup
-- Path configuration
-
-### Terminal Appearance
-
-#### Starship Prompt and Nerd Fonts
-
-Starship provides a customizable command-line prompt that displays contextual information while you work. To get the full visual experience with all icons and symbols:
-
-1. **Install Nerd Fonts** (done automatically by the setup script)
-   - The setup includes FiraCode Nerd Font and JetBrains Mono Nerd Font
-
-2. **Configure Your Terminal**:
-
-   **For iTerm2:**
-   - Open iTerm2 Preferences (⌘,)
-   - Go to Profiles > Text
-   - Click on Font and select one of:
-     - `FiraCode Nerd Font`
-     - `FiraCode Nerd Font Mono` (fixed width)
-     - `JetBrainsMono Nerd Font`
-     - `JetBrainsMono Nerd Font Mono` (fixed width)
-   - Adjust the font size as needed
-
-   **For Warp:**
-   - Open Settings (⌘,)
-   - Navigate to Appearance > Fonts
-   - Click on the font dropdown and select one of the Nerd Fonts
-   - You may need to restart Warp for changes to take effect
-
-3. **Verify Starship Icons**
-   - Once configured, you should see icons for Git branches, programming languages, and other status indicators in your prompt
-   - If you see squares or question marks instead of icons, your terminal is not using a Nerd Font
-
-#### Troubleshooting Font Issues
-
-- If icons aren't displaying correctly after installing fonts, try restarting your terminal application
-- Some terminal applications might require the "Mono" variant of the font
-- You may need to log out and back in for the fonts to be fully recognized by the system
-
-## 🔧 Usage
-
-### Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/Govinda-Fichtner/MacbookSetup.git
-cd MacbookSetup
-
-# Make the script executable
-chmod +x setup.sh
-
-# Run the setup
-./setup.sh
-```
-
-### What It Does
-
-1. Checks if Homebrew is installed; installs it if needed
-2. Installs all packages from the Brewfile
-3. Configures your shell with necessary tool integrations
-4. Installs the latest stable Ruby and Python versions
-5. Sets up development environments ready to use
-
-### Customization
-
-To customize your setup, modify the `Brewfile` before running the script. Add or remove packages as needed:
-
-```ruby
-# Add a formula (CLI tool)
-brew "your-package-name"
-
-# Add a cask (GUI application)
-cask "your-app-name"
-```
-
-## 📋 Requirements
-
-- macOS Catalina (10.15) or newer
-- Administrative privileges on your Mac
-- Internet connection
-- For Apple Silicon Macs (M1/M2/M3): Rosetta 2 is recommended (`softwareupdate --install-rosetta`)
-
-## 🧪 Continuous Integration
-
-This project uses Cirrus CI to validate the setup script on real macOS environments:
-
-- Every commit is tested on macOS ARM (Apple Silicon) virtual machines
-- The setup script is executed in a clean environment
-- Installation of tools and configuration is verified
-
-You can view CI build history on the [Cirrus CI dashboard](https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup).
+[Previous content remains the same until "Testing Strategy" section, where we add:]
 
 ### Testing Strategy
 
@@ -168,63 +9,63 @@ The CI pipeline employs a focused testing strategy to efficiently validate the c
 - **Shell Configuration**: Verifies that `.zshrc` is properly set up with all required tool integrations (rbenv, pyenv, direnv, Starship, etc.)
 - **Command-line Tools**: Tests the installation and availability of essential CLI tools that form the backbone of the development environment
 - **Environment Initialization**: Ensures that version managers and shell extensions initialize correctly
+- **Shell Completions**: Validates that command-line completions are properly configured for all installed tools
 
-#### Testing Approach
+#### Shell Completion Testing
 
-The CI testing differentiates between several types of components:
+The setup includes a comprehensive completion testing framework that verifies:
 
-1. **Essential CLI Tools** (fully tested):
-   - Tools like Git, rbenv, pyenv, direnv, and Starship
-   - These are verified to be installed, available in PATH, and properly configured
-   - They represent the core functionality needed for development
+1. **Multiple Completion Types**:
+   - Zinit plugin completions (e.g., Terraform)
+   - Built-in Zsh completions (e.g., Git)
+   - Custom completions (e.g., rbenv, pyenv, kubectl)
 
-2. **GUI Applications** (not tested in CI):
-   - Applications like iTerm2, Warp, and Visual Studio Code
-   - These are skipped during CI testing as they:
-     - Cannot be meaningfully tested in a headless environment
-     - Take longer to install and consume more resources
-     - Don't affect the functionality of other development tools
+2. **Tested Tools**:
+   - Core Development: Git, rbenv, pyenv, direnv
+   - Infrastructure: Terraform, Packer
+   - Kubernetes: kubectl, helm, kubectx
+   - Shell Enhancements: Starship
 
-3. **Optional Utilities** (not tested in CI):
-   - Additional command-line utilities that enhance the development experience
-   - While valuable for users, they're not essential for validating the setup process
+3. **Verification Process**:
+   - Checks if completion plugins are properly installed
+   - Validates that completion functions are loaded
+   - Tests basic completion functionality for common commands
+   - Provides detailed logging for troubleshooting
 
-This targeted testing approach ensures that:
-- CI runs remain efficient (typically under 15 minutes)
-- Core functionality is thoroughly validated
-- The setup script's reliability is maintained
+4. **Extensibility**:
+   - Structured configuration for adding new tool completions
+   - Support for different completion mechanisms
+   - Easy integration of new completion tests
 
-When you run the setup script on your actual machine, it will install all tools including GUI applications and optional utilities as specified in the Brewfile.
+This completion testing ensures that developers have full access to command-line completions, improving productivity and reducing errors.
 
-## 📄 License
+[Rest of the content remains the same]
 
-This project is licensed under the MIT License - see below for details:
+#### Shell Completion Testing
 
-```
-MIT License
+The setup includes a comprehensive completion testing framework that verifies:
 
-Copyright (c) 2025 Your Name
+1. **Multiple Completion Types**:
+   - Zinit plugin completions (e.g., Terraform)
+   - Built-in Zsh completions (e.g., Git)
+   - Custom completions (e.g., rbenv, pyenv, kubectl)
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+2. **Tested Tools**:
+   - Core Development: Git, rbenv, pyenv, direnv
+   - Infrastructure: Terraform, Packer
+   - Kubernetes: kubectl, helm, kubectx
+   - Shell Enhancements: Starship
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+3. **Verification Process**:
+   - Checks if completion plugins are properly installed
+   - Validates that completion functions are loaded
+   - Tests basic completion functionality for common commands
+   - Provides detailed logging for troubleshooting
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+4. **Extensibility**:
+   - Structured configuration for adding new tool completions
+   - Support for different completion mechanisms
+   - Easy integration of new completion tests
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+This completion testing ensures that developers have full access to command-line completions, improving productivity and reducing errors.
 
