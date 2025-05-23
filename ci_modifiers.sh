@@ -26,74 +26,8 @@ log_error() {
   echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Function to install Terraform directly from HashiCorp
-install_terraform() {
-  log_info "Checking if Terraform is installed..."
-  if command -v terraform >/dev/null 2>&1; then
-    terraform_version=$(terraform --version 2>/dev/null)
-    log_success "Terraform is already installed (version: $terraform_version)."
-    return 0
-  fi
-
-  log_info "Installing HashiCorp Terraform directly (version 1.6.0)..."
-  
-  # Create a temporary directory for the download
-  local tmp_dir
-  tmp_dir=$(mktemp -d)
-  log_info "Created temporary directory: $tmp_dir"
-  
-  # Determine the architecture
-  local arch
-  if [[ "$(uname -m)" == "arm64" ]]; then
-    arch="arm64"
-  else
-    arch="amd64"
-  fi
-  
-  # Set the download URL
-  local download_url="https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_darwin_${arch}.zip"
-  local zip_file="$tmp_dir/terraform.zip"
-  
-  # Download the Terraform zip file
-  log_info "Downloading Terraform from: $download_url"
-  if ! curl -sSL "$download_url" -o "$zip_file"; then
-    log_error "Failed to download Terraform from $download_url"
-    rm -rf "$tmp_dir"
-    return 1
-  fi
-  
-  # Extract the zip file
-  log_info "Extracting Terraform..."
-  if ! unzip -q "$zip_file" -d "$tmp_dir"; then
-    log_error "Failed to extract Terraform"
-    rm -rf "$tmp_dir"
-    return 1
-  fi
-  
-  # Move the terraform binary to /usr/local/bin
-  log_info "Installing Terraform to /usr/local/bin..."
-  if ! sudo mv "$tmp_dir/terraform" /usr/local/bin/; then
-    log_error "Failed to move Terraform binary to /usr/local/bin/"
-    rm -rf "$tmp_dir"
-    return 1
-  fi
-  
-  # Set appropriate permissions
-  sudo chmod +x /usr/local/bin/terraform
-  
-  # Clean up the temporary directory
-  rm -rf "$tmp_dir"
-  
-  # Verify the installation
-  if command -v terraform >/dev/null 2>&1; then
-    terraform_version=$(terraform --version)
-    log_success "Terraform $terraform_version installed successfully."
-    return 0
-  else
-    log_error "Terraform installation failed. Please check the logs."
-    return 1
-  fi
-}
+# Source HashiCorp installation functions
+source ./hashicorp_install.sh
 
 # Function to patch the setup.sh script for CI use
 patch_for_ci() {
@@ -114,15 +48,16 @@ export CI=true\
 
   # 2. Modify the install_packages function to use a subset of packages
   # Find the install_packages function and replace its content using awk
-  # Note: Package list excludes terraform as it's installed separately
-  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm kubectx packer\n\n  # Install terraform directly from HashiCorp\n  install_terraform || log_error \"Failed to install Terraform\"\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
+  # Note: Terraform and Packer are installed separately due to BUSL license
+  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm kubectx\n\n  # Install HashiCorp tools directly\n  install_terraform || log_error \"Failed to install Terraform\"\n  install_packer || log_error \"Failed to install Packer\"\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
 
-  # 3. Ensure .zshrc exists in CI (add after ZSHRC_PATH declaration)
-  # Note: Using single quotes intentionally for literal string in sed pattern
+  # 3. Ensure .zshrc exists and completions are properly loaded
   sed -i.bak '/ZSHRC_PATH=.*$/a\
 if [[ ! -f "$ZSHRC_PATH" ]]; then\
   touch "$ZSHRC_PATH"\
-fi\
+fi\n\
+# Ensure zsh completions directory is in fpath\
+echo "fpath=(/opt/homebrew/share/zsh/site-functions $fpath)" >> "$ZSHRC_PATH"\
 ' "$output_file"
 
   # 4. Remove any interactive prompts
