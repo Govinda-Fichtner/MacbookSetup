@@ -37,15 +37,19 @@ patch_for_ci() {
   # Apply CI-specific modifications
   
   # 1. Add CI environment marker near the top
+  # Note: Using single quotes intentionally for literal string in sed pattern
   sed -i.bak '4i\
 # Modified for CI environment\
+export CI=true\
 ' "$output_file"
 
   # 2. Modify the install_packages function to use a subset of packages
   # Find the install_packages function and replace its content using awk
-  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
+  # Note: Package list matches both verify_commands and completion_config entries
+  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship terraform kubectl helm kubectx packer\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
 
   # 3. Ensure .zshrc exists in CI (add after ZSHRC_PATH declaration)
+  # Note: Using single quotes intentionally for literal string in sed pattern
   sed -i.bak '/ZSHRC_PATH=.*$/a\
 if [[ ! -f "$ZSHRC_PATH" ]]; then\
   touch "$ZSHRC_PATH"\
