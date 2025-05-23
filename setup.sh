@@ -82,35 +82,20 @@ install_homebrew() {
 
 # Install all packages from Brewfile
 install_packages() {
-  local brewfile_path="$HOME/Brewfile"
+  # Use the Brewfile from the project directory
+  # Use the Brewfile from the project directory
+  local brewfile_path="./Brewfile"
   
   if [[ ! -f "$brewfile_path" ]]; then
-    log_error "Brewfile not found at $brewfile_path. Creating a new one."
-    
-    # Create a new Brewfile with the tools we've been using
-    cat > "$brewfile_path" << EOF
-# Brewfile
-# This file documents all Homebrew installations and can be used to set up a new machine.
-# To use this file for installation, run: brew bundle
-
-# Taps (Third-party repositories)
-tap "getantibody/antibody"
-
-# Formulae (Command-line packages)
-brew "git"
-brew "zinit"
-brew "rbenv"
-brew "pyenv"
-brew "direnv"
-
-# Casks (GUI applications)
-cask "iterm2"
-cask "warp"
-cask "signal"
-cask "whatsapp"
-EOF
-    log_info "Created new Brewfile at $brewfile_path"
+    log_error "Brewfile not found at $brewfile_path."
+    log_error "Please ensure you're running this script from the project directory containing the Brewfile."
+    exit 1
   fi
+  log_info "Using Brewfile from repository."
+    log_error "Please ensure you're running this script from the project directory containing the Brewfile."
+    exit 1
+  fi
+  log_info "Using Brewfile from repository."
   
   log_info "Installing packages from Brewfile..."
   if brew bundle check --file="$brewfile_path" >/dev/null 2>&1; then
@@ -138,35 +123,26 @@ configure_shell() {
       log_info "$comment configuration already exists in .zshrc"
     fi
   }
-
+  
   # Add zinit configuration
-  add_to_zshrc "source.*zinit.zsh" "source \$(brew --prefix)/opt/zinit/zinit.zsh
+  # First add the zinit source command (separate from plugin loading for better error handling)
+  # Add zinit configuration (source command only)
+  add_to_zshrc "source.*zinit.zsh" "source $(brew --prefix)/opt/zinit/zinit.zsh" "zinit setup"
 
-# Load zinit plugins
-zinit light zdharma/fast-syntax-highlighting
-zinit light zsh-users/zsh-autosuggestions
-zinit light macunha1/zsh-terraform" "zinit setup"
+  # Add zinit plugins with better error handling
+  if ! grep -q "zinit light macunha1/zsh-terraform" "$ZSHRC_PATH" 2>/dev/null; then
+    log_info "Adding zinit plugins to .zshrc"
+    cat >> "$ZSHRC_PATH" << 'EOF'
 
-  # Add rbenv configuration
-  add_to_zshrc "rbenv init" 'eval "$(rbenv init -)"' "rbenv setup"
+# Zinit plugins
+# Only load plugins if zinit is available
+if command -v zinit >/dev/null 2>&1; then
+  # Syntax highlighting and suggestions
+  zinit light zdharma/fast-syntax-highlighting 2>/dev/null || true
+  zinit light zsh-users/zsh-autosuggestions 2>/dev/null || true
 
-  # Add pyenv configuration
-  add_to_zshrc "pyenv init" 'export PATH="$HOME/.pyenv/bin:$PATH"
-eval "$(pyenv init --path)"
-eval "$(pyenv init -)"' "pyenv setup"
-
-  # Add direnv configuration
-  add_to_zshrc "direnv hook" 'eval "$(direnv hook zsh)"' "direnv setup"
-
-  # Add Starship prompt configuration
-  add_to_zshrc "starship init" 'eval "$(starship init zsh)"' "Starship prompt setup"
-
-  # Add Kubernetes tools completions
-  add_to_zshrc "kubectl completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectl completion"
-  add_to_zshrc "helm completion" 'source <(helm completion zsh 2>/dev/null)' "helm completion"
-  add_to_zshrc "kubectx completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectx completion"
-
-  # Terraform completion is now handled by the zinit plugin (macunha1/zsh-terraform)
-
-  log_success "Shell configuration completed."
-}
+  # Terraform completion via plugin
+  zinit light macunha1/zsh-terraform 2>/dev/null || true
+fi
+EOF
+  fi
