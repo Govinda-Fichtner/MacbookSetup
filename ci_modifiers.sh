@@ -158,44 +158,51 @@ export -f install_packer
 EOF
   fi
 
-  # 3. Insert HashiCorp functions at a higher scope (right after CI environment marker)
-  # Find the line where CI environment marker is placed
-  CI_MARKER=$(grep -n "^# Modified for CI environment" "$output_file" | head -1 | cut -d':' -f1)
-  if [ -n "$CI_MARKER" ]; then
-    # Find the line after 'set -a' (which should be right after the CI marker)
-    INSERTION_POINT=$((CI_MARKER + 3))
-    # Insert the HashiCorp functions immediately after the CI environment setup
-    # This ensures they are defined at global scope before any other function
-    sed -i.bak "${INSERTION_POINT}r /tmp/hashicorp_functions.sh" "$output_file"
-    log_info "Successfully injected HashiCorp functions into $output_file"
+  # 3. First remove any existing install_terraform or install_packer functions from setup.sh
+  # (they might conflict with our injected versions)
+  log_info "Removing any existing HashiCorp functions from the original script..."
+  sed -i.bak '/^install_terraform()/,/^}/d' "$output_file"
+  sed -i.bak '/^install_packer()/,/^}/d' "$output_file"
+
+  # 4. Insert HashiCorp functions at a higher scope (right after CI environment marker)
+  # Only inject if the functions don't already exist
+  if ! grep -q "^# HashiCorp installation functions" "$output_file"; then
+    # Find the line where CI environment marker is placed
+    CI_MARKER=$(grep -n "^# Modified for CI environment" "$output_file" | head -1 | cut -d':' -f1)
+    if [ -n "$CI_MARKER" ]; then
+      # Find the line after 'set -a' (which should be right after the CI marker)
+      INSERTION_POINT=$((CI_MARKER + 3))
+      # Insert the HashiCorp functions immediately after the CI environment setup
+      # This ensures they are defined at global scope before any other function
+      sed -i.bak "${INSERTION_POINT}r /tmp/hashicorp_functions.sh" "$output_file"
+      log_info "Successfully injected HashiCorp functions into $output_file"
     
-    # Verify that the functions were actually injected
-    if grep -q "install_terraform()" "$output_file"; then
-      log_success "install_terraform function successfully injected into $output_file"
+      # Verify that the functions were actually injected
+      if grep -q "install_terraform()" "$output_file"; then
+        log_success "install_terraform function successfully injected into $output_file"
+      else
+        log_error "install_terraform function not found in $output_file after injection"
+        return 1
+      fi
+      
+      if grep -q "install_packer()" "$output_file"; then
+        log_success "install_packer function successfully injected into $output_file"
+      else
+        log_error "install_packer function not found in $output_file after injection"
+        return 1
+      fi
     else
-      log_error "install_terraform function not found in $output_file after injection"
-      return 1
-    fi
-    
-    if grep -q "install_packer()" "$output_file"; then
-      log_success "install_packer function successfully injected into $output_file"
-    else
-      log_error "install_packer function not found in $output_file after injection"
+      log_error "Could not find insertion point after logging functions"
       return 1
     fi
   else
-    log_error "Could not find insertion point after logging functions"
-    return 1
+    log_info "HashiCorp functions already exist in the file, skipping injection"
   fi
 
   # Clean up the temporary file
   rm -f /tmp/hashicorp_functions.sh
 
-  # 4. Remove any existing install_terraform or install_packer functions from setup.sh
-  # (they might conflict with our injected versions)
-  log_info "Removing any existing HashiCorp functions from the original script..."
-  sed -i.bak '/^install_terraform()/,/^}/d' "$output_file"
-  sed -i.bak '/^install_packer()/,/^}/d' "$output_file"
+  # NOTE: Moved removal of existing HashiCorp functions to before injection step
 
   # 5. Modify the install_packages function to use a subset of packages
   # Find the install_packages function and replace its content using awk
@@ -227,6 +234,7 @@ EOF
   print "    if ! declare -F \"$tool_func\" > /dev/null; then"
   print "      log_error \"$tool_func function not available - attempting recovery\""
   print "      # Try to source the function from the current script"
+  print "      # shellcheck disable=SC1090"
   print "      source <(grep -A 50 \"^$tool_func()\" \"$0\" | grep -B 50 -m 1 \"^}\")"
   print "      "
   print "      # Check again after recovery attempt"
@@ -318,7 +326,7 @@ EOF
   
   # 6. Verify function order and check for duplicates
   log_info "Verifying function order in $output_file..."
-  if grep -n "^install_packer()" "$output_file" | wc -l | grep -q "1"; then
+  if [ "$(grep -c "^install_packer()" "$output_file")" -eq 1 ]; then
     log_success "No duplicate install_packer functions found."
   else
     log_error "Duplicate install_packer functions found. Check $output_file manually."
