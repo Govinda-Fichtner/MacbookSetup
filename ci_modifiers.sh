@@ -10,9 +10,6 @@ patch_for_ci() {
   # Create a copy of the original script
   cp "$setup_file" "$output_file"
   
-  # Make it executable
-  chmod +x "$output_file"
-  
   # Apply CI-specific modifications
   
   # 1. Add CI environment marker near the top
@@ -38,6 +35,11 @@ fi\
   sed -i.bak '/^log_info "Starting setup process/a\
 log_info "Running in CI environment - some operations will be modified"' "$output_file"
 
+  # 6. Ensure the script is executable
+  chmod +x "$output_file"
+
   # Clean up backup files
   rm -f "$output_file.bak"
+
+  log_info "CI-optimized script created at $output_file with execute permissions"
 }
