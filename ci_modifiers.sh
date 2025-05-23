@@ -127,7 +127,7 @@ install_terraform() {
 
 # Install Packer
 install_packer() {
-  install_hashicorp_tool "packer" "1.10.0"
+  install_hashicorp_tool "packer" "1.11.2"
 }
 EOF
 
