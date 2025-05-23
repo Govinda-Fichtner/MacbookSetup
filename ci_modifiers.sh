@@ -53,12 +53,15 @@ export CI=true\
 
   # 3. Ensure .zshrc exists and completions are properly loaded
   sed -i.bak '/ZSHRC_PATH=.*$/a\
+# Check and create .zshrc if needed\
 if [[ ! -f "$ZSHRC_PATH" ]]; then\
   touch "$ZSHRC_PATH"\
-fi\n\
+fi\
+\
 # Ensure zsh completions directory is in fpath\
-echo "fpath=(/opt/homebrew/share/zsh/site-functions $fpath)" >> "$ZSHRC_PATH"\
-' "$output_file"
+if ! grep -q "zsh/site-functions" "$ZSHRC_PATH" 2>/dev/null; then\
+  echo "fpath=(/opt/homebrew/share/zsh/site-functions \$fpath)" >> "$ZSHRC_PATH"\
+fi' "$output_file"
 
   # 4. Remove any interactive prompts
   sed -i.bak 's/read -p/echo "CI mode: skipping prompt" #read -p/g' "$output_file"
