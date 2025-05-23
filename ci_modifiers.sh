@@ -21,17 +21,8 @@ patch_for_ci() {
 ' "$output_file"
 
   # 2. Modify the install_packages function to use a subset of packages
-  # Find the install_packages function and replace its content
-  sed -i.bak '/^install_packages()/,/^}/c\
-install_packages() {\
-  log_info "Installing essential packages for CI testing..."\
-\
-  # Install core packages directly (faster than full Brewfile)\
-  brew install git zinit rbenv pyenv direnv starship kubectl helm\
-\
-  # Skip casks in CI to speed up testing\
-  log_success "Essential packages installed successfully."\
-}' "$output_file"
+  # Find the install_packages function and replace its content using awk
+  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
 
   # 3. Ensure .zshrc exists in CI (add after ZSHRC_PATH declaration)
   sed -i.bak '/ZSHRC_PATH=.*$/a\
@@ -50,4 +41,3 @@ log_info "Running in CI environment - some operations will be modified"' "$outpu
   # Clean up backup files
   rm -f "$output_file.bak"
 }
-
