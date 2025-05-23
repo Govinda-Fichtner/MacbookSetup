@@ -2,6 +2,30 @@
 # CI-specific modifications to be applied to setup.sh
 # This file contains only the differences needed for CI environments
 
+# Log formatting
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Logging functions
+log_info() {
+  echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+  echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+log_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
 # Function to patch the setup.sh script for CI use
 patch_for_ci() {
   local setup_file="$1"
