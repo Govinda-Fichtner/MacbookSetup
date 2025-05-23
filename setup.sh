@@ -82,19 +82,13 @@ install_homebrew() {
 
 # Install all packages from Brewfile
 install_packages() {
-  # Use the Brewfile from the project directory
-  # Use the Brewfile from the project directory
   local brewfile_path="./Brewfile"
   
   if [[ ! -f "$brewfile_path" ]]; then
-    log_error "Brewfile not found at $brewfile_path."
-    log_error "Please ensure you're running this script from the project directory containing the Brewfile."
+    log_error "Brewfile not found at $brewfile_path. Please ensure you're running the script from the project directory containing the Brewfile."
     exit 1
   fi
-  log_info "Using Brewfile from repository."
-    log_error "Please ensure you're running this script from the project directory containing the Brewfile."
-    exit 1
-  fi
+  
   log_info "Using Brewfile from repository."
   
   log_info "Installing packages from Brewfile..."
@@ -105,17 +99,16 @@ install_packages() {
     log_success "Packages installed successfully."
   fi
 }
-
 # Configure shell with required tool integrations
 configure_shell() {
   log_info "Configuring shell environment in .zshrc..."
-
+  
   # Function to add configuration if it doesn't exist
   add_to_zshrc() {
     local search_pattern="$1"
     local config_block="$2"
     local comment="$3"
-
+    
     if ! grep -q "$search_pattern" "$ZSHRC_PATH" 2>/dev/null; then
       log_info "Adding $comment configuration to .zshrc"
       echo -e "\n# $comment\n$config_block" >> "$ZSHRC_PATH"
@@ -125,24 +118,303 @@ configure_shell() {
   }
   
   # Add zinit configuration
-  # First add the zinit source command (separate from plugin loading for better error handling)
-  # Add zinit configuration (source command only)
-  add_to_zshrc "source.*zinit.zsh" "source $(brew --prefix)/opt/zinit/zinit.zsh" "zinit setup"
+  add_to_zshrc "source.*zinit.zsh" "source \$(brew --prefix)/opt/zinit/zinit.zsh" "zinit setup"
+  
+  # Add rbenv configuration
+  add_to_zshrc "rbenv init" 'eval "$(rbenv init -)"' "rbenv setup"
+  
+  # Add pyenv configuration
+  add_to_zshrc "pyenv init" 'export PATH="$HOME/.pyenv/bin:$PATH"
+eval "$(pyenv init --path)"
+eval "$(pyenv init -)"' "pyenv setup"
+  
+  # Add direnv configuration
+  add_to_zshrc "direnv hook" 'eval "$(direnv hook zsh)"' "direnv setup"
+  
+  # Add Starship prompt configuration
+  add_to_zshrc "starship init" 'eval "$(starship init zsh)"' "Starship prompt setup"
+  
+  # Add Kubernetes tools completions
+  add_to_zshrc "kubectl completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectl completion"
+  add_to_zshrc "helm completion" 'source <(helm completion zsh 2>/dev/null)' "helm completion" 
+  add_to_zshrc "kubectx completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectx completion"
+  
+  # Add Terraform completion if available
+  # More robust terraform completion setup
+  add_to_zshrc "terraform completion" '# Properly initialize bash completion in zsh
+autoload -Uz +X compinit && compinit
+autoload -Uz +X bashcompinit && bashcompinit
 
-  # Add zinit plugins with better error handling
-  if ! grep -q "zinit light macunha1/zsh-terraform" "$ZSHRC_PATH" 2>/dev/null; then
-    log_info "Adding zinit plugins to .zshrc"
-    cat >> "$ZSHRC_PATH" << 'EOF'
+# Only use complete command if it exists
+if type complete &>/dev/null; then
+  complete -o nospace -C $(which terraform) terraform
+else
+  # Alternative approach using terraform'"'"'s built-in completion
+  terraform -install-autocomplete 2>/dev/null || true
+fi' "terraform completion"
+  
+  log_success "Shell configuration completed."
+}
 
-# Zinit plugins
-# Only load plugins if zinit is available
-if command -v zinit >/dev/null 2>&1; then
-  # Syntax highlighting and suggestions
-  zinit light zdharma/fast-syntax-highlighting 2>/dev/null || true
-  zinit light zsh-users/zsh-autosuggestions 2>/dev/null || true
-
-  # Terraform completion via plugin
-  zinit light macunha1/zsh-terraform 2>/dev/null || true
-fi
-EOF
+# Install Ruby build dependencies required for compiling Ruby
+install_ruby_build_dependencies() {
+  log_info "Checking and installing Ruby build dependencies..."
+  
+  # Check if Homebrew is installed
+  if ! command -v brew >/dev/null 2>&1; then
+    log_error "Homebrew is not installed. Cannot install Ruby build dependencies."
+    return 1
   fi
+  
+  # List of common Ruby build dependencies
+  # These are required for various Ruby features:
+  # - openssl: Required for SSL/TLS support in Ruby
+  # - readline: Provides line-editing and history features in Ruby shell
+  # - zlib: Required for compression support
+  # - libyaml: Required for YAML parsing (used by many Ruby gems)
+  # - libffi: Required for Foreign Function Interface (calling functions in other languages)
+  # - autoconf: Build system tool required for compiling Ruby
+  local dependencies=("openssl" "readline" "zlib" "libyaml" "libffi" "autoconf")
+  
+  for dep in "${dependencies[@]}"; do
+    if ! brew list --formula | grep -q "^$dep$"; then
+      log_info "Installing $dep..."
+      brew install "$dep"
+      log_success "$dep installed successfully."
+    else
+      log_info "$dep is already installed."
+    fi
+  done
+  
+  log_success "All Ruby build dependencies are installed."
+  return 0
+}
+
+# Install the latest stable Ruby version using rbenv
+install_latest_ruby() {
+  log_info "Checking if rbenv is installed..."
+  if ! command -v rbenv >/dev/null 2>&1; then
+    log_warning "rbenv is not installed. Skipping Ruby installation."
+    return
+  fi
+
+  log_info "Installing latest stable Ruby version..."
+  # Get the latest stable Ruby version (excluding preview/beta)
+  latest_ruby=$(rbenv install -l | grep -v - | grep -v dev | tail -1 | tr -d '[:space:]')
+  
+  if [[ -z "$latest_ruby" ]]; then
+    log_error "Failed to determine the latest stable Ruby version."
+    return
+  fi
+
+  log_info "Latest stable Ruby version: $latest_ruby"
+  
+  # Install required build dependencies before proceeding
+  log_info "Ensuring all Ruby build dependencies are installed..."
+  install_ruby_build_dependencies
+  
+  # Check if this version is already installed
+  if rbenv versions | grep -q "$latest_ruby"; then
+    log_info "Ruby $latest_ruby is already installed."
+  else
+    log_info "Installing Ruby $latest_ruby..."
+    
+    # Set environment variables to help rbenv find the installed dependencies
+    RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl) --with-readline-dir=$(brew --prefix readline) --with-libyaml-dir=$(brew --prefix libyaml) --with-zlib-dir=$(brew --prefix zlib)"
+    export RUBY_CONFIGURE_OPTS
+    
+    # Install Ruby with rbenv
+    rbenv install "$latest_ruby"
+    log_success "Ruby $latest_ruby installed successfully."
+  fi
+  
+  # Set as global version
+  log_info "Setting Ruby $latest_ruby as the global version..."
+  rbenv global "$latest_ruby"
+  log_success "Ruby $latest_ruby is now the global version."
+  
+  # Verify installation
+  ruby_version=$(ruby -v)
+  log_info "Installed Ruby version: $ruby_version"
+}
+
+# Install Python build dependencies required for compiling Python
+install_python_build_dependencies() {
+  log_info "Checking and installing Python build dependencies..."
+  
+  # Check if Homebrew is installed
+  if ! command -v brew >/dev/null 2>&1; then
+    log_error "Homebrew is not installed. Cannot install Python build dependencies."
+    return 1
+  fi
+  
+  # List of common Python build dependencies
+  # These are required for various Python features:
+  # - xz: Required for LZMA compression support (needed for many packages including Python itself)
+  # - openssl: Required for SSL/TLS support in Python
+  # - readline: Provides line-editing and history features in Python shell
+  # - sqlite3: Required for SQLite database support in Python
+  # - zlib: Required for compression features
+  # - bzip2: Required for bzip2 compression support
+  local dependencies=("xz" "openssl" "readline" "sqlite3" "zlib" "bzip2")
+  
+  for dep in "${dependencies[@]}"; do
+    if ! brew list --formula | grep -q "^$dep$"; then
+      log_info "Installing $dep..."
+      brew install "$dep"
+      log_success "$dep installed successfully."
+    else
+      log_info "$dep is already installed."
+    fi
+  done
+  
+  log_success "All Python build dependencies are installed."
+  return 0
+}
+
+# Install the latest stable Python version using pyenv
+install_latest_python() {
+  log_info "Checking if pyenv is installed..."
+  if ! command -v pyenv >/dev/null 2>&1; then
+    log_warning "pyenv is not installed. Skipping Python installation."
+    return
+  fi
+
+  log_info "Installing latest stable Python version..."
+  # Get the latest stable Python version (excluding alpha/beta/rc)
+  latest_python=$(pyenv install --list | grep -v - | grep -v a | grep -v b | grep -v rc | grep "^  [0-9]" | tail -1 | tr -d '[:space:]')
+  
+  if [[ -z "$latest_python" ]]; then
+    log_error "Failed to determine the latest stable Python version."
+    return
+  fi
+
+  log_info "Latest stable Python version: $latest_python"
+  
+  # Install required build dependencies before proceeding
+  log_info "Ensuring all Python build dependencies are installed..."
+  install_python_build_dependencies
+  
+  # Check if this version is already installed
+  if pyenv versions | grep -q "$latest_python"; then
+    log_info "Python $latest_python is already installed."
+  else
+    log_info "Installing Python $latest_python..."
+    # Set CPPFLAGS and LDFLAGS to ensure the build can find the dependencies
+    # These environment variables help pyenv find the installed dependencies
+    CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix bzip2)/include -I$(brew --prefix readline)/include -I$(brew --prefix sqlite3)/include -I$(brew --prefix zlib)/include -I$(brew --prefix xz)/include"
+    export CPPFLAGS
+    LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix readline)/lib -L$(brew --prefix sqlite3)/lib -L$(brew --prefix zlib)/lib -L$(brew --prefix bzip2)/lib -L$(brew --prefix xz)/lib"
+    export LDFLAGS
+    
+    # Install Python with pyenv
+    pyenv install "$latest_python"
+    log_success "Python $latest_python installed successfully."
+  fi
+  
+  # Set as global version
+  log_info "Setting Python $latest_python as the global version..."
+  pyenv global "$latest_python"
+  log_success "Python $latest_python is now the global version."
+  
+  # Initialize pyenv in the current shell to make the python command available
+  log_info "Initializing pyenv in the current shell..."
+  export PATH="$HOME/.pyenv/bin:$PATH"
+  eval "$(pyenv init --path)"
+  eval "$(pyenv init -)"
+  
+  # Verify installation
+  log_info "Verifying Python installation..."
+  if command -v python >/dev/null 2>&1; then
+    python_version=$(python --version)
+    log_info "Installed Python version: $python_version"
+  else
+    log_warning "Python command not found. You may need to restart your shell or source your .zshrc"
+  fi
+}
+
+# Install HashiCorp Packer directly from official release
+install_packer() {
+  log_info "Checking if Packer is installed..."
+  if command -v packer >/dev/null 2>&1; then
+    packer_version=$(packer --version 2>/dev/null)
+    log_success "Packer is already installed (version: $packer_version)."
+    return 0
+  fi
+
+  log_info "Installing HashiCorp Packer directly (version 1.12.0)..."
+  
+  # Create a temporary directory for the download
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  log_info "Created temporary directory: $tmp_dir"
+  
+  # Determine the architecture
+  local arch
+  if [[ "$(uname -m)" == "arm64" ]]; then
+    arch="arm64"
+  else
+    arch="amd64"
+  fi
+  
+  # Set the download URL
+  local download_url="https://releases.hashicorp.com/packer/1.12.0/packer_1.12.0_darwin_${arch}.zip"
+  local zip_file="$tmp_dir/packer.zip"
+  
+  # Download the Packer zip file
+  log_info "Downloading Packer from: $download_url"
+  if ! curl -sSL "$download_url" -o "$zip_file"; then
+    log_error "Failed to download Packer from $download_url"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  
+  # Extract the zip file
+  log_info "Extracting Packer..."
+  if ! unzip -q "$zip_file" -d "$tmp_dir"; then
+    log_error "Failed to extract Packer"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  
+  # Move the packer binary to /usr/local/bin
+  log_info "Installing Packer to /usr/local/bin..."
+  if ! sudo mv "$tmp_dir/packer" /usr/local/bin/; then
+    log_error "Failed to move Packer binary to /usr/local/bin/"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+  
+  # Set appropriate permissions
+  sudo chmod +x /usr/local/bin/packer
+  
+  # Clean up the temporary directory
+  rm -rf "$tmp_dir"
+  
+  # Verify the installation
+  if command -v packer >/dev/null 2>&1; then
+    packer_version=$(packer --version)
+    log_success "Packer $packer_version installed successfully."
+    return 0
+  else
+    log_error "Packer installation failed. Please check the logs."
+    return 1
+  fi
+}
+
+# Main execution
+main() {
+  install_homebrew
+  install_packages
+  install_packer
+  configure_shell
+  install_latest_ruby
+  install_latest_python
+  
+  log_success "Setup completed successfully!"
+  log_info "To apply the changes to your current terminal session, run: source $ZSHRC_PATH"
+  log_info "Or restart your terminal."
+}
+
+main "$@"
+
