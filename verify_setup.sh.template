@@ -35,30 +35,15 @@ log_debug() {
 # type: zinit_plugin, builtin, or custom
 # source: plugin name for zinit, path for builtin, or command for custom
 # test_commands: space-separated list of commands to test completion
-typeset -A completion_config
+declare -A completion_config
 completion_config=(
-  # Terraform uses zinit plugin
   ["terraform"]="zinit_plugin macunha1/zsh-terraform init plan apply destroy"
-  
-  # Git uses built-in zsh completion
   ["git"]="builtin _git checkout branch commit push pull"
-  
-  # rbenv uses custom completion setup
   ["rbenv"]="custom 'eval \"$(rbenv init -)\"' install local global"
-  
-  # pyenv uses custom completion setup
   ["pyenv"]="custom 'eval \"$(pyenv init -)\"' install local global"
-  
-  # direnv uses custom hook
   ["direnv"]="custom 'eval \"$(direnv hook zsh)\"' allow deny"
-  
-  # Packer uses built-in completion
   ["packer"]="builtin _packer build init validate"
-
-  # Starship prompt
   ["starship"]="custom 'eval \"$(starship init zsh)\"' init configure preset"
-
-  # Kubernetes tools
   ["kubectl"]="custom 'source <(kubectl completion zsh)' get describe apply delete"
   ["helm"]="custom 'source <(helm completion zsh)' install upgrade rollback list"
   ["kubectx"]="custom 'source <(kubectl completion zsh)' none"
@@ -72,7 +57,7 @@ test_completion() {
   if [[ -z "$config" ]]; then
     log_debug "No completion configuration found for $tool"
     return 0
-  }
+  fi
   
   # Parse configuration
   local type=${config%% *}
@@ -87,7 +72,7 @@ test_completion() {
     echo "⏭️  SKIPPED"
     log_info "$tool not installed, skipping completion test"
     return 0
-  }
+  fi
   
   case $type in
     "zinit_plugin")
@@ -118,14 +103,16 @@ test_completion() {
   
   # Test if completion functions work for the specified commands
   local all_commands_complete=true
-  for cmd in $test_commands; do
+  # Split test_commands into an array and iterate
+  set -f; IFS=" "; set -- "$test_commands"; set +f
+  for cmd in "$@"; do
     if ! test_command_completion "$tool" "$cmd"; then
       all_commands_complete=false
       log_warning "$tool completion for '$cmd' not working"
     fi
   done
   
-  if $all_commands_complete; then
+  if [[ "$all_commands_complete" == "true" ]]; then
     echo "✅ PASS"
     log_success "$tool completion verified"
     return 0
@@ -143,7 +130,7 @@ test_command_completion() {
   # Skip for 'none' test commands
   if [[ "$cmd" == "none" ]]; then
     return 0
-  }
+  fi
   
   # First check if the command exists
   if ! command -v "$tool" >/dev/null 2>&1; then
@@ -161,4 +148,132 @@ test_command_completion() {
   return 0
 }
 
-[... rest of the file remains unchanged ...]
+# Add detailed environment information at startup
+log_info "Starting verification process..."
+log_debug "Current shell: $SHELL"
+log_debug "Current user: $(whoami)"
+log_debug "Current PATH: $PATH"
+log_debug "Current working directory: $(pwd)"
+log_debug "Home directory: $HOME"
+
+# Enable error logging but don't exit immediately on error
+set +e
+
+# Add error trapping to help diagnose where failures occur
+trap 'log_error "Command failed with exit code $? at line $LINENO"; if [[ $? -eq 3 ]]; then log_debug "Exit code 3 detected - special handling"; fi' ERR
+
+# Check if zshrc exists and source it
+if [[ -f ~/.zshrc ]]; then
+  log_info "Sourcing ~/.zshrc..."
+  # shellcheck disable=SC1090
+  source ~/.zshrc || {
+    log_error "Failed to source ~/.zshrc"
+    log_debug "Contents of $HOME/.zshrc (first 10 lines):"
+    head -n 10 ~/.zshrc || log_debug "Could not read $HOME/.zshrc"
+  }
+else
+  log_warning "$HOME/.zshrc does not exist. Creating a minimal one for testing."
+  touch ~/.zshrc
+fi
+
+# Check for essential PATH elements
+log_info "Checking PATH for required directories..."
+if [[ ! "$PATH" == *".pyenv"* ]]; then
+  log_warning "PATH does not include pyenv. Adding it..."
+  if [[ -d "$HOME/.pyenv/bin" ]]; then
+    export PATH="$HOME/.pyenv/bin:$PATH"
+    log_debug "Added $HOME/.pyenv/bin to PATH"
+  else
+    log_debug "Directory $HOME/.pyenv/bin does not exist"
+  fi
+  
+  # Initialize pyenv with error handling
+  if command -v pyenv >/dev/null 2>&1; then
+    eval "$(pyenv init --path 2>/dev/null)" || log_error "Failed to initialize pyenv path"
+    eval "$(pyenv init - 2>/dev/null)" || log_error "Failed to initialize pyenv"
+  else
+    log_error "pyenv command not found after updating PATH"
+    log_debug "Current PATH after update: $PATH"
+  fi
+fi
+
+if [[ ! "$PATH" == *"rbenv"* ]]; then
+  log_warning "PATH does not include rbenv. Adding it..."
+  if command -v rbenv >/dev/null 2>&1; then
+    eval "$(rbenv init - 2>/dev/null)" || log_error "Failed to initialize rbenv"
+  else
+    log_error "rbenv command not found"
+    log_debug "Current PATH: $PATH"
+  fi
+fi
+
+# Array of commands to verify
+declare -A verify_commands
+verify_commands=(
+  ["brew"]="Homebrew installation"
+  ["git"]="Git installation"
+  ["rbenv"]="rbenv installation"
+  ["pyenv"]="pyenv installation"
+  ["direnv"]="direnv installation"
+  ["starship"]="Starship prompt"
+  ["packer"]="HashiCorp Packer"
+  ["terraform"]="Terraform installation"
+)
+
+# Counter for successful checks
+success_count=0
+total_checks=${#verify_commands}
+
+log_info "=== INSTALLATION VERIFICATION ==="
+
+# Check each command with more detailed output
+# shellcheck disable=SC2296
+for cmd in ${(k)verify_commands}; do
+  description=${verify_commands[$cmd]}
+  printf "%-30s ... " "$description"
+  
+  if command -v "$cmd" >/dev/null 2>&1; then
+    echo "✅ PASS"
+    ((success_count++))
+    log_info "Command '$cmd' found at: $(command -v "$cmd")"
+    # More robust version command that won't fail if --version isn't supported
+    version_out=$("$cmd" --version 2>&1 || echo "Version command not supported")
+    log_info "Version: $(echo "$version_out" | head -n1)"
+  else
+    echo "❌ FAIL"
+    log_error "Command '$cmd' not found in PATH"
+    log_debug "Current PATH: $PATH"
+  fi
+done
+
+log_info "=== COMPLETION VERIFICATION ==="
+
+# Test completions for all configured tools
+completion_success=0
+completion_total=0
+
+# shellcheck disable=SC2296
+for tool in ${(k)completion_config}; do
+  ((completion_total++))
+  if test_completion "$tool"; then
+    ((completion_success++))
+  fi
+done
+
+# Calculate final result
+total_checks=$((total_checks + completion_total))
+success_count=$((success_count + completion_success))
+
+log_info "=== SUMMARY ==="
+log_info "$success_count of $total_checks checks passed"
+log_info "Completion tests: $completion_success of $completion_total passed"
+
+# Determine exit code based on success
+if [[ $success_count -eq $total_checks ]]; then
+  log_success "Verification successful! All components installed and configured correctly."
+  exit 0
+else
+  log_error "Verification failed! Some components were not installed or configured correctly."
+  # Use exit 1 instead of any other code to avoid the cryptic exit status 3
+  exit 1
+fi
