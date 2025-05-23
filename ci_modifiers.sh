@@ -201,7 +201,119 @@ EOF
   # Find the install_packages function and replace its content using awk
   # Note: Terraform and Packer are installed separately due to BUSL license
   log_info "Updating install_packages function to use HashiCorp functions..."
-  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm kubectx\n\n  # Verify HashiCorp functions are available before using them\n  if ! declare -F install_terraform > /dev/null; then\n    log_error \"install_terraform function not available - sourcing functions\"\n    # Source the function definitions to ensure they're available\n    source <(grep -A 50 \"^install_terraform()\" \"$0\" | grep -B 50 -m 1 \"^}\")\n  fi\n\n  if ! declare -F install_packer > /dev/null; then\n    log_error \"install_packer function not available - sourcing functions\"\n    # Source the function definitions to ensure they're available\n    source <(grep -A 50 \"^install_packer()\" \"$0\" | grep -B 50 -m 1 \"^}\")\n  fi\n\n  # Install HashiCorp tools directly (defined earlier in this script)\n  bash -c \"install_terraform\" || log_error \"Failed to install Terraform\"\n  bash -c \"install_packer\" || log_error \"Failed to install Packer\"\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
+  
+  # Create a cleaner heredoc for the awk script
+  cat > /tmp/install_packages_awk.script << 'EOT'
+/^install_packages\(\)/ {
+  p=1
+  print
+  print "  log_info \"Installing essential packages for CI testing...\""
+  print ""
+  print "  # Install core packages directly (faster than full Brewfile)"
+  print "  if ! brew install git zinit rbenv pyenv direnv starship kubectl helm kubectx; then"
+  print "    log_error \"Failed to install some core packages\""
+  print "    # Continue anyway as some packages might have been installed successfully"
+  print "  fi"
+  print ""
+  print "  # Verify HashiCorp functions are available"
+  print "  log_info \"Verifying HashiCorp functions availability...\""
+  print ""
+  print "  # Function to verify and run HashiCorp tool installation"
+  print "  run_hashicorp_install() {"
+  print "    local tool_func=\"$1\""
+  print "    local tool_name=\"$2\""
+  print ""
+  print "    # First verify the function exists"
+  print "    if ! declare -F \"$tool_func\" > /dev/null; then"
+  print "      log_error \"$tool_func function not available - attempting recovery\""
+  print "      # Try to source the function from the current script"
+  print "      source <(grep -A 50 \"^$tool_func()\" \"$0\" | grep -B 50 -m 1 \"^}\")"
+  print "      "
+  print "      # Check again after recovery attempt"
+  print "      if ! declare -F \"$tool_func\" > /dev/null; then"
+  print "        log_error \"Recovery failed: $tool_func function still not available\""
+  print "        return 1"
+  print "      fi"
+  print "    fi"
+  print ""
+  print "    # Call the function directly (no subshell needed since we verified it exists)"
+  print "    log_info \"Installing $tool_name...\""
+  print "    if \"$tool_func\"; then"
+  print "      log_success \"$tool_name installation successful\""
+  print "      return 0"
+  print "    else"
+  print "      log_error \"$tool_name installation failed\""
+  print "      return 1"
+  print "    fi"
+  print "  }"
+  print ""
+  print "  # Install HashiCorp tools with proper error handling"
+  print "  run_hashicorp_install \"install_terraform\" \"Terraform\""
+  print "  run_hashicorp_install \"install_packer\" \"Packer\""
+  print ""
+  print "  # Skip casks in CI to speed up testing"
+  print "  log_success \"Essential packages installed successfully.\""
+  next
+} 
+p && /^}/ {
+  p=0
+} 
+!p {
+  print
+}
+EOT
+
+  # Run the awk script with the newly created script file
+  awk -f /tmp/install_packages_awk.script "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
+  
+  # Clean up the temporary awk script file
+  rm -f /tmp/install_packages_awk.script
+  
+  # Add a function to the script to load HashiCorp functions if needed
+  # This avoids the problematic process substitution in the install_packages function
+  log_info "Adding HashiCorp function loader to the script..."
+  cat > /tmp/hashicorp_loader.sh << 'EOF'
+
+# Function to load HashiCorp functions if they're not already available
+load_hashicorp_functions() {
+  if ! declare -F install_terraform > /dev/null || ! declare -F install_packer > /dev/null; then
+    log_warning "Some HashiCorp functions are not available - attempting to load them"
+    
+    # Source the functions from the script file
+    # First, find the functions in the file
+    local terraform_func=$(grep -n "^install_terraform()" "$0" | head -1 | cut -d':' -f1)
+    local packer_func=$(grep -n "^install_packer()" "$0" | head -1 | cut -d':' -f1)
+    
+    if [ -n "$terraform_func" ]; then
+      log_info "Found install_terraform at line $terraform_func, loading function..."
+      # Extract and eval the function definition
+      eval "$(sed -n "${terraform_func},/^}/p" "$0")"
+      export -f install_terraform
+    fi
+    
+    if [ -n "$packer_func" ]; then
+      log_info "Found install_packer at line $packer_func, loading function..."
+      # Extract and eval the function definition
+      eval "$(sed -n "${packer_func},/^}/p" "$0")"
+      export -f install_packer
+    fi
+  fi
+}
+
+# Add call to load the functions before install_packages
+load_hashicorp_functions
+EOF
+
+  # Insert the loader function before the install_packages function
+  INSTALL_PACKAGES=$(grep -n "^install_packages()" "$output_file" | head -1 | cut -d':' -f1)
+  if [ -n "$INSTALL_PACKAGES" ]; then
+    INSERTION_POINT=$((INSTALL_PACKAGES - 1))
+    sed -i.bak "${INSERTION_POINT}r /tmp/hashicorp_loader.sh" "$output_file"
+    log_success "HashiCorp function loader added to the script."
+  else
+    log_error "Could not find install_packages function to place loader!"
+  fi
+  rm -f /tmp/hashicorp_loader.sh
   
   # 6. Verify function order and check for duplicates
   log_info "Verifying function order in $output_file..."
