@@ -148,11 +148,11 @@ autoload -Uz _zinit
 
 # Load zinit plugins
 zinit wait lucid light-mode for \
-  atinit'zicompinit; zicdreplay' \
+  atinit"zicompinit; zicdreplay" \
     zdharma/fast-syntax-highlighting \
-  atload'_zsh_autosuggest_start' \
+  atload"_zsh_autosuggest_start" \
     zsh-users/zsh-autosuggestions \
-  atload'zicompinit; zicdreplay' \
+  atload"zicompinit; zicdreplay" \
     macunha1/zsh-terraform" "zinit setup"
 
   # Add rbenv configuration
