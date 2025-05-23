@@ -52,16 +52,22 @@ export CI=true\
   awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm kubectx\n\n  # Install HashiCorp tools directly\n  install_terraform || log_error \"Failed to install Terraform\"\n  install_packer || log_error \"Failed to install Packer\"\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
 
   # 3. Ensure .zshrc exists and completions are properly loaded
-  sed -i.bak '/ZSHRC_PATH=.*$/a\
-# Check and create .zshrc if needed\
-if [[ ! -f "$ZSHRC_PATH" ]]; then\
-  touch "$ZSHRC_PATH"\
-fi\
-\
-# Ensure zsh completions directory is in fpath\
-if ! grep -q "zsh/site-functions" "$ZSHRC_PATH" 2>/dev/null; then\
-  echo "fpath=(/opt/homebrew/share/zsh/site-functions \$fpath)" >> "$ZSHRC_PATH"\
-fi' "$output_file"
+  # Create a temporary file with the content to insert
+  cat > /tmp/zshrc_config.txt << 'EOZSH'
+# Check and create .zshrc if needed
+if [[ ! -f "$ZSHRC_PATH" ]]; then
+  touch "$ZSHRC_PATH"
+fi
+
+# Ensure zsh completions directory is in fpath
+if ! grep -q "zsh/site-functions" "$ZSHRC_PATH" 2>/dev/null; then
+  echo "fpath=(/opt/homebrew/share/zsh/site-functions \$fpath)" >> "$ZSHRC_PATH"
+fi
+EOZSH
+
+  # Insert the content after ZSHRC_PATH declaration
+  sed -i.bak "/ZSHRC_PATH=.*$/r /tmp/zshrc_config.txt" "$output_file"
+  rm /tmp/zshrc_config.txt
 
   # 4. Remove any interactive prompts
   sed -i.bak 's/read -p/echo "CI mode: skipping prompt" #read -p/g' "$output_file"
