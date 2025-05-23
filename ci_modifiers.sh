@@ -43,10 +43,23 @@ patch_for_ci() {
 export CI=true\
 ' "$output_file"
 
-  # 2. Create a temporary file with HashiCorp installation functions
-  cat > /tmp/hashicorp_functions.sh << 'EOF'
+  # 2. Source HashiCorp installation functions directly from file rather than creating a temp file
+  if [ -f "hashicorp_install.sh" ]; then
+    log_info "Using existing hashicorp_install.sh for function definitions"
+    # Read the content of hashicorp_install.sh, but skip the shebang line
+    HASHICORP_FUNCTIONS=$(tail -n +2 "hashicorp_install.sh")
+    # Create a temporary file with HashiCorp functions
+    cat > /tmp/hashicorp_functions.sh << EOF
+
+# HashiCorp installation functions - directly included from hashicorp_install.sh
+${HASHICORP_FUNCTIONS}
+EOF
+  else
+    log_error "hashicorp_install.sh not found - creating default implementation"
+    cat > /tmp/hashicorp_functions.sh << 'EOF'
 
 # HashiCorp installation functions
+# Placed after all logging functions and before other functions
 install_hashicorp_tool() {
   local tool=$1
   local version=$2
@@ -130,13 +143,31 @@ install_packer() {
   install_hashicorp_tool "packer" "1.11.2"
 }
 EOF
+  fi
 
-  # 3. Find the insertion point after logging functions and insert HashiCorp functions
-  INSERTION_POINT=$(grep -n "^log_error" "$output_file" | head -1 | cut -d':' -f1)
-  if [ -n "$INSERTION_POINT" ]; then
-    # Insert the HashiCorp functions after the log_error function
+  # 3. Find the insertion point after all logging functions (look for the line after log_error function's closing brace)
+  LOGGING_END=$(grep -n "^log_error" "$output_file" | head -1 | cut -d':' -f1)
+  if [ -n "$LOGGING_END" ]; then
+    # Find the next line after the log_error function's completion
+    INSERTION_POINT=$((LOGGING_END + 2))
+    # Insert the HashiCorp functions after the log_error function is complete
     sed -i.bak "${INSERTION_POINT}r /tmp/hashicorp_functions.sh" "$output_file"
     log_info "Successfully injected HashiCorp functions into $output_file"
+    
+    # Verify that the functions were actually injected
+    if grep -q "install_terraform()" "$output_file"; then
+      log_success "install_terraform function successfully injected into $output_file"
+    else
+      log_error "install_terraform function not found in $output_file after injection"
+      return 1
+    fi
+    
+    if grep -q "install_packer()" "$output_file"; then
+      log_success "install_packer function successfully injected into $output_file"
+    else
+      log_error "install_packer function not found in $output_file after injection"
+      return 1
+    fi
   else
     log_error "Could not find insertion point after logging functions"
     return 1
@@ -148,9 +179,22 @@ EOF
   # 3. Modify the install_packages function to use a subset of packages
   # Find the install_packages function and replace its content using awk
   # Note: Terraform and Packer are installed separately due to BUSL license
-  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm kubectx\n\n  # Install HashiCorp tools directly\n  install_terraform || log_error \"Failed to install Terraform\"\n  install_packer || log_error \"Failed to install Packer\"\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
+  awk '/^install_packages\(\)/{p=1;print;print "  log_info \"Installing essential packages for CI testing...\"\n\n  # Install core packages directly (faster than full Brewfile)\n  brew install git zinit rbenv pyenv direnv starship kubectl helm kubectx\n\n  # Install HashiCorp tools directly (defined earlier in this script)\n  install_terraform || log_error \"Failed to install Terraform\"\n  install_packer || log_error \"Failed to install Packer\"\n\n  # Skip casks in CI to speed up testing\n  log_success \"Essential packages installed successfully.\"";next} p&&/^}/{p=0} !p{print}' "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
 
-  # 3. Ensure .zshrc exists and completions are properly loaded
+  # 4. Remove any existing install_terraform or install_packer functions from setup.sh
+  # (they might conflict with our injected versions)
+  sed -i.bak '/^install_terraform()/,/^}/d' "$output_file"
+  sed -i.bak '/^install_packer()/,/^}/d' "$output_file"
+  
+  # 5. Verify function order and check for duplicates
+  log_info "Verifying function order in $output_file..."
+  if grep -n "^install_packer()" "$output_file" | wc -l | grep -q "1"; then
+    log_success "No duplicate install_packer functions found."
+  else
+    log_error "Duplicate install_packer functions found. Check $output_file manually."
+  fi
+  
+  # 5. Ensure .zshrc exists and completions are properly loaded
   # Create a temporary file with the content to insert
   cat > /tmp/zshrc_config.txt << 'EOZSH'
 # Check and create .zshrc if needed
