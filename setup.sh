@@ -82,14 +82,35 @@ install_homebrew() {
 
 # Install all packages from Brewfile
 install_packages() {
-  local brewfile_path="./Brewfile"
+  local brewfile_path="$HOME/Brewfile"
   
   if [[ ! -f "$brewfile_path" ]]; then
-    log_error "Brewfile not found at $brewfile_path. Please ensure you're running the script from the project directory containing the Brewfile."
-    exit 1
+    log_error "Brewfile not found at $brewfile_path. Creating a new one."
+    
+    # Create a new Brewfile with the tools we've been using
+    cat > "$brewfile_path" << EOF
+# Brewfile
+# This file documents all Homebrew installations and can be used to set up a new machine.
+# To use this file for installation, run: brew bundle
+
+# Taps (Third-party repositories)
+tap "getantibody/antibody"
+
+# Formulae (Command-line packages)
+brew "git"
+brew "zinit"
+brew "rbenv"
+brew "pyenv"
+brew "direnv"
+
+# Casks (GUI applications)
+cask "iterm2"
+cask "warp"
+cask "signal"
+cask "whatsapp"
+EOF
+    log_info "Created new Brewfile at $brewfile_path"
   fi
-  
-  log_info "Using Brewfile from repository."
   
   log_info "Installing packages from Brewfile..."
   if brew bundle check --file="$brewfile_path" >/dev/null 2>&1; then
@@ -99,6 +120,7 @@ install_packages() {
     log_success "Packages installed successfully."
   fi
 }
+
 # Configure shell with required tool integrations
 configure_shell() {
   log_info "Configuring shell environment in .zshrc..."
@@ -118,14 +140,12 @@ configure_shell() {
   }
   
   # Add zinit configuration
-  # Add zinit configuration
   add_to_zshrc "source.*zinit.zsh" "source $(brew --prefix)/opt/zinit/zinit.zsh
 
 # Load zinit plugins
 zinit light zdharma/fast-syntax-highlighting
 zinit light zsh-users/zsh-autosuggestions
-zinit light macunha1/zsh-terraform" "zinit setup"
-  
+zinit light macunha1/zsh-terraform" "zinit setup"  
   # Add rbenv configuration
   add_to_zshrc "rbenv init" 'eval "$(rbenv init -)"' "rbenv setup"
   
@@ -145,8 +165,6 @@ eval "$(pyenv init -)"' "pyenv setup"
   add_to_zshrc "helm completion" 'source <(helm completion zsh 2>/dev/null)' "helm completion" 
   add_to_zshrc "kubectx completion" 'source <(kubectl completion zsh 2>/dev/null)' "kubectx completion"
   
-  # Add Terraform completion if available
-  # More robust terraform completion setup
   
   log_success "Shell configuration completed."
 }
