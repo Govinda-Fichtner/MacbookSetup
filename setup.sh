@@ -68,11 +68,11 @@ install_homebrew() {
     # Add Homebrew to PATH based on architecture
     if [[ "$(uname -m)" == "arm64" ]]; then
       # For Apple Silicon
-      echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$ZSHRC_PATH"
+      echo "eval \"$(/opt/homebrew/bin/brew shellenv)\"" >> "$ZSHRC_PATH"
       eval "$(/opt/homebrew/bin/brew shellenv)"
     else
       # For Intel Mac
-      echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$ZSHRC_PATH"
+      echo "eval \"$(/usr/local/bin/brew shellenv)\"" >> "$ZSHRC_PATH"
       eval "$(/usr/local/bin/brew shellenv)"
     fi
     
@@ -144,33 +144,33 @@ configure_shell() {
 
 # Configure zinit completions
 autoload -Uz _zinit
-(( ${+_comps} )) && _comps[zinit]=_zinit
+(( \${+_comps} )) && _comps[zinit]=_zinit
 
 # Load zinit plugins
-zinit wait lucid light-mode for \
-  atinit"zicompinit; zicdreplay" \
-    zdharma/fast-syntax-highlighting \
-  atload"_zsh_autosuggest_start" \
-    zsh-users/zsh-autosuggestions \
-  atload"zicompinit; zicdreplay" \
+zinit wait lucid light-mode for \\
+  atinit\"zicompinit; zicdreplay\" \\
+    zdharma/fast-syntax-highlighting \\
+  atload\"_zsh_autosuggest_start\" \\
+    zsh-users/zsh-autosuggestions \\
+  atload\"zicompinit; zicdreplay\" \\
     macunha1/zsh-terraform" "zinit setup"
 
   # Add rbenv configuration
-  add_to_zshrc "rbenv init" 'eval "$(rbenv init - zsh)"' "rbenv setup"
+  add_to_zshrc "rbenv init" "eval \"\$(rbenv init - zsh)\"" "rbenv setup"
   
   # Add pyenv configuration
-  add_to_zshrc "pyenv init" 'export PATH="$HOME/.pyenv/bin:$PATH"
-eval "$(pyenv init --path)"
-eval "$(pyenv init -)"' "pyenv setup"
+  add_to_zshrc "pyenv init" "export PATH=\"\$HOME/.pyenv/bin:\$PATH\"
+eval \"\$(pyenv init --path)\"
+eval \"\$(pyenv init -)\"" "pyenv setup"
   
   # Add direnv configuration with proper zsh completion
-  add_to_zshrc "direnv hook" 'eval "$(direnv hook zsh)"' "direnv setup"
+  add_to_zshrc "direnv hook" "eval \"\$(direnv hook zsh)\"" "direnv setup"
   
   # Add Starship prompt configuration
-  add_to_zshrc "starship init" 'eval "$(starship init zsh)"' "Starship prompt setup"
+  add_to_zshrc "starship init" "eval \"\$(starship init zsh)\"" "Starship prompt setup"
   
   # Add Kubernetes tools completions with proper zsh syntax
-  add_to_zshrc "kubectl completion" '# Kubernetes tools completions
+  add_to_zshrc "kubectl completion" "# Kubernetes tools completions
 if command -v kubectl >/dev/null; then
   source <(kubectl completion zsh)
 fi
@@ -180,27 +180,27 @@ fi
 if command -v kubectx >/dev/null; then
   source <(kubectx completion zsh)
   source <(kubens completion zsh)
-fi' "Kubernetes completions"
+fi" "Kubernetes completions"
   
   # Add Packer completion with proper zsh syntax
-  add_to_zshrc "packer completion" 'if command -v packer >/dev/null; then
+  add_to_zshrc "packer completion" "if command -v packer >/dev/null; then
   # Register packer completion function
   _packer_completion() {
     local completions
-    completions="$(packer --completion-script-zsh)"
-    eval "$completions"
-    _packer "$@"
+    completions=\"\$(packer --completion-script-zsh)\"
+    eval \"\$completions\"
+    _packer \"\$@\"
   }
   compdef _packer_completion packer
-fi' "Packer completion"
+fi" "Packer completion"
   
   # Add Starship completion
-  add_to_zshrc "starship completions" 'if command -v starship >/dev/null; then
+  add_to_zshrc "starship completions" "if command -v starship >/dev/null; then
   source <(starship completions zsh)
-fi' "Starship completions"
+fi" "Starship completions"
   
   # Initialize completions after all sources are added
-  add_to_zshrc "# Initialize completions" '# Initialize completions
+  add_to_zshrc "# Initialize completions" "# Initialize completions
 autoload -Uz compinit
 # Reset completion cache once per day
 if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
@@ -210,12 +210,12 @@ else
 fi
 
 # Enable menu selection
-zstyle ":completion:*" menu select
+zstyle \":completion:*\" menu select
 # Enable case-insensitive completion
-zstyle ":completion:*" matcher-list "m:{a-zA-Z}={A-Za-z}"
+zstyle \":completion:*\" matcher-list \"m:{a-zA-Z}={A-Za-z}\"
 # Cache completions
-zstyle ":completion::complete:*" use-cache on
-zstyle ":completion::complete:*" cache-path "$HOME/.zcompcache"' "completion initialization"
+zstyle \":completion::complete:*\" use-cache on
+zstyle \":completion::complete:*\" cache-path \"\$HOME/.zcompcache\"" "completion initialization"
   
   log_success "Shell configuration completed."
   
