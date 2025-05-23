@@ -281,8 +281,9 @@ load_hashicorp_functions() {
     
     # Source the functions from the script file
     # First, find the functions in the file
-    local terraform_func=$(grep -n "^install_terraform()" "$0" | head -1 | cut -d':' -f1)
-    local packer_func=$(grep -n "^install_packer()" "$0" | head -1 | cut -d':' -f1)
+    local terraform_func packer_func
+    terraform_func=$(grep -n "^install_terraform()" "$0" | head -1 | cut -d':' -f1)
+    packer_func=$(grep -n "^install_packer()" "$0" | head -1 | cut -d':' -f1)
     
     if [ -n "$terraform_func" ]; then
       log_info "Found install_terraform at line $terraform_func, loading function..."
@@ -337,6 +338,7 @@ verify_hashicorp_functions() {
     log_error "install_terraform function is not available!"
     # Attempt to recover by sourcing from the current file
     log_info "Attempting to source install_terraform function..."
+    # shellcheck disable=SC1090
     source <(grep -A 20 "^install_terraform()" "$0" | grep -B 20 -m 1 "^}")
   fi
   
@@ -344,6 +346,7 @@ verify_hashicorp_functions() {
     log_error "install_packer function is not available!"
     # Attempt to recover by sourcing from the current file
     log_info "Attempting to source install_packer function..."
+    # shellcheck disable=SC1090
     source <(grep -A 20 "^install_packer()" "$0" | grep -B 20 -m 1 "^}")
   fi
   
@@ -351,6 +354,7 @@ verify_hashicorp_functions() {
     log_error "install_hashicorp_tool function is not available!"
     # Attempt to recover by sourcing from the current file
     log_info "Attempting to source install_hashicorp_tool function..."
+    # shellcheck disable=SC1090
     source <(grep -A 100 "^install_hashicorp_tool()" "$0" | grep -B 100 -m 1 "^}")
   fi
   
