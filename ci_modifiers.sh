@@ -585,6 +585,151 @@ EOF
   fi
   rm -f /tmp/zinit_patch.sh
 
+  # Modify the configure_shell function to better handle CI environments, especially zinit paths
+  log_info "Enhancing configure_shell function for CI environment..."
+  
+  # Create a temporary file with zinit path discovery for configure_shell
+  cat > /tmp/improved_zinit_config.awk << 'EOT'
+/^  # Add zinit configuration/ {
+  p=1
+  print
+  print "  # Add zinit configuration with dynamic path discovery for CI compatibility"
+  print "  log_info \"Setting up zinit with dynamic path discovery...\""
+  print "  # Find the zinit.zsh file using the same logic as patch_zinit_init"
+  print "  local zinit_paths=("
+  print "    \"$(brew --prefix 2>/dev/null)/opt/zinit/zinit.zsh\""
+  print "    \"$(brew --prefix 2>/dev/null)/share/zinit/zinit.zsh\""
+  print "    \"$HOME/.zinit/bin/zinit.zsh\""
+  print "    \"$HOME/.local/share/zinit/zinit.zsh\""
+  print "    \"/usr/local/share/zinit/zinit.zsh\""
+  print "    \"/usr/local/opt/zinit/zinit.zsh\""
+  print "  )"
+  print ""
+  print "  # Check for zinit in Homebrew Cellar directory (version-specific paths)"
+  print "  local brew_prefix=\"$(brew --prefix 2>/dev/null)\""
+  print "  if [[ -d \"$brew_prefix/Cellar/zinit\" ]]; then"
+  print "    log_info \"Checking Homebrew Cellar for zinit...\""
+  print "    local cellar_versions=(\"$brew_prefix/Cellar/zinit\"/*)"
+  print "    for version_dir in \"${cellar_versions[@]}\"; do"
+  print "      if [[ -d \"$version_dir\" && -f \"$version_dir/zinit.zsh\" ]]; then"
+  print "        zinit_paths+=(\"$version_dir/zinit.zsh\")"
+  print "        log_info \"Found zinit in Cellar: $version_dir/zinit.zsh\""
+  print "      fi"
+  print "    done"
+  print "  fi"
+  print ""
+  print "  local zinit_path=\"\""
+  print "  for path in \"${zinit_paths[@]}\"; do"
+  print "    if [[ -f \"$path\" ]]; then"
+  print "      zinit_path=\"$path\""
+  print "      log_info \"Using zinit at: $zinit_path\""
+  print "      break"
+  print "    fi"
+  print "  done"
+  print ""
+  print "  if [[ -z \"$zinit_path\" ]]; then"
+  print "    log_warning \"Could not find zinit.zsh, using fallback path\""
+  print "    # Use a fallback path as a last resort"
+  print "    zinit_path=\"$(brew --prefix 2>/dev/null)/opt/zinit/zinit.zsh\""
+  print "  fi"
+  print ""
+  print "  add_to_zshrc \"source.*zinit.zsh\" \"# Dynamic zinit path discovery for CI compatibility"
+  print "ZINIT_PATH=\\\"$zinit_path\\\""
+  print "if [[ -f \\\"\\$ZINIT_PATH\\\" ]]; then"
+  print "  source \\\"\\$ZINIT_PATH\\\" || log_warning \\\"Failed to source zinit from \\$ZINIT_PATH\\\""
+  print ""
+  print "  # Load zinit plugins with CI-safe configuration"
+  print "  zinit light zdharma/fast-syntax-highlighting"
+  print "  zinit light zsh-users/zsh-autosuggestions"
+  print "  zinit light macunha1/zsh-terraform"
+  print "else"
+  print "  log_warning \\\"Zinit not found at \\$ZINIT_PATH\\\""
+  print "fi\" \"zinit setup with CI compatibility\""
+  next
+}
+p && /^  # Add rbenv configuration/ {
+  p=0
+  print
+  next
+}
+p {
+  # Skip lines while in the zinit configuration section
+  next
+}
+!p {
+  print
+}
+EOT
+
+  # Apply the awk script to modify the zinit configuration in configure_shell
+  awk -f /tmp/improved_zinit_config.awk "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
+  rm -f /tmp/improved_zinit_config.awk
+  
+  # Now update the shell reloading part of configure_shell
+  log_info "Enhancing shell reload mechanism for CI environment..."
+  cat > /tmp/improved_shell_reload.awk << 'EOT'
+/^  # Reload the shell configuration more thoroughly/ {
+  p=1
+  print
+  print "  log_info \"Reloading shell configuration in CI environment...\""
+  print "  # Force zcompdump regeneration"
+  print "  rm -f \"$HOME/.zcompdump\"*"
+  print "  rm -f \"$HOME/.zcompcache\"/*"
+  print "  # Source zshrc with error handling"
+  print "  log_info \"Sourcing zshrc file: $ZSHRC_PATH\""
+  print "  # shellcheck disable=SC1090"
+  print "  if ! source \"$ZSHRC_PATH\"; then"
+  print "    log_warning \"Failed to source $ZSHRC_PATH directly, continuing anyway\""
+  print "    # Set environment variables directly to ensure availability"
+  print "    export PATH=\"$HOME/.pyenv/bin:$PATH\""
+  print "    export PATH=\"$HOME/.rbenv/bin:$PATH\""
+  print "  else"
+  print "    log_info \"Successfully sourced $ZSHRC_PATH\""
+  print "  fi"
+  print ""
+  print "  # Initialize completions with error handling"
+  print "  log_info \"Initializing shell completions...\""
+  print "  if ! autoload -Uz compinit 2>/dev/null; then"
+  print "    log_warning \"Failed to load compinit, skipping completion initialization\""
+  print "  else"
+  print "    # Run compinit with option to ignore insecure directories"
+  print "    compinit -u 2>/dev/null || compinit -C -i 2>/dev/null || true"
+  print "    log_info \"Completions initialized\""
+  print "  fi"
+  print ""
+  print "  # Rehash commands with error handling"
+  print "  rehash 2>/dev/null || true"
+  print ""
+  print "  log_success \"Shell configuration reloaded with enhanced CI compatibility.\""
+  next
+}
+p && /^}/ {
+  p=0
+  print
+  next
+}
+p {
+  # Skip lines while processing the shell reload section
+  next
+}
+!p {
+  print
+}
+EOT
+
+  # Apply the awk script to modify the shell reloading part
+  CONFIGURE_SHELL_FUNC=$(grep -n "^configure_shell()" "$output_file" | head -1 | cut -d':' -f1)
+  if [ -n "$CONFIGURE_SHELL_FUNC" ]; then
+    log_info "Found configure_shell function at line $CONFIGURE_SHELL_FUNC, applying shell reload enhancement..."
+    awk -f /tmp/improved_shell_reload.awk "$output_file" > "$output_file.tmp" && mv "$output_file.tmp" "$output_file"
+    log_success "Shell reload enhancement applied successfully."
+  else
+    log_error "Could not find configure_shell function in $output_file!"
+  fi
+  
+  # Clean up temporary file
+  rm -f /tmp/improved_shell_reload.awk
+
   # Clean up backup files
   rm -f "$output_file.bak"
 
