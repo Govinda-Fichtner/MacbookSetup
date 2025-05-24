@@ -26,6 +26,67 @@ log_error() {
   echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to ensure file has correct executable permissions
+ensure_file_permissions() {
+  local file_path="$1"
+  local sudo_if_needed="${2:-false}"  # Optional flag to try sudo if regular chmod fails
+  
+  # Validate input
+  if [[ -z "$file_path" ]]; then
+    log_error "ensure_file_permissions: No file path provided"
+    return 1
+  fi
+
+  if [[ ! -f "$file_path" ]]; then
+    log_error "ensure_file_permissions: File does not exist: $file_path"
+    return 1
+  fi
+
+  log_info "Setting executable permissions for $file_path..."
+  
+  # Check current permissions
+  if [[ -x "$file_path" ]]; then
+    log_info "File already has executable permissions: $file_path"
+    return 0
+  fi
+
+  # Try setting permissions without sudo first
+  if chmod +x "$file_path" 2>/dev/null; then
+    if [[ -x "$file_path" ]]; then
+      log_success "Successfully set executable permissions for $file_path"
+      ls -l "$file_path"  # Display permissions for verification
+      return 0
+    else
+      log_warning "chmod command succeeded but permissions not set correctly on $file_path"
+    fi
+  else
+    log_warning "Failed to set executable permissions for $file_path with regular chmod"
+  fi
+
+  # If we're here, the first attempt failed. Try with sudo if allowed.
+  if [[ "$sudo_if_needed" == "true" ]]; then
+    log_info "Attempting to use sudo to set permissions on $file_path..."
+    if sudo chmod +x "$file_path" 2>/dev/null; then
+      if [[ -x "$file_path" ]]; then
+        log_success "Successfully set executable permissions for $file_path using sudo"
+        ls -l "$file_path"  # Display permissions for verification
+        return 0
+      else
+        log_error "sudo chmod succeeded but permissions still not set correctly on $file_path"
+      fi
+    else
+      log_error "Failed to set executable permissions with sudo on $file_path"
+    fi
+  else
+    log_info "Skipping sudo attempt (not enabled for this call)"
+  fi
+
+  # If we reach here, all attempts failed
+  log_error "Could not set executable permissions on $file_path after all attempts"
+  log_info "Current permissions: $(ls -l "$file_path")"
+  return 1
+}
+
 # Function to patch the setup.sh script for CI use
 patch_for_ci() {
   local setup_file="$1"
@@ -428,10 +489,7 @@ EOZSH
   sed -i.bak '/^log_info "Starting setup process/a\
 log_info "Running in CI environment - some operations will be modified"' "$output_file"
 
-  # 6. Ensure the script is executable
-  chmod +x "$output_file"
-
-  # 7. Patch zinit initialization script to fix typeset -g compatibility issue
+  # Patch zinit initialization script to fix typeset -g compatibility issue
   log_info "Patching zinit initialization script for CI compatibility..."
   
   # Create a function to patch zinit.zsh
@@ -735,6 +793,13 @@ EOT
 
   # Clean up backup files
   rm -f "$output_file.bak"
+
+  # Use the ensure_file_permissions function to set and verify permissions
+  if ! ensure_file_permissions "$output_file" "true"; then
+    log_error "Failed to set executable permissions for $output_file despite multiple attempts"
+    log_error "This may cause CI pipeline failures - manual intervention may be required"
+    return 1
+  fi
 
   log_info "CI-optimized script created at $output_file with execute permissions"
 }
