@@ -431,6 +431,75 @@ log_info "Running in CI environment - some operations will be modified"' "$outpu
   # 6. Ensure the script is executable
   chmod +x "$output_file"
 
+  # 7. Patch zinit initialization script to fix typeset -g compatibility issue
+  log_info "Patching zinit initialization script for CI compatibility..."
+  
+  # Create a function to patch zinit.zsh
+  cat > /tmp/zinit_patch.sh << 'EOF'
+
+# Function to patch zinit initialization script for compatibility with older zsh versions
+patch_zinit_init() {
+  local zinit_paths=(
+    "/opt/homebrew/share/zinit/zinit.zsh"
+    "$HOME/.zinit/bin/zinit.zsh"
+    "/usr/local/share/zinit/zinit.zsh"
+  )
+  
+  log_info "Searching for zinit initialization script..."
+  
+  local zinit_path=""
+  for path in "${zinit_paths[@]}"; do
+    if [[ -f "$path" ]]; then
+      zinit_path="$path"
+      log_info "Found zinit at: $zinit_path"
+      break
+    fi
+  done
+  
+  if [[ -z "$zinit_path" ]]; then
+    log_warning "Zinit initialization script not found, skipping patch"
+    return 0
+  fi
+  
+  # Create a backup of the original file
+  local backup_file="${zinit_path}.bak"
+  if [[ ! -f "$backup_file" ]]; then
+    log_info "Creating backup of original zinit script at: $backup_file"
+    cp "$zinit_path" "$backup_file"
+  else
+    log_info "Backup already exists at: $backup_file"
+  fi
+  
+  # Replace 'typeset -g' with 'typeset' to fix compatibility issues
+  log_info "Patching zinit script to replace 'typeset -g' with 'typeset'"
+  if sed -i.tmp 's/typeset -g/typeset/g' "$zinit_path"; then
+    rm -f "${zinit_path}.tmp"
+    log_success "Zinit initialization script patched successfully"
+  else
+    log_error "Failed to patch zinit initialization script"
+    # Restore from backup if patch failed
+    if [[ -f "$backup_file" ]]; then
+      log_info "Restoring zinit script from backup"
+      cp "$backup_file" "$zinit_path"
+    fi
+  fi
+}
+
+# Call the function to patch zinit
+patch_zinit_init
+EOF
+
+  # Insert the zinit patch function before install_packages function
+  INSTALL_PACKAGES=$(grep -n "^install_packages()" "$output_file" | head -1 | cut -d':' -f1)
+  if [ -n "$INSTALL_PACKAGES" ]; then
+    INSERTION_POINT=$((INSTALL_PACKAGES - 1))
+    sed -i.bak "${INSERTION_POINT}r /tmp/zinit_patch.sh" "$output_file"
+    log_success "Zinit patching function added to the script."
+  else
+    log_error "Could not find install_packages function to place zinit patcher!"
+  fi
+  rm -f /tmp/zinit_patch.sh
+
   # Clean up backup files
   rm -f "$output_file.bak"
 
