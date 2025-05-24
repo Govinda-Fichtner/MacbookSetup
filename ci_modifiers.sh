@@ -440,7 +440,8 @@ log_info "Running in CI environment - some operations will be modified"' "$outpu
 # Function to patch zinit initialization script for compatibility with older zsh versions
 patch_zinit_init() {
   log_info "Discovering Homebrew installation path..."
-  local brew_prefix=""
+  local brew_prefix
+  brew_prefix=""
   if command -v brew >/dev/null 2>&1; then
     brew_prefix=$(brew --prefix)
     log_info "Homebrew prefix detected: $brew_prefix"
@@ -606,7 +607,9 @@ EOF
   print "  )"
   print ""
   print "  # Check for zinit in Homebrew Cellar directory (version-specific paths)"
-  print "  local brew_prefix=\"$(brew --prefix 2>/dev/null)\""
+  print "  local brew_prefix"
+  print "  brew_prefix=\"\""
+  print "  brew_prefix=\"$(brew --prefix 2>/dev/null)\""
   print "  if [[ -d \"$brew_prefix/Cellar/zinit\" ]]; then"
   print "    log_info \"Checking Homebrew Cellar for zinit...\""
   print "    local cellar_versions=(\"$brew_prefix/Cellar/zinit\"/*)"
