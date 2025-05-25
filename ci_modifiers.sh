@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 # CI-specific modifications to be applied to setup.sh
 # This file contains only the differences needed for CI environments
 
@@ -95,14 +95,238 @@ patch_for_ci() {
   # Create a copy of the original script
   cp "$setup_file" "$output_file"
   
-  # Patch zinit initialization script early before sourcing
-  log_info "Patching zinit initialization script before any sourcing..."
-  patch_zinit_init
-  if [ $? -ne 0 ]; then
-    log_error "Failed to patch zinit initialization script"
+  # Insert the patch_zinit_init function definition at the beginning of the script
+  # Right after the logging functions (around line 43)
+  log_info "Injecting patch_zinit_init function at the beginning of the script..."
+  
+  # Create a temporary file with the patch_zinit_init function definition
+  cat > /tmp/early_zinit_patch.sh << 'EOF'
+
+# Function to patch zinit initialization script for compatibility with older zsh versions
+patch_zinit_init() {
+  log_info "Discovering Homebrew installation path..."
+  local brew_prefix
+  brew_prefix=""
+  
+  if ! command -v brew >/dev/null 2>&1; then
+    log_error "Homebrew command not found - this is required for setup"
+    log_warning "Will try to proceed with default paths, but this may fail"
+    # Default to Apple Silicon path, but check architecture
+    if [[ "$(uname -m)" == "arm64" ]]; then
+      brew_prefix="/opt/homebrew"  # Default for Apple Silicon
+    else
+      brew_prefix="/usr/local"     # Default for Intel Mac
+    fi
+    log_warning "Using default Homebrew prefix based on architecture: $brew_prefix"
+  else
+    # Get brew prefix with error handling
+    if ! brew_prefix=$(brew --prefix 2>/dev/null); then
+      log_error "Failed to determine Homebrew prefix"
+      # Default to Apple Silicon path, but check architecture
+      if [[ "$(uname -m)" == "arm64" ]]; then
+        brew_prefix="/opt/homebrew"  # Default for Apple Silicon
+      else
+        brew_prefix="/usr/local"     # Default for Intel Mac
+      fi
+      log_warning "Using default Homebrew prefix based on architecture: $brew_prefix"
+    else
+      log_info "Homebrew prefix detected: $brew_prefix"
+    fi
+  fi
+  
+  # Find all zinit installations in Cellar directory using glob pattern
+  local cellar_zinit_paths=()
+  if [[ -d "$brew_prefix/Cellar/zinit" ]]; then
+    log_info "Searching for zinit in Homebrew Cellar directory..."
+    # Find all zinit versions in Cellar and add them to paths
+    for version_dir in "$brew_prefix/Cellar/zinit"/*; do
+      if [[ -d "$version_dir" && -f "$version_dir/zinit.zsh" ]]; then
+        cellar_zinit_paths+=("$version_dir/zinit.zsh")
+        log_info "Found Cellar zinit installation: $version_dir/zinit.zsh"
+      fi
+    done
+  else
+    log_info "No Homebrew Cellar zinit directory found at $brew_prefix/Cellar/zinit"
+  fi
+  
+  # Combine all possible paths, including dynamic ones
+  local zinit_paths=(
+    # Dynamic Homebrew paths
+    "$brew_prefix/opt/zinit/zinit.zsh"
+    "$brew_prefix/share/zinit/zinit.zsh"
+    # Include all detected Cellar paths
+    "${cellar_zinit_paths[@]}"
+    # User installation paths
+    "$HOME/.zinit/bin/zinit.zsh"
+    "$HOME/.local/share/zinit/zinit.zsh"
+    # System-wide installation paths
+    "/usr/local/share/zinit/zinit.zsh"
+    "/usr/local/opt/zinit/zinit.zsh"
+    "/usr/share/zinit/zinit.zsh"
+  )
+  
+  log_info "Searching for zinit initialization script..."
+  
+  local zinit_path=""
+  for path in "${zinit_paths[@]}"; do
+    if [[ -z "$path" ]]; then
+      continue  # Skip empty paths
+    fi
+    
+    log_info "Checking for zinit at: $path"
+    if [[ -f "$path" ]]; then
+      zinit_path="$path"
+      log_success "Found zinit at: $zinit_path"
+      break
+    else
+      log_info "Zinit not found at: $path"
+    fi
+  done
+  
+  if [[ -z "$zinit_path" ]]; then
+    log_warning "Zinit initialization script not found, skipping patch"
+    return 0
+  fi
+  
+  # Check if the file is writable
+  if [[ ! -w "$zinit_path" ]]; then
+    log_error "Zinit initialization script found but not writable: $zinit_path"
+    log_info "Attempting to make the file writable..."
+    if ! chmod +w "$zinit_path" 2>/dev/null; then
+      log_error "Failed to make the file writable, will try using sudo"
+      if ! sudo chmod +w "$zinit_path" 2>/dev/null; then
+        log_error "Failed to make the file writable even with sudo, cannot patch zinit"
+        return 1
+      else
+        log_success "Made zinit file writable using sudo"
+      fi
+    else
+      log_success "Made zinit file writable"
+    fi
+  fi
+  
+  # Create a backup of the original file
+  local backup_file="${zinit_path}.bak"
+  if [[ ! -f "$backup_file" ]]; then
+    log_info "Creating backup of original zinit script at: $backup_file"
+    cp "$zinit_path" "$backup_file"
+  else
+    log_info "Backup already exists at: $backup_file"
+    # Verify the backup is valid by checking its size
+    local orig_size backup_size
+    orig_size=$(wc -c < "$zinit_path" 2>/dev/null || echo 0)
+    backup_size=$(wc -c < "$backup_file" 2>/dev/null || echo 0)
+    
+    if [[ $backup_size -lt 100 ]]; then
+      log_error "Backup file appears to be invalid (size: $backup_size bytes)"
+      log_info "Creating a new backup file..."
+      cp "$zinit_path" "${backup_file}.new"
+      if [[ -f "${backup_file}.new" ]]; then
+        mv "${backup_file}.new" "$backup_file"
+        log_success "Created new backup file at: $backup_file"
+      else
+        log_error "Failed to create new backup file"
+        return 1
+      fi
+    else
+      log_info "Backup file appears valid (size: $backup_size bytes)"
+    fi
+  fi
+  
+  # Replace 'typeset -g' with 'typeset' to fix compatibility issues
+  log_info "Patching zinit script to replace 'typeset -g' with 'typeset'"
+  
+  # Count occurrences of 'typeset -g' before patching
+  local count_before
+  count_before=$(grep -c "typeset -g" "$zinit_path" || echo 0)
+  log_info "Found $count_before occurrences of 'typeset -g' before patching"
+  
+  # Perform the patching
+  if sed -i.tmp 's/typeset -g/typeset/g' "$zinit_path"; then
+    rm -f "${zinit_path}.tmp"
+    
+    # Verify the changes were applied by counting occurrences after patching
+    local count_after
+    count_after=$(grep -c "typeset -g" "$zinit_path" || echo 0)
+    log_info "Found $count_after occurrences of 'typeset -g' after patching"
+    
+    if [[ $count_after -eq 0 ]]; then
+      log_success "Zinit initialization script patched successfully (removed $count_before occurrences of 'typeset -g')"
+      
+      # Try to source the patched file to verify it works
+      log_info "Verifying patched zinit script loads correctly..."
+      if ! source "$zinit_path" >/dev/null 2>&1; then
+        log_error "Patched zinit script fails to load - restoring from backup"
+        if [[ -f "$backup_file" ]]; then
+          cp "$backup_file" "$zinit_path"
+          log_warning "Restored zinit script from backup - patch was not applied"
+          return 1
+        else
+          log_error "Cannot restore from backup - zinit may be broken"
+          return 1
+        fi
+      else
+        log_success "Patched zinit script loads correctly"
+      fi
+    elif [[ $count_after -lt $count_before ]]; then
+      log_warning "Zinit initialization script partially patched (removed $(($count_before - $count_after)) of $count_before occurrences)"
+      log_info "Attempting to fix remaining instances..."
+      
+      # Try a different sed approach for remaining instances
+      if sed -i.tmp 's/typeset -g/typeset/g' "$zinit_path"; then
+        rm -f "${zinit_path}.tmp"
+        count_after=$(grep -c "typeset -g" "$zinit_path" || echo 0)
+        
+        if [[ $count_after -eq 0 ]]; then
+          log_success "All instances of 'typeset -g' removed with second attempt"
+        else
+          log_warning "Still $count_after instances of 'typeset -g' remaining"
+          # Continue anyway, as we've made progress
+        fi
+      fi
+    else
+      log_error "Zinit initialization script patch failed - no occurrences were changed"
+      # Restore from backup
+      if [[ -f "$backup_file" ]]; then
+        log_info "Restoring zinit script from backup"
+        cp "$backup_file" "$zinit_path"
+      fi
+      return 1
+    fi
+  else
+    log_error "Failed to patch zinit script with sed command"
+    # Restore from backup if patch failed
+    if [[ -f "$backup_file" ]]; then
+      log_info "Restoring zinit script from backup"
+      cp "$backup_file" "$zinit_path"
+    fi
     return 1
   fi
+}
+EOF
 
+  # Find the line where log_info "Starting setup process..." is located
+  LOG_START_LINE=$(grep -n "log_info \"Starting setup process" "$output_file" | head -1 | cut -d':' -f1)
+  if [ -n "$LOG_START_LINE" ]; then
+    # Insert the patch_zinit_init function right after this line
+    sed -i.bak "${LOG_START_LINE}r /tmp/early_zinit_patch.sh" "$output_file"
+    log_success "Successfully injected patch_zinit_init function early in the script"
+    
+    # Verify the function was actually injected
+    if grep -q "patch_zinit_init()" "$output_file"; then
+      log_success "patch_zinit_init function successfully injected into $output_file"
+    else
+      log_error "patch_zinit_init function not found in $output_file after injection"
+      return 1
+    fi
+  else
+    log_error "Could not find 'Starting setup process' message in $output_file"
+    return 1
+  fi
+  
+  # Remove the temporary file
+  rm -f /tmp/early_zinit_patch.sh
+  
   # Apply CI-specific modifications
   
   # 1. Add CI environment marker near the top and ensure bash functions are exportable
@@ -603,225 +827,15 @@ log_info "Running in CI environment - some operations will be modified"' "$outpu
   # Patch zinit initialization script to fix typeset -g compatibility issue
   log_info "Patching zinit initialization script for CI compatibility..."
   
-  # Create a function to patch zinit.zsh
-  cat > /tmp/zinit_patch.sh << 'EOF'
-
-# Function to patch zinit initialization script for compatibility with older zsh versions
-patch_zinit_init() {
-  log_info "Discovering Homebrew installation path..."
-  local brew_prefix
-  brew_prefix=""
-  
-  if ! command -v brew >/dev/null 2>&1; then
-    log_error "Homebrew command not found - this is required for setup"
-    log_warning "Will try to proceed with default paths, but this may fail"
-    # Default to Apple Silicon path, but check architecture
-    if [[ "$(uname -m)" == "arm64" ]]; then
-      brew_prefix="/opt/homebrew"  # Default for Apple Silicon
-    else
-      brew_prefix="/usr/local"     # Default for Intel Mac
-    fi
-    log_warning "Using default Homebrew prefix based on architecture: $brew_prefix"
-  else
-    # Get brew prefix with error handling
-    if ! brew_prefix=$(brew --prefix 2>/dev/null); then
-      log_error "Failed to determine Homebrew prefix"
-      # Default to Apple Silicon path, but check architecture
-      if [[ "$(uname -m)" == "arm64" ]]; then
-        brew_prefix="/opt/homebrew"  # Default for Apple Silicon
-      else
-        brew_prefix="/usr/local"     # Default for Intel Mac
-      fi
-      log_warning "Using default Homebrew prefix based on architecture: $brew_prefix"
-    else
-      log_info "Homebrew prefix detected: $brew_prefix"
-    fi
-  fi
-  
-  # Find all zinit installations in Cellar directory using glob pattern
-  local cellar_zinit_paths=()
-  if [[ -d "$brew_prefix/Cellar/zinit" ]]; then
-    log_info "Searching for zinit in Homebrew Cellar directory..."
-    # Find all zinit versions in Cellar and add them to paths
-    for version_dir in "$brew_prefix/Cellar/zinit"/*; do
-      if [[ -d "$version_dir" && -f "$version_dir/zinit.zsh" ]]; then
-        cellar_zinit_paths+=("$version_dir/zinit.zsh")
-        log_info "Found Cellar zinit installation: $version_dir/zinit.zsh"
-      fi
-    done
-  else
-    log_info "No Homebrew Cellar zinit directory found at $brew_prefix/Cellar/zinit"
-  fi
-  
-  # Combine all possible paths, including dynamic ones
-  local zinit_paths=(
-    # Dynamic Homebrew paths
-    "$brew_prefix/opt/zinit/zinit.zsh"
-    "$brew_prefix/share/zinit/zinit.zsh"
-    # Include all detected Cellar paths
-    "${cellar_zinit_paths[@]}"
-    # User installation paths
-    "$HOME/.zinit/bin/zinit.zsh"
-    "$HOME/.local/share/zinit/zinit.zsh"
-    # System-wide installation paths
-    "/usr/local/share/zinit/zinit.zsh"
-    "/usr/local/opt/zinit/zinit.zsh"
-    "/usr/share/zinit/zinit.zsh"
-  )
-  
-  log_info "Searching for zinit initialization script..."
-  
-  local zinit_path=""
-  for path in "${zinit_paths[@]}"; do
-    if [[ -z "$path" ]]; then
-      continue  # Skip empty paths
-    fi
-    
-    log_info "Checking for zinit at: $path"
-    if [[ -f "$path" ]]; then
-      zinit_path="$path"
-      log_success "Found zinit at: $zinit_path"
-      break
-    else
-      log_info "Zinit not found at: $path"
-    fi
-  done
-  
-  if [[ -z "$zinit_path" ]]; then
-    log_warning "Zinit initialization script not found, skipping patch"
-    return 0
-  fi
-  
-  # Check if the file is writable
-  if [[ ! -w "$zinit_path" ]]; then
-    log_error "Zinit initialization script found but not writable: $zinit_path"
-    log_info "Attempting to make the file writable..."
-    if ! chmod +w "$zinit_path" 2>/dev/null; then
-      log_error "Failed to make the file writable, will try using sudo"
-      if ! sudo chmod +w "$zinit_path" 2>/dev/null; then
-        log_error "Failed to make the file writable even with sudo, cannot patch zinit"
-        return 1
-      else
-        log_success "Made zinit file writable using sudo"
-      fi
-    else
-      log_success "Made zinit file writable"
-    fi
-  fi
-  
-  # Create a backup of the original file
-  local backup_file="${zinit_path}.bak"
-  if [[ ! -f "$backup_file" ]]; then
-    log_info "Creating backup of original zinit script at: $backup_file"
-    cp "$zinit_path" "$backup_file"
-  else
-    log_info "Backup already exists at: $backup_file"
-    # Verify the backup is valid by checking its size
-    local orig_size backup_size
-    orig_size=$(wc -c < "$zinit_path" 2>/dev/null || echo 0)
-    backup_size=$(wc -c < "$backup_file" 2>/dev/null || echo 0)
-    
-    if [[ $backup_size -lt 100 ]]; then
-      log_error "Backup file appears to be invalid (size: $backup_size bytes)"
-      log_info "Creating a new backup file..."
-      cp "$zinit_path" "${backup_file}.new"
-      if [[ -f "${backup_file}.new" ]]; then
-        mv "${backup_file}.new" "$backup_file"
-        log_success "Created new backup file at: $backup_file"
-      else
-        log_error "Failed to create new backup file"
-        return 1
-      fi
-    else
-      log_info "Backup file appears valid (size: $backup_size bytes)"
-    fi
-  fi
-  
-  # Replace 'typeset -g' with 'typeset' to fix compatibility issues
-  log_info "Patching zinit script to replace 'typeset -g' with 'typeset'"
-  
-  # Count occurrences of 'typeset -g' before patching
-  local count_before
-  count_before=$(grep -c "typeset -g" "$zinit_path" || echo 0)
-  log_info "Found $count_before occurrences of 'typeset -g' before patching"
-  
-  # Perform the patching
-  if sed -i.tmp 's/typeset -g/typeset/g' "$zinit_path"; then
-    rm -f "${zinit_path}.tmp"
-    
-    # Verify the changes were applied by counting occurrences after patching
-    local count_after
-    count_after=$(grep -c "typeset -g" "$zinit_path" || echo 0)
-    log_info "Found $count_after occurrences of 'typeset -g' after patching"
-    
-    if [[ $count_after -eq 0 ]]; then
-      log_success "Zinit initialization script patched successfully (removed $count_before occurrences of 'typeset -g')"
-      
-      # Try to source the patched file to verify it works
-      log_info "Verifying patched zinit script loads correctly..."
-      if ! source "$zinit_path" >/dev/null 2>&1; then
-        log_error "Patched zinit script fails to load - restoring from backup"
-        if [[ -f "$backup_file" ]]; then
-          cp "$backup_file" "$zinit_path"
-          log_warning "Restored zinit script from backup - patch was not applied"
-          return 1
-        else
-          log_error "Cannot restore from backup - zinit may be broken"
-          return 1
-        fi
-      else
-        log_success "Patched zinit script loads correctly"
-      fi
-    elif [[ $count_after -lt $count_before ]]; then
-      log_warning "Zinit initialization script partially patched (removed $(($count_before - $count_after)) of $count_before occurrences)"
-      log_info "Attempting to fix remaining instances..."
-      
-      # Try a different sed approach for remaining instances
-      if sed -i.tmp 's/typeset -g/typeset/g' "$zinit_path"; then
-        rm -f "${zinit_path}.tmp"
-        count_after=$(grep -c "typeset -g" "$zinit_path" || echo 0)
-        
-        if [[ $count_after -eq 0 ]]; then
-          log_success "All instances of 'typeset -g' removed with second attempt"
-        else
-          log_warning "Still $count_after instances of 'typeset -g' remaining"
-          # Continue anyway, as we've made progress
-        fi
-      fi
-    else
-      log_error "Zinit initialization script patch failed - no occurrences were changed"
-      # Restore from backup
-      if [[ -f "$backup_file" ]]; then
-        log_info "Restoring zinit script from backup"
-        cp "$backup_file" "$zinit_path"
-      fi
-      return 1
-    fi
-  else
-    log_error "Failed to patch zinit initialization script with sed command"
-    # Restore from backup if patch failed
-    if [[ -f "$backup_file" ]]; then
-      log_info "Restoring zinit script from backup"
-      cp "$backup_file" "$zinit_path"
-    fi
+  # Since we already injected the patch_zinit_init function at the beginning of the script,
+  # we don't need to recreate it here. Just verify that it exists in the output file.
+  if ! grep -q "^patch_zinit_init()" "$output_file"; then
+    log_error "patch_zinit_init function not found in the generated script!"
+    log_error "This indicates a serious problem with function injection"
     return 1
-  fi
-}
-
-# Call the function to patch zinit
-# Do not call patch_zinit_init here - will be called from install_packages
-EOF
-
-  # Insert the zinit patch function before install_packages function
-  INSTALL_PACKAGES=$(grep -n "^install_packages()" "$output_file" | head -1 | cut -d':' -f1)
-  if [ -n "$INSTALL_PACKAGES" ]; then
-    INSERTION_POINT=$((INSTALL_PACKAGES - 1))
-    sed -i.bak "${INSERTION_POINT}r /tmp/zinit_patch.sh" "$output_file"
-    log_success "Zinit patching function added to the script."
   else
-    log_error "Could not find install_packages function to place zinit patcher!"
+    log_success "patch_zinit_init function exists in the generated script"
   fi
-  rm -f /tmp/zinit_patch.sh
 
   # Modify the configure_shell function to better handle CI environments, especially zinit paths
   log_info "Enhancing configure_shell function for CI environment..."
