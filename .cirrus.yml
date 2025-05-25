@@ -61,16 +61,22 @@ daily_validation_task:
       echo "Validating shell scripts with ShellCheck..."
       
       # Check specific important scripts
-      shellcheck -S warning setup.sh
-      shellcheck -S warning ci_modifiers.sh
-      shellcheck -S warning verify_setup.sh.template
+      shellcheck -S warning --shell=bash setup.sh
+      shellcheck -S warning --shell=bash ci_modifiers.sh
+      shellcheck -S warning --shell=bash verify_setup.sh.template
       
       # Find and check any other shell scripts
       find . -name "*.sh" -not -path "*/\.*" | while read -r script; do
         if [[ "$script" != "./setup.sh" && "$script" != "./ci_modifiers.sh" ]]; then
           echo "Checking $script..."
-          shellcheck -S warning "$script"
+          shellcheck -S warning --shell=bash "$script"
         fi
+      done
+      
+      # Find and check any zsh scripts
+      find . -name "*.zsh" -not -path "*/\.*" | while read -r script; do
+        echo "Checking $script with bash compatibility mode..."
+        shellcheck -S warning --shell=bash "$script"
       done
       
       echo "All shell scripts validated successfully."
@@ -92,7 +98,7 @@ daily_validation_task:
       
       # Validate the generated ci_setup.sh script
       echo "Validating generated ci_setup.sh script..."
-      shellcheck -S warning ci_setup.sh
+      shellcheck -S warning --shell=bash ci_setup.sh
       echo "ci_setup.sh validation complete."
   
   # Create a test script to verify installations
@@ -158,16 +164,22 @@ macos_arm_test_task:
       echo "Validating shell scripts with ShellCheck..."
       
       # Check specific important scripts
-      shellcheck -S warning setup.sh
-      shellcheck -S warning ci_modifiers.sh
-      shellcheck -S warning verify_setup.sh.template
+      shellcheck -S warning --shell=bash setup.sh
+      shellcheck -S warning --shell=bash ci_modifiers.sh
+      shellcheck -S warning --shell=bash verify_setup.sh.template
       
       # Find and check any other shell scripts
       find . -name "*.sh" -not -path "*/\.*" | while read -r script; do
         if [[ "$script" != "./setup.sh" && "$script" != "./ci_modifiers.sh" ]]; then
           echo "Checking $script..."
-          shellcheck -S warning "$script"
+          shellcheck -S warning --shell=bash "$script"
         fi
+      done
+      
+      # Find and check any zsh scripts
+      find . -name "*.zsh" -not -path "*/\.*" | while read -r script; do
+        echo "Checking $script with bash compatibility mode..."
+        shellcheck -S warning --shell=bash "$script"
       done
       
       echo "All shell scripts validated successfully."
@@ -189,7 +201,7 @@ macos_arm_test_task:
       
       # Validate the generated ci_setup.sh script
       echo "Validating generated ci_setup.sh script..."
-      shellcheck -S warning ci_setup.sh
+      shellcheck -S warning --shell=bash ci_setup.sh
       echo "ci_setup.sh validation complete."
   
   # Create a test script to verify installations
