@@ -1,23 +1,17 @@
 #!/bin/zsh
 set -e
 
-# Simple logging functions
-log_info() {
-    echo "[INFO] $1"
-}
+# Color definitions for logging (used colors only)
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-log_success() {
-    echo "[SUCCESS] $1"
-}
-
-log_error() {
-    echo "[ERROR] $1" >&2
-}
-
-log_debug() {
-    # Print to both stdout and stderr to ensure visibility
-    echo ">>> DEBUG: $1" | tee /dev/stderr
-}
+# Logging functions
+log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1" | tee -a ci_setup.log; }
+log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" | tee -a ci_setup.log; }
+log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" | tee -a ci_setup.log >&2; }
+log_debug() { echo ">>> DEBUG: $1" | tee -a ci_setup.log; }
 
 # Function to generate CI setup script
 generate_ci_setup() {
@@ -40,101 +34,67 @@ export CI=true
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 setopt +o nomatch
 
-# Simple logging functions
-log_info() {
-    echo "[INFO] $1"
-}
-
-log_success() {
-    echo "[SUCCESS] $1"
-}
-
-log_error() {
-    echo "[ERROR] $1" >&2
-}
-
-log_debug() {
-    # Print to both stdout and stderr to ensure visibility
-    echo ">>> DEBUG: $1" | tee /dev/stderr
-}
+# Logging functions
+log_info() { echo "[INFO] $1" | tee -a ci_setup.log; }
+log_success() { echo "[SUCCESS] $1" | tee -a ci_setup.log; }
+log_error() { echo "[ERROR] $1" | tee -a ci_setup.log >&2; }
+log_debug() { echo ">>> DEBUG: $1" | tee -a ci_setup.log; }
 
 # Function to patch zinit
 patch_zinit_init() {
     log_info "Finding zinit installation..."
     local zinit_path
+    
+    # Split declaration and assignment for proper error handling
     zinit_path="$(brew --prefix)/opt/zinit/zinit.zsh"
-
     if [[ ! -f "$zinit_path" ]]; then
         log_error "Zinit not found at: $zinit_path"
         return 1
     fi
 
     log_success "Found zinit at: $zinit_path"
-    
-    # Show initial script content
-    log_debug "=== Zinit script content before patching ==="
+    log_debug "=== Initial zinit script content ==="
     log_debug "$(cat "$zinit_path")"
-    log_debug "=== End of zinit script content ==="
-    
-    # Show typeset patterns
     log_debug "=== Typeset patterns found ==="
     log_debug "$(grep -n 'typeset.*-g' "$zinit_path" || echo 'No typeset -g patterns found')"
-    log_debug "=== End of typeset patterns ==="
-
+    
     # Create backup if it doesn't exist
     if [[ ! -f "${zinit_path}.bak" ]]; then
         cp "$zinit_path" "${zinit_path}.bak" || {
             log_error "Failed to create backup of zinit script"
             return 1
         }
-        log_debug "Created backup at ${zinit_path}.bak"
-    else
-        log_debug "Using existing backup at ${zinit_path}.bak"
     fi
 
     # Patch zinit script
     log_info "Patching zinit script..."
     local tmp_file="${zinit_path}.tmp"
+    cp "$zinit_path" "$tmp_file" || return 1
     
-    log_debug "Creating temporary file for patching..."
-    cp "$zinit_path" "$tmp_file" || {
-        log_error "Failed to create temporary file"
-        return 1
-    }
-    
-    log_debug "Running sed command to patch file..."
-    # Handle different typeset variants
-    for pattern in "typeset[[:space:]]*-g[[:space:]]" "typeset[[:space:]]*-gA[[:space:]]" "typeset[[:space:]]*-ga[[:space:]]" "typeset[[:space:]]*-gU[[:space:]]"; do
-        log_debug "Processing pattern: $pattern"
-        sed -i '' -E "s/$pattern/typeset /g" "$tmp_file" || {
-            log_error "Failed to patch pattern: $pattern"
+    # Process each pattern separately for better reliability
+    sed -i '' \
+        -e 's/typeset[[:space:]]*-gA[[:space:]]/typeset -A /g' \
+        -e 's/typeset[[:space:]]*-ga[[:space:]]/typeset -a /g' \
+        -e 's/typeset[[:space:]]*-gU[[:space:]]/typeset -U /g' \
+        -e 's/typeset[[:space:]]*-g[[:space:]]/typeset /g' \
+        "$tmp_file" || {
             rm -f "$tmp_file"
             return 1
         }
-    done
     
     log_debug "=== Content after patching ==="
     log_debug "$(cat "$tmp_file")"
-    log_debug "=== End of patched content ==="
     
     # Verify patch was successful
     if grep -q "typeset.*-g" "$tmp_file"; then
         log_error "Patching verification failed"
         log_debug "=== Remaining typeset patterns ==="
         log_debug "$(grep -n 'typeset.*-g' "$tmp_file")"
-        log_debug "=== End of remaining patterns ==="
         rm -f "$tmp_file"
         return 1
     fi
     
-    log_debug "Moving patched file into place..."
-    mv "$tmp_file" "$zinit_path" || {
-        log_error "Failed to update zinit script"
-        rm -f "$tmp_file"
-        return 1
-    }
-    
-    log_success "Successfully patched zinit script"
+    mv "$tmp_file" "$zinit_path"
     return 0
 }
 
@@ -167,6 +127,7 @@ configure_shell() {
     touch "$HOME/.zshrc"
     
     local zinit_path
+    # Split declaration and assignment for proper error handling
     zinit_path="$(brew --prefix)/opt/zinit/zinit.zsh"
     echo "source $zinit_path" >> "$HOME/.zshrc"
     
@@ -218,6 +179,7 @@ EEOF
 
 # Main execution
 main() {
+    rm -f ci_setup.log
     generate_ci_setup "setup.sh" "ci_setup.sh" || {
         log_error "Failed to create CI setup script"
         return 1
