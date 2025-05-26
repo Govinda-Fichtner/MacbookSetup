@@ -61,22 +61,67 @@ patch_zinit_init() {
 
     log_success "Found zinit at: $zinit_path"
     
-    # Backup and patch
-    cp "$zinit_path" "${zinit_path}.bak" || return 1
-    sed -i '' 's/typeset -g/typeset/g' "$zinit_path" || {
-        cp "${zinit_path}.bak" "$zinit_path"
+    # Create backup if it doesn't exist
+    if [[ ! -f "${zinit_path}.bak" ]]; then
+        cp "$zinit_path" "${zinit_path}.bak" || {
+            log_error "Failed to create backup of zinit script"
+            return 1
+        }
+    fi
+
+    # Patch zinit script
+    log_info "Patching zinit script..."
+    local tmp_file="${zinit_path}.tmp"
+    
+    # Create temporary file for patching
+    cp "$zinit_path" "$tmp_file" || {
+        log_error "Failed to create temporary file"
         return 1
     }
     
+    # Patch the temporary file
+    sed -i '' 's/typeset -g/typeset/g' "$tmp_file" || {
+        log_error "Failed to patch zinit script"
+        rm -f "$tmp_file"
+        return 1
+    }
+    
+    # Verify patch was successful
+    if grep -q "typeset -g" "$tmp_file"; then
+        log_error "Patching verification failed"
+        rm -f "$tmp_file"
+        return 1
+    fi
+    
+    # Move patched file into place
+    mv "$tmp_file" "$zinit_path" || {
+        log_error "Failed to update zinit script"
+        rm -f "$tmp_file"
+        return 1
+    }
+    
+    log_success "Successfully patched zinit script"
     return 0
 }
 
 # Install packages
 install_packages() {
     log_info "Installing packages..."
+    
+    # Install git and zinit first
     brew install git zinit || return 1
     patch_zinit_init || return 1
-    brew install rbenv pyenv direnv starship || true
+    
+    # Install development tools
+    brew install rbenv pyenv direnv starship || return 1
+
+    # Install HashiCorp tools required by verification
+    log_info "Installing HashiCorp tools..."
+    brew install terraform packer || {
+        log_error "Failed to install HashiCorp tools"
+        return 1
+    }
+    
     return 0
 }
 
@@ -105,6 +150,9 @@ configure_shell() {
     
     autoload -Uz compinit
     compinit -i
+    
+    # shellcheck disable=SC1091
+    source "$HOME/.zshrc"
     
     return 0
 }
