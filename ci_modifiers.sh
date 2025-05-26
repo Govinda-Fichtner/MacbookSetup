@@ -214,8 +214,7 @@ patch_zinit_init() {
   else
     log_info "Backup already exists at: $backup_file"
     # Verify the backup is valid by checking its size
-    local orig_size backup_size
-    orig_size=$(wc -c < "$zinit_path" 2>/dev/null || echo 0)
+    local backup_size
     backup_size=$(wc -c < "$backup_file" 2>/dev/null || echo 0)
     
     if [[ $backup_size -lt 100 ]]; then
@@ -256,6 +255,7 @@ patch_zinit_init() {
       
       # Try to source the patched file to verify it works
       log_info "Verifying patched zinit script loads correctly..."
+      # shellcheck disable=SC1090  # Dynamic source path for zinit
       if ! source "$zinit_path" >/dev/null 2>&1; then
         log_error "Patched zinit script fails to load - restoring from backup"
         if [[ -f "$backup_file" ]]; then
@@ -611,6 +611,7 @@ EOF
   print ""
   print "    # Try to source zinit to verify it works"
   print "    log_info \"Attempting to source zinit to verify it works...\""
+  print "    # shellcheck disable=SC1090  # Dynamic source path for zinit"
   print "    if ! source \"$zinit_path\" >/dev/null 2>&1; then"
   print "      log_error \"Failed to source zinit after patching - this may cause issues in CI\""
   print "      log_error \"Inspect $zinit_path manually to fix any issues\""
