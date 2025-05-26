@@ -196,6 +196,7 @@ compinit -i
 EOF
 
     # Source the new configuration
+    # shellcheck disable=SC1091
     source "$HOME/.zshrc"
     
     # Clean completion caches
