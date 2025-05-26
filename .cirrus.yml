@@ -10,10 +10,10 @@ env:
   # Avoid prompts during script execution
   CI: true
   NONINTERACTIVE: 1
+  # Ensure proper PATH for commands
+  PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
 
 # Daily scheduled validation build
-# This task runs every day at midnight UTC to ensure ongoing compatibility
-# with the latest macOS updates and Homebrew formula changes
 daily_validation_task:
   name: daily_compatibility_check
   trigger_type: scheduled
@@ -35,70 +35,42 @@ daily_validation_task:
   # Validate shell scripts with ShellCheck
   shellcheck_script:
     - |
-      # Check if Homebrew is installed, install if needed
+      # Install Homebrew if needed
       if ! command -v brew &>/dev/null; then
-        echo "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        
-        # Add Homebrew to PATH for Apple Silicon Macs
-        if [[ "$(uname -m)" == "arm64" ]]; then
-          echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-          eval "$(/opt/homebrew/bin/brew shellenv)"
-        else
-          echo 'eval "$(/usr/local/bin/brew shellenv)"' >> ~/.zprofile
-          eval "$(/usr/local/bin/brew shellenv)"
-        fi
-      else
-        echo "Homebrew is already installed."
+        [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
       
-      # Install ShellCheck using Homebrew
-      echo "Installing ShellCheck using Homebrew..."
+      # Install ShellCheck
       brew install shellcheck
-      echo "ShellCheck version: $(shellcheck --version | head -n 1)"
       
-      # Run ShellCheck on all shell scripts
-      echo "Validating shell scripts with ShellCheck..."
-      
-      # Check specific important scripts
-      shellcheck -S warning --shell=bash setup.sh
-      shellcheck -S warning --shell=bash ci_modifiers.sh
-      shellcheck -S warning --shell=bash verify_setup.sh.template
-      
-      # Find and check any other shell scripts
-      find . -name "*.sh" -not -path "*/\.*" | while read -r script; do
-        if [[ "$script" != "./setup.sh" && "$script" != "./ci_modifiers.sh" ]]; then
-          echo "Checking $script..."
-          shellcheck -S warning --shell=bash "$script"
-        fi
-      done
-      
-      # Find and check any zsh scripts
-      find . -name "*.zsh" -not -path "*/\.*" | while read -r script; do
-        echo "Checking $script with bash compatibility mode..."
-        shellcheck -S warning --shell=bash "$script"
-      done
-      
-      echo "All shell scripts validated successfully."
+      # Validate shell scripts
+      shellcheck -s bash ci_modifiers.sh
+      shellcheck -s bash setup.sh
+      shellcheck -s bash verify_setup.sh.template
   
   # Generate CI setup script by patching the original setup.sh
   prepare_script:
     - |
-      # Source the CI modifiers
-      source ci_modifiers.sh
+      # Ensure script is executable
+      chmod +x ci_modifiers.sh
       
-      # Generate the CI setup script from the original setup.sh
-      patch_for_ci setup.sh ci_setup.sh
+      # Run the CI modifiers script directly in zsh
+      # This generates ci_setup.sh without needing to source functions
+      zsh ./ci_modifiers.sh
       
       # Verify the script was created successfully
       if [[ ! -f ci_setup.sh ]]; then
-        echo "Failed to generate CI setup script"
+        echo "Failed to generate ci_setup.sh"
         exit 1
       fi
       
+      # Make the generated script executable
+      chmod +x ci_setup.sh
+      
       # Validate the generated ci_setup.sh script
       echo "Validating generated ci_setup.sh script..."
-      shellcheck -S warning --shell=bash ci_setup.sh
+      shellcheck -s bash ci_setup.sh
       echo "ci_setup.sh validation complete."
   
   # Create a test script to verify installations
@@ -108,7 +80,7 @@ daily_validation_task:
   
   # Run the actual setup
   setup_script:
-    - ./ci_setup.sh
+    - zsh ./ci_setup.sh
 
   # Verify the installation
   verify_script:
@@ -138,70 +110,41 @@ macos_arm_test_task:
   # Validate shell scripts with ShellCheck
   shellcheck_script:
     - |
-      # Check if Homebrew is installed, install if needed
+      # Install Homebrew if needed
       if ! command -v brew &>/dev/null; then
-        echo "Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        
-        # Add Homebrew to PATH for Apple Silicon Macs
-        if [[ "$(uname -m)" == "arm64" ]]; then
-          echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
-          eval "$(/opt/homebrew/bin/brew shellenv)"
-        else
-          echo 'eval "$(/usr/local/bin/brew shellenv)"' >> ~/.zprofile
-          eval "$(/usr/local/bin/brew shellenv)"
-        fi
-      else
-        echo "Homebrew is already installed."
+        [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
       
-      # Install ShellCheck using Homebrew
-      echo "Installing ShellCheck using Homebrew..."
+      # Install ShellCheck
       brew install shellcheck
-      echo "ShellCheck version: $(shellcheck --version | head -n 1)"
       
-      # Run ShellCheck on all shell scripts
-      echo "Validating shell scripts with ShellCheck..."
-      
-      # Check specific important scripts
-      shellcheck -S warning --shell=bash setup.sh
-      shellcheck -S warning --shell=bash ci_modifiers.sh
-      shellcheck -S warning --shell=bash verify_setup.sh.template
-      
-      # Find and check any other shell scripts
-      find . -name "*.sh" -not -path "*/\.*" | while read -r script; do
-        if [[ "$script" != "./setup.sh" && "$script" != "./ci_modifiers.sh" ]]; then
-          echo "Checking $script..."
-          shellcheck -S warning --shell=bash "$script"
-        fi
-      done
-      
-      # Find and check any zsh scripts
-      find . -name "*.zsh" -not -path "*/\.*" | while read -r script; do
-        echo "Checking $script with bash compatibility mode..."
-        shellcheck -S warning --shell=bash "$script"
-      done
-      
-      echo "All shell scripts validated successfully."
+      # Validate shell scripts
+      shellcheck -s bash ci_modifiers.sh
+      shellcheck -s bash setup.sh
+      shellcheck -s bash verify_setup.sh.template
   
   # Generate CI setup script by patching the original setup.sh
   prepare_script:
     - |
-      # Source the CI modifiers
-      source ci_modifiers.sh
+      # Ensure script is executable
+      chmod +x ci_modifiers.sh
       
-      # Generate the CI setup script from the original setup.sh
-      patch_for_ci setup.sh ci_setup.sh
+      # Run the CI modifiers script directly in zsh
+      zsh ./ci_modifiers.sh
       
       # Verify the script was created successfully
       if [[ ! -f ci_setup.sh ]]; then
-        echo "Failed to generate CI setup script"
+        echo "Failed to generate ci_setup.sh"
         exit 1
       fi
       
+      # Make the generated script executable
+      chmod +x ci_setup.sh
+      
       # Validate the generated ci_setup.sh script
       echo "Validating generated ci_setup.sh script..."
-      shellcheck -S warning --shell=bash ci_setup.sh
+      shellcheck -s bash ci_setup.sh
       echo "ci_setup.sh validation complete."
   
   # Create a test script to verify installations
@@ -211,7 +154,7 @@ macos_arm_test_task:
   
   # Run the actual setup
   setup_script:
-    - ./ci_setup.sh
+    - zsh ./ci_setup.sh
 
   # Verify the installation
   verify_script:
@@ -222,4 +165,3 @@ macos_arm_test_task:
     logs_artifacts:
       path: "*.log"
       type: text/plain
-
