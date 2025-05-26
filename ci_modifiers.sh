@@ -1,11 +1,11 @@
 #!/bin/zsh
 set -e
 
-# Simple logging functions
-log_info() { printf "[INFO] %s\n" "$1"; }
-log_success() { printf "[SUCCESS] %s\n" "$1"; }
-log_error() { printf "[ERROR] %s\n" "$1" >&2; }
-log_debug() { printf "DEBUG: %s\n" "$1" >&2; }
+# Simple logging functions with forced flush
+log_info() { printf "[INFO] %s\n" "$1" | tee /dev/stderr; }
+log_success() { printf "[SUCCESS] %s\n" "$1" | tee /dev/stderr; }
+log_error() { printf "[ERROR] %s\n" "$1" | tee /dev/stderr; }
+log_debug() { printf "DEBUG: %s\n" "$1" | tee /dev/stderr; }
 
 # Function to generate CI setup script
 generate_ci_setup() {
@@ -28,11 +28,11 @@ export CI=true
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 setopt +o nomatch
 
-# Simple logging functions
-log_info() { printf "[INFO] %s\n" "$1"; }
-log_success() { printf "[SUCCESS] %s\n" "$1"; }
-log_error() { printf "[ERROR] %s\n" "$1" >&2; }
-log_debug() { printf "DEBUG: %s\n" "$1" >&2; }
+# Simple logging functions with forced flush
+log_info() { printf "[INFO] %s\n" "$1" | tee /dev/stderr; }
+log_success() { printf "[SUCCESS] %s\n" "$1" | tee /dev/stderr; }
+log_error() { printf "[ERROR] %s\n" "$1" | tee /dev/stderr; }
+log_debug() { printf "DEBUG: %s\n" "$1" | tee /dev/stderr; }
 
 # Function to patch zinit
 patch_zinit_init() {
@@ -48,13 +48,15 @@ patch_zinit_init() {
 
     log_success "Found zinit at: $zinit_path"
     
-    # Display initial content
-    {
-        log_debug "=== Initial zinit script content ==="
-        cat "$zinit_path"
-        log_debug "=== Initial typeset patterns ==="
-        grep -n 'typeset.*-g' "$zinit_path" || echo "No typeset -g patterns found"
-    } >&2
+    # Display original content with line numbers
+    log_debug "Initial zinit script content:"
+    printf "DEBUG: Line %d: %s\n" "$(nl -ba "$zinit_path")" | tee /dev/stderr
+    
+    # Show typeset patterns with line numbers
+    log_debug "Searching for typeset patterns..."
+    grep -n 'typeset.*-g' "$zinit_path" | while IFS=':' read -r line content; do
+        printf "DEBUG: Found pattern at line %d: %s\n" "$line" "$content" | tee /dev/stderr
+    done
     
     # Create backup if it doesn't exist
     if [[ ! -f "${zinit_path}.bak" ]]; then
@@ -69,42 +71,51 @@ patch_zinit_init() {
     local tmp_file="${zinit_path}.tmp"
     cp "$zinit_path" "$tmp_file" || return 1
     
-    # Process each pattern separately for better reliability
-    local patterns=(
-        'typeset[[:space:]]*-gA[[:space:]]'
-        'typeset[[:space:]]*-ga[[:space:]]'
-        'typeset[[:space:]]*-gU[[:space:]]'
-        'typeset[[:space:]]*-g[[:space:]]'
-    )
+    # Ensure the temporary file exists
+    if [[ ! -f "$tmp_file" ]]; then
+        log_error "Failed to create temporary file"
+        return 1
+    fi
     
-    for pattern in "${patterns[@]}"; do
-        log_debug "Checking for pattern: $pattern"
-        if grep -q "$pattern" "$tmp_file"; then
-            log_debug "Found pattern, attempting to replace..."
-            sed -i '' -E "s/$pattern/typeset /g" "$tmp_file" || {
-                log_error "Failed to replace pattern: $pattern"
-                rm -f "$tmp_file"
-                return 1
-            }
+    # Check initial content
+    log_debug "Temporary file created, size: $(wc -l < "$tmp_file") lines"
+    
+    # Process patterns
+    local pattern_count=0
+    local replaced_count=0
+    
+    # Check each pattern type
+    for type in "A" "a" "U" ""; do
+        local search="typeset[[:space:]]*-g${type}[[:space:]]"
+        local replace="typeset ${type:+ -$type }"
+        
+        # Count matches
+        local matches
+        matches=$(grep -c "$search" "$tmp_file" || echo 0)
+        ((pattern_count += matches))
+        
+        if ((matches > 0)); then
+            log_debug "Found $matches occurrences of pattern: $search"
+            sed -i '' -E "s/$search/$replace/g" "$tmp_file" && ((replaced_count += matches))
         fi
     done
     
-    # Display result
-    {
-        log_debug "=== Content after patching ==="
-        cat "$tmp_file"
-        log_debug "=== Checking for remaining patterns ==="
-        grep -n 'typeset.*-g' "$tmp_file" 2>/dev/null || echo "No typeset -g patterns remain"
-    } >&2
+    log_debug "Found $pattern_count patterns, replaced $replaced_count"
     
-    # Verify patch was successful
+    # Verify patch success
     if grep -q "typeset.*-g" "$tmp_file"; then
         log_error "Patching verification failed"
-        log_debug "=== Remaining patterns ==="
-        grep -n 'typeset.*-g' "$tmp_file" >&2
+        log_debug "Remaining patterns:"
+        grep -n "typeset.*-g" "$tmp_file" | while IFS=':' read -r line content; do
+            printf "DEBUG: Pattern remains at line %d: %s\n" "$line" "$content" | tee /dev/stderr
+        done
         rm -f "$tmp_file"
         return 1
     fi
+    
+    # Show final content
+    log_debug "Final content:"
+    printf "DEBUG: Line %d: %s\n" "$(nl -ba "$tmp_file")" | tee /dev/stderr
     
     mv "$tmp_file" "$zinit_path"
     log_success "Successfully patched zinit script"
