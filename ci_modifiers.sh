@@ -1,17 +1,11 @@
 #!/bin/zsh
 set -e
 
-# Color definitions for logging (used colors only)
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# Logging functions that write directly to stdout/stderr
-log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
-log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
-log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
-log_debug() { printf ">>> DEBUG: %s\n" "$1" >&2; }
+# Simple logging functions
+log_info() { printf "[INFO] %s\n" "$1"; }
+log_success() { printf "[SUCCESS] %s\n" "$1"; }
+log_error() { printf "[ERROR] %s\n" "$1" >&2; }
+log_debug() { printf "DEBUG: %s\n" "$1" >&2; }
 
 # Function to generate CI setup script
 generate_ci_setup() {
@@ -34,11 +28,11 @@ export CI=true
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 setopt +o nomatch
 
-# Logging functions with immediate output
+# Simple logging functions
 log_info() { printf "[INFO] %s\n" "$1"; }
 log_success() { printf "[SUCCESS] %s\n" "$1"; }
 log_error() { printf "[ERROR] %s\n" "$1" >&2; }
-log_debug() { printf ">>> DEBUG: %s\n" "$1" >&2; }
+log_debug() { printf "DEBUG: %s\n" "$1" >&2; }
 
 # Function to patch zinit
 patch_zinit_init() {
@@ -54,7 +48,7 @@ patch_zinit_init() {
 
     log_success "Found zinit at: $zinit_path"
     
-    # Show initial content
+    # Display initial content
     {
         log_debug "=== Initial zinit script content ==="
         cat "$zinit_path"
@@ -77,32 +71,37 @@ patch_zinit_init() {
     
     # Process each pattern separately for better reliability
     local patterns=(
-        's/typeset[[:space:]]*-gA[[:space:]]/typeset -A /g'
-        's/typeset[[:space:]]*-ga[[:space:]]/typeset -a /g'
-        's/typeset[[:space:]]*-gU[[:space:]]/typeset -U /g'
-        's/typeset[[:space:]]*-g[[:space:]]/typeset /g'
+        'typeset[[:space:]]*-gA[[:space:]]'
+        'typeset[[:space:]]*-ga[[:space:]]'
+        'typeset[[:space:]]*-gU[[:space:]]'
+        'typeset[[:space:]]*-g[[:space:]]'
     )
     
     for pattern in "${patterns[@]}"; do
-        log_debug "Applying pattern: $pattern"
-        sed -i '' -E "$pattern" "$tmp_file" || {
-            log_error "Failed to apply pattern: $pattern"
-            rm -f "$tmp_file"
-            return 1
-        }
+        log_debug "Checking for pattern: $pattern"
+        if grep -q "$pattern" "$tmp_file"; then
+            log_debug "Found pattern, attempting to replace..."
+            sed -i '' -E "s/$pattern/typeset /g" "$tmp_file" || {
+                log_error "Failed to replace pattern: $pattern"
+                rm -f "$tmp_file"
+                return 1
+            }
+        fi
     done
     
-    # Show patched content
+    # Display result
     {
         log_debug "=== Content after patching ==="
         cat "$tmp_file"
         log_debug "=== Checking for remaining patterns ==="
-        grep -n 'typeset.*-g' "$tmp_file" || echo "No typeset -g patterns remain"
+        grep -n 'typeset.*-g' "$tmp_file" 2>/dev/null || echo "No typeset -g patterns remain"
     } >&2
     
     # Verify patch was successful
     if grep -q "typeset.*-g" "$tmp_file"; then
         log_error "Patching verification failed"
+        log_debug "=== Remaining patterns ==="
+        grep -n 'typeset.*-g' "$tmp_file" >&2
         rm -f "$tmp_file"
         return 1
     fi
