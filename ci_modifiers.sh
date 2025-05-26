@@ -134,23 +134,24 @@ patch_zinit_init() {
     fi
   fi
   
-  # Find all zinit installations in Cellar directory using glob pattern
-  local cellar_zinit_paths=()
+  # Find all zinit installations in Cellar directory
+  cellar_zinit_paths=()
   if [[ -d "$brew_prefix/Cellar/zinit" ]]; then
     log_info "Searching for zinit in Homebrew Cellar directory..."
     # Find all zinit versions in Cellar and add them to paths
-    for version_dir in "$brew_prefix/Cellar/zinit"/*; do
+    while IFS= read -r version_dir; do
       if [[ -d "$version_dir" && -f "$version_dir/zinit.zsh" ]]; then
         cellar_zinit_paths+=("$version_dir/zinit.zsh")
         log_info "Found Cellar zinit installation: $version_dir/zinit.zsh"
       fi
-    done
+    done < <(find "$brew_prefix/Cellar/zinit" -maxdepth 1 -mindepth 1 -type d)
   else
     log_info "No Homebrew Cellar zinit directory found at $brew_prefix/Cellar/zinit"
   fi
   
   # Combine all possible paths, including dynamic ones
-  local zinit_paths=(
+  local -a zinit_paths
+  zinit_paths=(
     # Dynamic Homebrew paths
     "$brew_prefix/opt/zinit/zinit.zsh"
     "$brew_prefix/share/zinit/zinit.zsh"
@@ -546,27 +547,28 @@ EOF
   print ""
   print "  log_info \"Using Homebrew prefix: $brew_prefix\""
   print "  local zinit_path=\"\""
-  print "  local possible_paths=("
-  print "    \"$brew_prefix/opt/zinit/zinit.zsh\""
-  print "    \"$brew_prefix/share/zinit/zinit.zsh\""
-  print "    \"$HOME/.zinit/bin/zinit.zsh\""
-  print "    \"$HOME/.local/share/zinit/zinit.zsh\""
+  print "  # Initialize path array"
+  print "  typeset -a possible_paths"
+  print "  possible_paths=("
+  print "    \"${brew_prefix}/opt/zinit/zinit.zsh\""
+  print "    \"${brew_prefix}/share/zinit/zinit.zsh\""
+  print "    \"${HOME}/.zinit/bin/zinit.zsh\""
+  print "    \"${HOME}/.local/share/zinit/zinit.zsh\""
   print "    \"/usr/local/share/zinit/zinit.zsh\""
   print "    \"/usr/local/opt/zinit/zinit.zsh\""
+  print "  )"
   print ""
-  print "  # Check for zinit in Homebrew Cellar directory"
-  print "  if [[ -d \"$brew_prefix/Cellar/zinit\" ]]; then"
-  print "    for version_dir in \"$brew_prefix/Cellar/zinit\"/*; do"
-  print "      if [[ -d \"$version_dir\" && -f \"$version_dir/zinit.zsh\" ]]; then"
-  print "        possible_paths+=(\"$version_dir/zinit.zsh\")"
-  print "      fi"
-  print "    done"
+  print "  # Find additional paths in Homebrew Cellar"
+  print "  if [[ -d \"${brew_prefix}/Cellar/zinit\" ]]; then"
+  print "    while IFS= read -r version_dir; do"
+  print "      [[ -d \"${version_dir}\" && -f \"${version_dir}/zinit.zsh\" ]] && possible_paths+=(\"${version_dir}/zinit.zsh\")"
+  print "    done < <(find \"${brew_prefix}/Cellar/zinit\" -maxdepth 1 -mindepth 1 -type d)"
   print "  fi"
   print ""
   print "  # Find first existing zinit.zsh file"
   print "  for path in \"${possible_paths[@]}\"; do"
-  print "    if [[ -f \"$path\" ]]; then"
-  print "      zinit_path=\"$path\""
+  print "    if [[ -f \"${path}\" ]]; then"
+  print "      zinit_path=\"${path}\""
   print "      break"
   print "    fi"
   print "  done"
@@ -848,7 +850,8 @@ log_info "Running in CI environment - some operations will be modified"' "$outpu
   print "  # Add zinit configuration with dynamic path discovery for CI compatibility"
   print "  log_info \"Setting up zinit with dynamic path discovery...\""
   print "  # Find the zinit.zsh file using the same logic as patch_zinit_init"
-  print "  local zinit_paths=("
+  print "  typeset -a zinit_paths"
+  print "  zinit_paths=("
   print "    \"$(brew --prefix 2>/dev/null)/opt/zinit/zinit.zsh\""
   print "    \"$(brew --prefix 2>/dev/null)/share/zinit/zinit.zsh\""
   print "    \"$HOME/.zinit/bin/zinit.zsh\""
@@ -863,7 +866,11 @@ log_info "Running in CI environment - some operations will be modified"' "$outpu
   print "  brew_prefix=\"$(brew --prefix 2>/dev/null)\""
   print "  if [[ -d \"$brew_prefix/Cellar/zinit\" ]]; then"
   print "    log_info \"Checking Homebrew Cellar for zinit...\""
-  print "    local cellar_versions=(\"$brew_prefix/Cellar/zinit\"/*)"
+  print "    local -a cellar_versions"
+  print "    cellar_versions=()"
+  print "    while IFS= read -r version_dir; do"
+  print "      cellar_versions+=(\"$version_dir\")"
+  print "    done < <(find \"$brew_prefix/Cellar/zinit\" -maxdepth 1 -mindepth 1 -type d)"
   print "    for version_dir in \"${cellar_versions[@]}\"; do"
   print "      if [[ -d \"$version_dir\" && -f \"$version_dir/zinit.zsh\" ]]; then"
   print "        zinit_paths+=(\"$version_dir/zinit.zsh\")"
