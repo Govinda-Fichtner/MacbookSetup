@@ -15,7 +15,8 @@ log_error() {
 }
 
 log_debug() {
-    echo "[DEBUG] $1" >&2
+    # Print to both stdout and stderr to ensure visibility
+    echo ">>> DEBUG: $1" | tee /dev/stderr
 }
 
 # Function to generate CI setup script
@@ -53,7 +54,8 @@ log_error() {
 }
 
 log_debug() {
-    echo "[DEBUG] $1" >&2
+    # Print to both stdout and stderr to ensure visibility
+    echo ">>> DEBUG: $1" | tee /dev/stderr
 }
 
 # Function to patch zinit
@@ -68,9 +70,17 @@ patch_zinit_init() {
     fi
 
     log_success "Found zinit at: $zinit_path"
-    log_debug "Initial zinit script content:"
-    log_debug "$(grep 'typeset -g' "$zinit_path" || echo 'No typeset -g found')"
     
+    # Show initial script content
+    log_debug "=== Zinit script content before patching ==="
+    log_debug "$(cat "$zinit_path")"
+    log_debug "=== End of zinit script content ==="
+    
+    # Show typeset patterns
+    log_debug "=== Typeset patterns found ==="
+    log_debug "$(grep -n 'typeset.*-g' "$zinit_path" || echo 'No typeset -g patterns found')"
+    log_debug "=== End of typeset patterns ==="
+
     # Create backup if it doesn't exist
     if [[ ! -f "${zinit_path}.bak" ]]; then
         cp "$zinit_path" "${zinit_path}.bak" || {
@@ -93,17 +103,26 @@ patch_zinit_init() {
     }
     
     log_debug "Running sed command to patch file..."
-    sed -i '' -E 's/typeset[[:space:]]*-g([[:space:]]*|$)/typeset\1/g' "$tmp_file" || {
-        log_error "Failed to patch zinit script"
-        rm -f "$tmp_file"
-        return 1
-    }
+    # Handle different typeset variants
+    for pattern in "typeset[[:space:]]*-g[[:space:]]" "typeset[[:space:]]*-gA[[:space:]]" "typeset[[:space:]]*-ga[[:space:]]" "typeset[[:space:]]*-gU[[:space:]]"; do
+        log_debug "Processing pattern: $pattern"
+        sed -i '' -E "s/$pattern/typeset /g" "$tmp_file" || {
+            log_error "Failed to patch pattern: $pattern"
+            rm -f "$tmp_file"
+            return 1
+        }
+    done
     
-    log_debug "Verifying patch result..."
-    if grep -q "typeset[[:space:]]*-g" "$tmp_file"; then
+    log_debug "=== Content after patching ==="
+    log_debug "$(cat "$tmp_file")"
+    log_debug "=== End of patched content ==="
+    
+    # Verify patch was successful
+    if grep -q "typeset.*-g" "$tmp_file"; then
         log_error "Patching verification failed"
-        log_debug "Remaining typeset -g patterns:"
-        log_debug "$(grep 'typeset -g' "$tmp_file")"
+        log_debug "=== Remaining typeset patterns ==="
+        log_debug "$(grep -n 'typeset.*-g' "$tmp_file")"
+        log_debug "=== End of remaining patterns ==="
         rm -f "$tmp_file"
         return 1
     fi
