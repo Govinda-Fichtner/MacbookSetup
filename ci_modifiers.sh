@@ -7,11 +7,11 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Logging functions
-log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1" | tee -a ci_setup.log; }
-log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" | tee -a ci_setup.log; }
-log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" | tee -a ci_setup.log >&2; }
-log_debug() { echo ">>> DEBUG: $1" | tee -a ci_setup.log; }
+# Logging functions that write directly to stdout/stderr
+log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1"; }
+log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"; }
+log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
+log_debug() { printf ">>> DEBUG: %s\n" "$1" >&2; }
 
 # Function to generate CI setup script
 generate_ci_setup() {
@@ -34,11 +34,11 @@ export CI=true
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 setopt +o nomatch
 
-# Logging functions
-log_info() { echo "[INFO] $1" | tee -a ci_setup.log; }
-log_success() { echo "[SUCCESS] $1" | tee -a ci_setup.log; }
-log_error() { echo "[ERROR] $1" | tee -a ci_setup.log >&2; }
-log_debug() { echo ">>> DEBUG: $1" | tee -a ci_setup.log; }
+# Logging functions with immediate output
+log_info() { printf "[INFO] %s\n" "$1"; }
+log_success() { printf "[SUCCESS] %s\n" "$1"; }
+log_error() { printf "[ERROR] %s\n" "$1" >&2; }
+log_debug() { printf ">>> DEBUG: %s\n" "$1" >&2; }
 
 # Function to patch zinit
 patch_zinit_init() {
@@ -53,10 +53,14 @@ patch_zinit_init() {
     fi
 
     log_success "Found zinit at: $zinit_path"
-    log_debug "=== Initial zinit script content ==="
-    log_debug "$(cat "$zinit_path")"
-    log_debug "=== Typeset patterns found ==="
-    log_debug "$(grep -n 'typeset.*-g' "$zinit_path" || echo 'No typeset -g patterns found')"
+    
+    # Show initial content
+    {
+        log_debug "=== Initial zinit script content ==="
+        cat "$zinit_path"
+        log_debug "=== Initial typeset patterns ==="
+        grep -n 'typeset.*-g' "$zinit_path" || echo "No typeset -g patterns found"
+    } >&2
     
     # Create backup if it doesn't exist
     if [[ ! -f "${zinit_path}.bak" ]]; then
@@ -72,29 +76,39 @@ patch_zinit_init() {
     cp "$zinit_path" "$tmp_file" || return 1
     
     # Process each pattern separately for better reliability
-    sed -i '' \
-        -e 's/typeset[[:space:]]*-gA[[:space:]]/typeset -A /g' \
-        -e 's/typeset[[:space:]]*-ga[[:space:]]/typeset -a /g' \
-        -e 's/typeset[[:space:]]*-gU[[:space:]]/typeset -U /g' \
-        -e 's/typeset[[:space:]]*-g[[:space:]]/typeset /g' \
-        "$tmp_file" || {
+    local patterns=(
+        's/typeset[[:space:]]*-gA[[:space:]]/typeset -A /g'
+        's/typeset[[:space:]]*-ga[[:space:]]/typeset -a /g'
+        's/typeset[[:space:]]*-gU[[:space:]]/typeset -U /g'
+        's/typeset[[:space:]]*-g[[:space:]]/typeset /g'
+    )
+    
+    for pattern in "${patterns[@]}"; do
+        log_debug "Applying pattern: $pattern"
+        sed -i '' -E "$pattern" "$tmp_file" || {
+            log_error "Failed to apply pattern: $pattern"
             rm -f "$tmp_file"
             return 1
         }
+    done
     
-    log_debug "=== Content after patching ==="
-    log_debug "$(cat "$tmp_file")"
+    # Show patched content
+    {
+        log_debug "=== Content after patching ==="
+        cat "$tmp_file"
+        log_debug "=== Checking for remaining patterns ==="
+        grep -n 'typeset.*-g' "$tmp_file" || echo "No typeset -g patterns remain"
+    } >&2
     
     # Verify patch was successful
     if grep -q "typeset.*-g" "$tmp_file"; then
         log_error "Patching verification failed"
-        log_debug "=== Remaining typeset patterns ==="
-        log_debug "$(grep -n 'typeset.*-g' "$tmp_file")"
         rm -f "$tmp_file"
         return 1
     fi
     
     mv "$tmp_file" "$zinit_path"
+    log_success "Successfully patched zinit script"
     return 0
 }
 
@@ -179,7 +193,6 @@ EEOF
 
 # Main execution
 main() {
-    rm -f ci_setup.log
     generate_ci_setup "setup.sh" "ci_setup.sh" || {
         log_error "Failed to create CI setup script"
         return 1
