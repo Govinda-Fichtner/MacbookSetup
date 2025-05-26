@@ -14,6 +14,10 @@ log_error() {
     echo "[ERROR] $1" >&2
 }
 
+log_debug() {
+    echo "[DEBUG] $1" >&2
+}
+
 # Function to generate CI setup script
 generate_ci_setup() {
     local setup_file="$1"
@@ -48,6 +52,10 @@ log_error() {
     echo "[ERROR] $1" >&2
 }
 
+log_debug() {
+    echo "[DEBUG] $1" >&2
+}
+
 # Function to patch zinit
 patch_zinit_init() {
     log_info "Finding zinit installation..."
@@ -60,6 +68,8 @@ patch_zinit_init() {
     fi
 
     log_success "Found zinit at: $zinit_path"
+    log_debug "Initial zinit script content:"
+    log_debug "$(grep 'typeset -g' "$zinit_path" || echo 'No typeset -g found')"
     
     # Create backup if it doesn't exist
     if [[ ! -f "${zinit_path}.bak" ]]; then
@@ -67,33 +77,38 @@ patch_zinit_init() {
             log_error "Failed to create backup of zinit script"
             return 1
         }
+        log_debug "Created backup at ${zinit_path}.bak"
+    else
+        log_debug "Using existing backup at ${zinit_path}.bak"
     fi
 
     # Patch zinit script
     log_info "Patching zinit script..."
     local tmp_file="${zinit_path}.tmp"
     
-    # Create temporary file for patching
+    log_debug "Creating temporary file for patching..."
     cp "$zinit_path" "$tmp_file" || {
         log_error "Failed to create temporary file"
         return 1
     }
     
-    # Patch the temporary file
-    sed -i '' 's/typeset -g/typeset/g' "$tmp_file" || {
+    log_debug "Running sed command to patch file..."
+    sed -i '' -E 's/typeset[[:space:]]*-g([[:space:]]*|$)/typeset\1/g' "$tmp_file" || {
         log_error "Failed to patch zinit script"
         rm -f "$tmp_file"
         return 1
     }
     
-    # Verify patch was successful
-    if grep -q "typeset -g" "$tmp_file"; then
+    log_debug "Verifying patch result..."
+    if grep -q "typeset[[:space:]]*-g" "$tmp_file"; then
         log_error "Patching verification failed"
+        log_debug "Remaining typeset -g patterns:"
+        log_debug "$(grep 'typeset -g' "$tmp_file")"
         rm -f "$tmp_file"
         return 1
     fi
     
-    # Move patched file into place
+    log_debug "Moving patched file into place..."
     mv "$tmp_file" "$zinit_path" || {
         log_error "Failed to update zinit script"
         rm -f "$tmp_file"
