@@ -9,42 +9,81 @@ source "lib/logging.sh"
 # Enable error reporting
 set -e
 
+# Function to handle completion test errors
+handle_completion_error() {
+    local exit_code="$1"
+    local tool="$2"
+    
+    log_debug "Completion test for $tool failed with exit code $exit_code"
+    
+    case "$exit_code" in
+        1)
+            log_error "$tool completion function not found"
+            ;;
+        2)
+            log_error "$tool completion file not found"
+            ;;
+        3)
+            log_error "$tool not installed"
+            ;;
+        *)
+            log_error "Unknown error testing $tool completion"
+            ;;
+    esac
+    
+    # Try to fix common issues
+    case "$tool" in
+        "fzf")
+            if [[ -f "/opt/homebrew/opt/fzf/shell/completion.zsh" ]]; then
+                log_debug "Found fzf completion, attempting to source it"
+                # shellcheck disable=SC1091
+                source "/opt/homebrew/opt/fzf/shell/completion.zsh" 2>/dev/null || log_error "Failed to source fzf completion"
+            else
+                log_error "fzf completion file not found"
+            fi
+            ;;
+        *)
+            log_debug "No automatic fix available for $tool"
+            ;;
+    esac
+}
+
+# Function to safely initialize completion system
+initialize_completion_system() {
+    local force_flag=$1
+    local init_result=0
+
+    # Try standard initialization first
+    if [[ "$force_flag" == "force" ]]; then
+        compinit -u 2>/dev/null || init_result=$?
+    else
+        compinit 2>/dev/null || init_result=$?
+    fi
+
+    # If standard initialization fails, try with different options
+    if [[ $init_result -ne 0 ]]; then
+        log_debug "First compinit attempt failed, trying with -i option..."
+        compinit -i 2>/dev/null || init_result=$?
+
+        # If still failing, try with security checks disabled
+        if [[ $init_result -ne 0 ]]; then
+            log_debug "Second compinit attempt failed, trying with -C option..."
+            compinit -C 2>/dev/null || init_result=$?
+
+            # Last resort - try resetting the zcompdump file
+            if [[ $init_result -ne 0 ]]; then
+                log_debug "Third compinit attempt failed, trying with zcompdump reset..."
+                rm -f "${HOME}/.zcompdump"
+                compinit 2>/dev/null || log_warning "All compinit attempts failed"
+            fi
+        fi
+    fi
+}
+
 # Early completion initialization to ensure completions are available
 # This is important for the verification process
 # Load compinit function
 autoload -Uz compinit
-
-# Function to safely initialize completion system
-initialize_completion_system() {
-  local force_flag=$1
-  local init_result=0
-
-  # Try standard initialization first
-  if [[ "$force_flag" == "force" ]]; then
-    compinit -u 2>/dev/null || init_result=$?
-  else
-    compinit 2>/dev/null || init_result=$?
-  fi
-
-  # If standard initialization fails, try with different options
-  if [[ $init_result -ne 0 ]]; then
-    log_debug "First compinit attempt failed, trying with -i option..."
-    compinit -i 2>/dev/null || init_result=$?
-
-    # If still failing, try with security checks disabled
-    if [[ $init_result -ne 0 ]]; then
-      log_debug "Second compinit attempt failed, trying with -C option..."
-      compinit -C 2>/dev/null || init_result=$?
-
-      # Last resort - try resetting the zcompdump file
-      if [[ $init_result -ne 0 ]]; then
-        log_debug "Third compinit attempt failed, trying with zcompdump reset..."
-        rm -f "${HOME}/.zcompdump"
-        compinit 2>/dev/null || log_warning "All compinit attempts failed"
-      fi
-    fi
-  fi
-}
 
 # Early pyenv initialization to ensure correct PATH setup
 if command -v pyenv >/dev/null 2>&1; then
@@ -152,17 +191,17 @@ completion_paths[fzf_completions]="/opt/homebrew/opt/fzf/shell"
 
 # Function to get tool configuration parts
 get_tool_config_part() {
-    local tool=$1
-    local part=$2  # type, source, or commands
-    local config=${tool_configs[$tool]}
+    local tool="$1"
+    local part="$2"  # type, source, or commands
+    local config="${tool_configs[$tool]}"
     local -a parts
     parts=()
-    IFS='|' read -A parts <<< "$config"
+    IFS='|' read -r -A parts <<< "$config"
     
-    case $part in
-        type) echo ${parts[1]} ;;
-        source) echo ${parts[2]} ;;
-        commands) echo ${parts[3]} ;;
+    case "$part" in
+        type) echo "${parts[1]}" ;;
+        source) echo "${parts[2]}" ;;
+        commands) echo "${parts[3]}" ;;
     esac
 }
 
@@ -202,543 +241,150 @@ log_info "Initializing completion system..."
 autoload -Uz compinit
 compinit -u
 
-# Function to test completion setup for a tool
+# Function to test completion for a tool
 test_completion() {
-    local tool=$1
-    local config=${tool_configs[$tool]}
+    local tool="$1"
+    local command="$2"
+    local test_command="$3"
+    local completion_file=""
+    local exit_code=0
 
-    log_debug "Testing completion for $tool..."
-    log_debug "Configuration: $config"
-
-    if [[ -z "$config" ]]; then
-        log_debug "No completion configuration found for $tool"
-        return 0
-    fi
-
-    # Parse configuration using | as delimiter
-    local type source test_commands
-    IFS='|' read -r type source test_commands <<< "$config"
-
-    if [[ -z "$type" || -z "$source" || -z "$test_commands" ]]; then
-        log_error "Invalid configuration format for $tool"
-        log_debug "Missing required parts (type|source|commands)"
-        return 1
-    fi
-
-    log_debug "Type: $type"
-    log_debug "Source: $source"
-    log_debug "Test commands: $test_commands"
-
-    printf "\n%-30s ... " "$tool completion"
-
-    # Skip test if tool is not installed
-    if ! command -v "$tool" >/dev/null 2>&1; then
-        echo "⏭️  SKIPPED"
-        log_info "$tool not installed, skipping completion test"
-        return 0
-    fi
-
-    # Create completion directory if it doesn't exist
-    mkdir -p "${HOME}/.zsh/completions" 2>/dev/null || {
-        log_error "Failed to create completion directory"
-        return 1
-    }
-
-    # Add completion directory to fpath if not already there
-    if [[ ":$fpath:" != *":${HOME}/.zsh/completions:"* ]]; then
-        fpath=("${HOME}/.zsh/completions" $fpath)
-    fi
-
-    case $type in
-        "antidote_plugin")
-            # Check if plugin is in .zsh_plugins.txt
-            if ! grep -q "$source" "${HOME}/.zsh_plugins.txt" 2>/dev/null; then
-                echo "❌ FAIL"
-                log_error "$tool completion plugin ($source) not in .zsh_plugins.txt"
-                return 1
-            fi
-            log_debug "Found antidote plugin: $source"
+    # First, try to find the completion file
+    case "$tool" in
+        "fzf")
+            completion_file="/opt/homebrew/opt/fzf/shell/completion.zsh"
             ;;
-
-        "builtin")
-            if ! type "$source" >/dev/null 2>&1; then
-                echo "❌ FAIL"
-                log_error "$tool built-in completion ($source) not available"
-                return 1
-            fi
-            log_debug "Found builtin completion: $source"
+        "git")
+            completion_file="/opt/homebrew/share/zsh/site-functions/_git"
             ;;
-
-        "custom")
-            # Try to evaluate the custom completion setup
-            log_debug "Evaluating custom completion setup: $source"
-            
-            # Special handling for terraform
-            if [[ "$tool" == "terraform" ]]; then
-                log_debug "Setting up terraform completion..."
-                # Create completions directory if it doesn't exist
-                mkdir -p "${HOME}/.zsh/completions"
-                
-                # Generate terraform completion script
-                if ! terraform -install-autocomplete >/dev/null 2>&1; then
-                    # If direct installation fails, try manual generation
-                    cat > "${HOME}/.zsh/completions/_terraform" << 'EOF'
-#compdef terraform
-local -a _terraform_cmds
-_terraform_cmds=(
-    'init:Initialize a new or existing Terraform configuration'
-    'plan:Generate and show an execution plan'
-    'apply:Builds or changes infrastructure'
-    'destroy:Destroy Terraform-managed infrastructure'
-    'show:Inspect Terraform state or plan'
-    'validate:Validates the Terraform files'
-    'fmt:Rewrites config files to canonical format'
-    'refresh:Update local state file against real resources'
-    'output:Read an output from a state file'
-    'workspace:Workspace management'
-    'state:Advanced state management'
-)
-
-_arguments -C \
-    "-help[Show help]" \
-    "-version[Show version]" \
-    "*::terraform commands:->cmds"
-
-case "$state" in
-    cmds)
-        _describe -t commands 'terraform command' _terraform_cmds
-        return
-    ;;
-esac
-EOF
-                    log_debug "Created manual terraform completion file"
-                fi
-
-                # Add completions directory to fpath if not already there
-                if [[ ! " ${fpath[@]} " =~ " ${HOME}/.zsh/completions " ]]; then
-                    fpath=("${HOME}/.zsh/completions" "${fpath[@]}")
-                fi
-
-                # Reload completions
-                compinit -u
-
-                # Verify completion is working
-                if [[ -f "${HOME}/.zsh/completions/_terraform" ]] || typeset -f "_terraform" >/dev/null 2>&1; then
-                    echo "✅ PASS"
-                    log_success "terraform completion installed"
-                    return 0
-                else
-                    echo "❌ FAIL"
-                    log_error "terraform completion setup failed"
-                    return 1
-                fi
+        "kubectl")
+            # Generate kubectl completion if not exists
+            if [[ ! -f "$COMPLETION_DIR/_kubectl" ]]; then
+                kubectl completion zsh > "$COMPLETION_DIR/_kubectl" 2>/dev/null || true
             fi
-
-            # Special handling for packer
-            if [[ "$tool" == "packer" ]]; then
-                log_debug "Setting up packer completion..."
-                
-                # Create completions directory if it doesn't exist
-                mkdir -p "${HOME}/.zsh/completions"
-                
-                # Create packer completion script
-                cat > "${HOME}/.zsh/completions/_packer" << 'EOF'
-#compdef packer
-
-local -a _packer_cmds
-_packer_cmds=(
-    'build:Build an image from a template'
-    'console:Creates a console for testing variable interpolation'
-    'fix:Fixes templates from old versions of packer'
-    'fmt:Rewrites HCL2 config files to canonical format'
-    'hcl2_upgrade:Transform a JSON template into an HCL2 configuration'
-    'init:Install missing plugins or upgrade plugins'
-    'inspect:See components of a template'
-    'validate:Check that a template is valid'
-    'version:Prints the Packer version'
-)
-
-_arguments -C \
-    "-help[Show help]" \
-    "-version[Show version]" \
-    "*::packer commands:->cmds"
-
-case "$state" in
-    cmds)
-        _describe -t commands 'packer command' _packer_cmds
-        return
-    ;;
-esac
-EOF
-                
-                # Add completions directory to fpath if not already there
-                if [[ ! " ${fpath[@]} " =~ " ${HOME}/.zsh/completions " ]]; then
-                    fpath=("${HOME}/.zsh/completions" "${fpath[@]}")
-                fi
-                
-                # Reload completions
-                compinit -u
-                
-                # Verify completion is working
-                if [[ -f "${HOME}/.zsh/completions/_packer" ]] && typeset -f "_packer" >/dev/null 2>&1; then
-                    echo "✅ PASS"
-                    log_success "packer completion installed"
-                    return 0
-                else
-                    echo "❌ FAIL"
-                    log_error "packer completion setup failed"
-                    return 1
-                fi
-            fi
-
-            # Special handling for helm
-            if [[ "$tool" == "helm" ]]; then
-                if ! helm completion zsh > "${HOME}/.zsh/completions/_helm" 2>/dev/null; then
-                    echo "❌ FAIL"
-                    log_error "helm completion installation failed"
-                    return 1
-                fi
-                echo "✅ PASS"
-                log_success "helm completion installed"
-                return 0
-            fi
-
-            # Special handling for kubectx
-            if [[ "$tool" == "kubectx" ]]; then
-                log_debug "Setting up kubectx completion..."
-                
-                # Create completions directory if it doesn't exist
-                mkdir -p "${HOME}/.zsh/completions"
-                
-                # Try multiple methods to get kubectx completion
-                if command -v kubectx >/dev/null 2>&1; then
-                    # First try: direct completion command
-                    if ! kubectx --completion zsh > "${HOME}/.zsh/completions/_kubectx" 2>/dev/null; then
-                        # Second try: check Homebrew completion files
-                        local completion_file
-                        for completion_file in \
-                            "/opt/homebrew/share/zsh/site-functions/_kubectx" \
-                            "/usr/local/share/zsh/site-functions/_kubectx" \
-                            "/usr/share/zsh/vendor-completions/_kubectx"; do
-                            if [[ -f "$completion_file" ]]; then
-                                cp "$completion_file" "${HOME}/.zsh/completions/_kubectx"
-                                break
-                            fi
-                        done
-                        
-                        # Third try: create basic completion file
-                        if [[ ! -f "${HOME}/.zsh/completions/_kubectx" ]]; then
-                            cat > "${HOME}/.zsh/completions/_kubectx" << 'EOF'
-#compdef kubectx
-_arguments \
-  '-h[display help]' \
-  '--help[display help]' \
-  '-c[switch context and execute command]' \
-  '--current[show current context]' \
-  '*:context:->context'
-
-case "$state" in
-  context)
-    local -a contexts
-    contexts=( ${(f)"$(kubectl config get-contexts -o name 2>/dev/null)"} )
-    _describe 'context' contexts
-    ;;
-esac
-EOF
-                        fi
-                    fi
-                else
-                    echo "⏭️  SKIPPED"
-                    log_info "kubectx not installed, skipping completion setup"
-                    return 0
-                fi
-                
-                # Add completions directory to fpath if not already there
-                if [[ ! " ${fpath[@]} " =~ " ${HOME}/.zsh/completions " ]]; then
-                    fpath=("${HOME}/.zsh/completions" "${fpath[@]}")
-                fi
-                
-                # Reload completions
-                compinit -u
-                
-                # Verify completion is working
-                if [[ -f "${HOME}/.zsh/completions/_kubectx" ]] && typeset -f "_kubectx" >/dev/null 2>&1; then
-                    echo "✅ PASS"
-                    log_success "kubectx completion installed"
-                    return 0
-                else
-                    echo "❌ FAIL"
-                    log_error "kubectx completion setup failed"
-                    return 1
-                fi
-            fi
-
-            # Special handling for rbenv and pyenv
-            if [[ "$tool" == "rbenv" || "$tool" == "pyenv" ]]; then
-                log_debug "Setting up $tool initialization..."
-                
-                # Set up environment for rbenv
-                if [[ "$tool" == "rbenv" ]]; then
-                    log_debug "Setting up rbenv environment..."
-                    
-                    # Ensure RBENV_ROOT is set
-                    export RBENV_ROOT="${RBENV_ROOT:-$HOME/.rbenv}"
-                    log_debug "RBENV_ROOT set to: $RBENV_ROOT"
-                    
-                    # Add rbenv to PATH if not already there
-                    if [[ ! "$PATH" =~ ${RBENV_ROOT}/bin ]]; then
-                        export PATH="${RBENV_ROOT}/bin:$PATH"
-                        log_debug "Added rbenv bin to PATH"
-                    fi
-                    
-                    # Add shims to PATH
-                    if [[ -d "${RBENV_ROOT}/shims" ]] && [[ ! "$PATH" =~ ${RBENV_ROOT}/shims ]]; then
-                        export PATH="${RBENV_ROOT}/shims:$PATH"
-                        log_debug "Added rbenv shims to PATH"
-                    fi
-                    
-                    # Initialize rbenv
-                    eval "$(rbenv init -)" 2>/dev/null
-                    log_debug "Initialized rbenv"
-                    
-                    # Set up completion
-                    mkdir -p "${HOME}/.zsh/completions"
-                    
-                    # Try to find completion file from various sources
-                    local completion_found=false
-                    local completion_sources=(
-                        "${RBENV_ROOT}/completions/rbenv.zsh"
-                        "/opt/homebrew/share/zsh/site-functions/_rbenv"
-                        "/usr/local/share/zsh/site-functions/_rbenv"
-                    )
-                    
-                    for source in "${completion_sources[@]}"; do
-                        if [[ -f "$source" ]]; then
-                            log_debug "Found rbenv completion at $source"
-                            cp "$source" "${HOME}/.zsh/completions/_rbenv"
-                            completion_found=true
-                            break
-                        fi
-                    done
-                    
-                    # If no completion file found, generate one
-                    if ! $completion_found; then
-                        log_debug "No existing completion file found, generating one"
-                        cat > "${HOME}/.zsh/completions/_rbenv" << 'EOF'
-#compdef rbenv
-if [[ ! -o interactive ]]; then
-    return
-fi
-
-local state line
-typeset -A opt_args
-
-_rbenv() {
-  local -a commands
-  commands=(
-    'commands:List all available rbenv commands'
-    'local:Set or show the local application-specific Ruby version'
-    'global:Set or show the global Ruby version'
-    'shell:Set or show the shell-specific Ruby version'
-    'install:Install a Ruby version using ruby-build'
-    'uninstall:Uninstall a specific Ruby version'
-    'rehash:Rehash rbenv shims (run this after installing executables)'
-    'version:Show the current Ruby version and its origin'
-    'versions:List installed Ruby versions'
-    'which:Display the full path to an executable'
-    'whence:List all Ruby versions that contain the given executable'
-  )
-
-  _arguments -C \
-    '(-v --version)'{-v,--version}'[Display version information]' \
-    '(-h --help)'{-h,--help}'[Display help information]' \
-    '*:: :->subcmds' && return 0
-
-  if (( CURRENT == 1 )); then
-    _describe -t commands "rbenv subcommand" commands
-    return
-  fi
-}
-
-_rbenv "$@"
-EOF
-                        log_debug "Generated rbenv completion file"
-                    fi
-                    
-                    # Add completions directory to fpath if needed
-                    if [[ ! " ${fpath[@]} " =~ " ${HOME}/.zsh/completions " ]]; then
-                        fpath=("${HOME}/.zsh/completions" "${fpath[@]}")
-                        log_debug "Added completions directory to fpath"
-                    fi
-                    
-                    # Reload completions
-                    compinit -u
-                    log_debug "Reloaded completions"
-                    
-                    # Verify rbenv is working
-                    if rbenv root >/dev/null 2>&1 && { typeset -f "_rbenv" >/dev/null 2>&1 || [[ -f "${HOME}/.zsh/completions/_rbenv" ]]; }; then
-                        echo "✅ PASS"
-                        log_success "rbenv initialized and completion installed"
-                        return 0
-                    else
-                        echo "❌ FAIL"
-                        log_error "rbenv initialization or completion failed"
-                        log_debug "rbenv root exit code: $?"
-                        log_debug "completion function exists: $(typeset -f "_rbenv" >/dev/null 2>&1 && echo "yes" || echo "no")"
-                        log_debug "completion file exists: $([[ -f "${HOME}/.zsh/completions/_rbenv" ]] && echo "yes" || echo "no")"
-                        return 1
-                    fi
-                fi
-                
-                # Keep existing pyenv handling
-                if [[ "$tool" == "pyenv" ]]; then
-                    if ! eval "$source" >/dev/null 2>&1; then
-                        echo "❌ FAIL"
-                        log_error "$tool initialization failed"
-                        return 1
-                    fi
-                    echo "✅ PASS"
-                    log_success "$tool initialized"
-                    return 0
-                fi
-            fi
-
-            # Special handling for direnv
-            if [[ "$tool" == "direnv" ]]; then
-                log_debug "Setting up direnv hook..."
-                
-                # Ensure direnv is in PATH
-                if ! command -v direnv >/dev/null 2>&1; then
-                    echo "❌ FAIL"
-                    log_error "direnv not found in PATH"
-                    return 1
-                fi
-                
-                # Generate hook script to a temporary file
-                local hook_script
-                hook_script=$(mktemp)
-                direnv hook zsh > "$hook_script" 2>/dev/null
-                
-                if [[ ! -s "$hook_script" ]]; then
-                    rm -f "$hook_script"
-                    echo "❌ FAIL"
-                    log_error "Failed to generate direnv hook script"
-                    return 1
-                fi
-                
-                # Source the hook script
-                # shellcheck disable=SC1090
-                if ! source "$hook_script" >/dev/null 2>&1; then
-                    rm -f "$hook_script"
-                    echo "❌ FAIL"
-                    log_error "Failed to source direnv hook"
-                    return 1
-                fi
-                
-                # Clean up
-                rm -f "$hook_script"
-                
-                # Verify direnv is working
-                if typeset -f "_direnv_hook" >/dev/null 2>&1; then
-                    echo "✅ PASS"
-                    log_success "direnv hook installed"
-                    return 0
-                else
-                    echo "❌ FAIL"
-                    log_error "direnv hook not found after installation"
-                    return 1
-                fi
-            fi
-
-            # Special handling for starship
-            if [[ "$tool" == "starship" ]]; then
-                if ! eval "$source" >/dev/null 2>&1; then
-                    echo "❌ FAIL"
-                    log_error "starship initialization failed"
-                    return 1
-                fi
-                echo "✅ PASS"
-                log_success "starship initialized"
-                return 0
-            fi
-
-            # Special handling for fzf
-            if [[ "$tool" == "fzf" ]]; then
-                if [[ ! -f "/opt/homebrew/opt/fzf/shell/completion.zsh" ]]; then
-                    echo "❌ FAIL"
-                    log_error "fzf completion file not found"
-                    return 1
-                fi
-                if ! source "/opt/homebrew/opt/fzf/shell/completion.zsh" >/dev/null 2>&1; then
-                    echo "❌ FAIL"
-                    log_error "fzf completion setup failed"
-                    return 1
-                fi
-                echo "✅ PASS"
-                log_success "fzf completion installed"
-                return 0
-            fi
-
-            # Evaluate the source command with error handling
-            if ! eval "$source" >/dev/null 2>&1; then
-                echo "❌ FAIL"
-                log_error "$tool custom completion setup failed: $source"
-                return 1
-            fi
-            log_debug "Custom completion setup successful"
+            completion_file="$COMPLETION_DIR/_kubectl"
             ;;
-
+        "helm")
+            # Generate helm completion if not exists
+            if [[ ! -f "$COMPLETION_DIR/_helm" ]]; then
+                helm completion zsh > "$COMPLETION_DIR/_helm" 2>/dev/null || true
+            fi
+            completion_file="$COMPLETION_DIR/_helm"
+            ;;
+        "terraform")
+            completion_file="/opt/homebrew/share/zsh/site-functions/_terraform"
+            ;;
+        "packer")
+            completion_file="/opt/homebrew/share/zsh/site-functions/_packer"
+            ;;
+        "rbenv")
+            # Source rbenv completion directly
+            if ! command -v rbenv >/dev/null 2>&1; then
+                return 3
+            fi
+            eval "$(rbenv init - zsh)" 2>/dev/null || true
+            ;;
+        "pyenv")
+            # Source pyenv completion directly
+            if ! command -v pyenv >/dev/null 2>&1; then
+                return 3
+            fi
+            eval "$(pyenv init - zsh)" 2>/dev/null || true
+            ;;
+        "direnv")
+            # Source direnv completion directly
+            if ! command -v direnv >/dev/null 2>&1; then
+                return 3
+            fi
+            eval "$(direnv hook zsh)" 2>/dev/null || true
+            ;;
+        "starship")
+            # Generate starship completion if not exists
+            if [[ ! -f "$COMPLETION_DIR/_starship" ]]; then
+                starship completions zsh > "$COMPLETION_DIR/_starship" 2>/dev/null || true
+            fi
+            completion_file="$COMPLETION_DIR/_starship"
+            ;;
+        "kubectx")
+            completion_file="/opt/homebrew/share/zsh/site-functions/_kubectx"
+            ;;
         *)
-            log_error "Unknown completion type: $type"
-            echo "❌ FAIL"
             return 1
             ;;
     esac
 
-    # Test if completion function exists
-    if typeset -f "_${tool}" &>/dev/null || [[ -f "${HOME}/.zsh/completions/_${tool}" ]]; then
-        echo "✅ PASS"
-        log_success "$tool completion verified"
-        return 0
-    elif [[ "$tool" == "terraform" ]] && complete -p terraform >/dev/null 2>&1; then
-        echo "✅ PASS"
-        log_success "terraform completion verified (using complete)"
-        return 0
-    else
-        echo "❌ FAIL"
-        log_error "$tool completion function not found"
-        return 1
+    # Source completion file if it exists
+    if [[ -n "$completion_file" && -f "$completion_file" ]]; then
+        # shellcheck disable=SC1090
+        source "$completion_file" 2>/dev/null || exit_code=$?
     fi
+
+    # Verify the completion function exists
+    if ! type "_$tool" >/dev/null 2>&1 && ! type "_${tool//-/_}" >/dev/null 2>&1; then
+        exit_code=1
+    fi
+
+    return $exit_code
 }
 
-# Test completions for each tool
-log_info "Testing completions for each tool..."
-completion_success=0
-completion_total=0
+# Test completions for all tools
+test_all_completions() {
+    log_info "Testing completions for each tool..."
+    local success_count=0
+    local total_count=0
 
-# Test each tool's completion with error handling
-{
-    for tool in terraform git rbenv pyenv direnv packer starship kubectl helm kubectx fzf; do
-        log_debug "Checking completion configuration for $tool..."
-        if [[ -n "${tool_configs[$tool]}" ]]; then
-            log_debug "Found configuration for $tool: ${tool_configs[$tool]}"
-            ((completion_total++))
-            
-            if test_completion "$tool" 2>/dev/null; then
-                ((completion_success++))
-                log_debug "$tool completion test passed"
-            else
-                handle_completion_error "$?" "$tool"
-            fi
+    # Define tools and their test commands
+    local -A tools=(
+        ["terraform"]="workspace list"
+        ["git"]="branch"
+        ["rbenv"]="versions"
+        ["pyenv"]="versions"
+        ["direnv"]="status"
+        ["packer"]="version"
+        ["starship"]="prompt"
+        ["kubectl"]="get pods"
+        ["helm"]="list"
+        ["kubectx"]=""
+        ["fzf"]="--version"
+    )
+
+    # Ensure completion directories exist
+    ensure_dir "$COMPLETION_DIR"
+
+    # Add completion directory to fpath if not already there
+    if ! printf '%s\n' "${fpath[@]}" | grep -q "^${COMPLETION_DIR}$"; then
+        fpath=("$COMPLETION_DIR" "${fpath[@]}")
+    fi
+
+    # Initialize completion system
+    autoload -Uz compinit
+    compinit -u
+
+    # Test each tool
+    for tool in "${!tools[@]}"; do
+        local test_cmd="${tools[$tool]}"
+        ((total_count++))
+
+        printf "%-30s ... " "$tool completion"
+        
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            echo "⏭️  SKIPPED"
+            log_info "$tool not installed, skipping completion test"
+            continue
+        fi
+
+        if test_completion "$tool" "$tool" "$test_cmd"; then
+            echo "✅ PASS"
+            log_success "$tool completion verified"
+            ((success_count++))
         else
-            log_debug "No completion configuration found for $tool"
+            echo "❌ FAIL"
+            handle_completion_error $? "$tool"
         fi
     done
 
-    log_info "Completion testing completed: $completion_success of $completion_total tools tested successfully"
-} || {
-    log_error "Error during completion testing"
-    log_debug "Error details: $?"
+    log_info "Completion testing completed: $success_count of $total_count tools tested successfully"
+    return 0
 }
 
 # Verify completion system
@@ -810,19 +456,7 @@ setup_pyenv_completion() {
     fi
 
     # Make sure completions directory is in fpath
-    local path_exists
-    path_exists=false
-    if [[ ${#fpath[@]} -gt 0 ]]; then
-        for path in "${fpath[@]}"; do
-            if [[ "$path" == "$HOME/.zsh/completions" ]]; then
-                path_exists=true
-                break
-            fi
-        done
-    else
-        log_debug "fpath array is empty, will add user completions directory"
-    fi
-    if ! $path_exists; then
+    if ! check_fpath_contains "${HOME}/.zsh/completions"; then
         fpath=("$HOME/.zsh/completions" "${fpath[@]}")
         log_debug "Added user completions directory to fpath"
     fi
@@ -843,247 +477,47 @@ log_debug "Current working directory: $(pwd)"
 log_debug "Home directory: $HOME"
 log_debug "Current fpath: ${fpath[*]}"
 
-# Initialize completion system directories
+# Function to set up completion directories
 setup_completion_directories() {
     log_info "Setting up completion directories..."
 
-    # Create user completion directory if it doesn't exist
-    if [[ ! -d "${HOME}/.zsh/completions" ]]; then
-        log_warning "Creating user completions directory..."
-        if ! mkdir -p "${HOME}/.zsh/completions"; then
-            log_error "Failed to create user completions directory"
-            # Continue anyway, as other directories might work
-        else
-            log_debug "Successfully created user completions directory"
-        fi
-    fi
+    # Create completion directory if it doesn't exist
+    ensure_dir "$COMPLETION_DIR"
 
-    # Enable extended globbing for more powerful pattern matching
-    setopt extendedglob &>/dev/null || log_debug "Failed to set extendedglob option, continuing anyway"
-
-    # Create zcompcache directory with error handling
-    if [[ ! -d "${HOME}/.zcompcache" ]]; then
-        if ! mkdir -p "${HOME}/.zcompcache"; then
-            log_warning "Failed to create .zcompcache directory"
-        else
-            log_debug "Created .zcompcache directory for faster completion"
-        fi
-    fi
-
-    # Check for corrupt zcompdump and remove if necessary
+    # Check if zcompdump is corrupted or old
     local zcompdump="${HOME}/.zcompdump"
-    if [[ -f "$zcompdump" ]] && ! grep -q "^#compdef\|^#autoload" "$zcompdump" 2>/dev/null; then
-        log_warning "zcompdump appears corrupted, removing it to force regeneration"
-        rm -f "$zcompdump"
+    if [[ -f "$zcompdump" ]]; then
+        if ! zsh -c "autoload -U compaudit && compaudit" >/dev/null 2>&1; then
+            log_warning "zcompdump appears corrupted, removing it to force regeneration"
+            rm -f "$zcompdump"*
+        elif [[ -n "$(find "$zcompdump" -mtime +7 2>/dev/null)" ]]; then
+            log_debug "zcompdump is older than 7 days, removing for regeneration"
+            rm -f "$zcompdump"*
+        fi
     fi
 
-    # Deduplicate fpath if not already done
-    typeset -U fpath
+    # Add user completions directory to fpath if not already there
+    log_debug "Adding user completions directory to fpath: $COMPLETION_DIR"
+    if ! printf '%s\n' "${fpath[@]}" | grep -q "^${COMPLETION_DIR}$"; then
+        fpath=("$COMPLETION_DIR" "${fpath[@]}")
+    fi
 
-    # Temporary array to collect unique fpath entries
-    local new_fpath=()
-    local added_paths=()
-
-    # Function to safely add a path to fpath arrays
-    # This ensures valid paths and prevents duplicates
-    safe_add_to_fpath() {
-        local dir="$1"
-        local description="$2"
-
-        # Skip if directory doesn't exist or isn't readable
-        if [[ ! -d "$dir" ]]; then
-            log_debug "Skipping $description: Directory does not exist"
-            return 1
-        fi
-
-        if [[ ! -r "$dir" ]]; then
-            log_debug "Skipping $description: Directory is not readable"
-            return 1
-        fi
-
-        # Check if already added
-        local path_exists
-        path_exists=false
-        # Check if added_paths array exists and has elements
-        if [[ ${#added_paths[@]} -gt 0 ]]; then
-            for path in "${added_paths[@]}"; do
-                if [[ "$path" == "$dir" ]]; then
-                    path_exists=true
-                    break
-                fi
-            done
-        fi
-
-        if ! $path_exists; then
-            new_fpath+=("$dir")
-            added_paths+=("$dir")
-            log_debug "Adding $description to fpath: $dir"
-            return 0
-        else
-            log_debug "Skipping $description: Already in fpath"
-            return 0
-        fi
-    }
-
-    # Add user completions directory first (highest priority)
-    safe_add_to_fpath "${HOME}/.zsh/completions" "user completions directory"
-
-    # Check for antidote completions directory (high priority)
-    safe_add_to_fpath "${HOME}/.antidote/completions" "antidote completions directory"
-
-    # Special case for Homebrew completions (high priority)
-    # Handle both Apple Silicon and Intel Mac paths
-    local brew_prefix=""
-    local arch_type
-    arch_type="$(uname -m)"
-
-    # More robust Homebrew detection
-    if command -v brew >/dev/null 2>&1; then
-        # Try to get Homebrew prefix reliably
-        brew_prefix="$(brew --prefix 2>/dev/null)" || {
-            # Fallback based on architecture
-            if [[ "$arch_type" == "arm64" ]]; then
-                brew_prefix="/opt/homebrew"
-                log_debug "Fallback to default Apple Silicon Homebrew path: $brew_prefix"
-            else
-                brew_prefix="/usr/local"
-                log_debug "Fallback to default Intel Homebrew path: $brew_prefix"
-            fi
-        }
-
-        log_debug "Detected Homebrew prefix: $brew_prefix"
-        local brew_completion_dir="${brew_prefix}/share/zsh/site-functions"
-        safe_add_to_fpath "$brew_completion_dir" "Homebrew completion directory"
-
-        # Add FZF completions path if it exists
-        local fzf_completion="${brew_prefix}/opt/fzf/shell/completion.zsh"
-        if [[ -f "$fzf_completion" ]]; then
-            log_debug "Found FZF completion at $fzf_completion"
-            # shellcheck disable=SC1090
-            if ! source "$fzf_completion" 2>/dev/null; then
-                log_warning "Failed to source FZF completion from $fzf_completion"
-            else
-                log_debug "Successfully sourced FZF completion"
-            fi
-        fi
-
-        # Check for Intel Homebrew path if we're on Apple Silicon
-        # This is important for cross-architecture compatibility
-        if [[ "$arch_type" == "arm64" ]]; then
-            safe_add_to_fpath "/usr/local/share/zsh/site-functions" "Intel Homebrew completion directory"
+    # Check for antidote completions directory
+    local antidote_completions="/opt/homebrew/share/zsh/site-functions"
+    if [[ -d "$antidote_completions" ]]; then
+        log_debug "Adding antidote completions directory to fpath: $antidote_completions"
+        if ! printf '%s\n' "${fpath[@]}" | grep -q "^${antidote_completions}$"; then
+            fpath=("$antidote_completions" "${fpath[@]}")
         fi
     else
-        log_debug "Homebrew not found, skipping Homebrew completion paths"
+        log_debug "Skipping antidote completions directory: Directory does not exist"
     fi
 
-    # Add other completion directories in a controlled order
-    # shellcheck disable=SC2066
-    for location_key in "${(@k)completion_paths}"; do
-        local location="${completion_paths[$location_key]}"
-        safe_add_to_fpath "$location" "completion directory ($location_key)"
-    done
+    # Initialize completion system
+    autoload -Uz compinit
+    compinit -u
 
-    # Add existing fpath entries that weren't already added
-    # This preserves any system or user-configured paths
-    if [[ ${#fpath[@]} -gt 0 ]]; then
-        for path in "${fpath[@]}"; do
-            # Skip empty or invalid paths
-            if [[ -z "$path" || ! -d "$path" ]]; then
-                continue
-            fi
-
-            local path_exists
-            path_exists=false
-            if [[ ${#added_paths[@]} -gt 0 ]]; then
-                for added_path in "${added_paths[@]}"; do
-                    if [[ "$added_path" == "$path" ]]; then
-                        path_exists=true
-                        break
-                    fi
-                done
-            fi
-
-            if ! $path_exists; then
-                new_fpath+=("$path")
-                added_paths+=("$path")
-                log_debug "Preserving existing fpath entry: $path"
-            fi
-        done
-    else
-        log_debug "fpath array is empty, nothing to preserve"
-    fi
-
-    # Count valid vs. invalid paths for debugging
-    local valid_paths=0
-    local invalid_paths=0
-    if [[ ${#new_fpath[@]} -gt 0 ]]; then
-        for path in "${new_fpath[@]}"; do
-            if [[ -d "$path" ]]; then
-                ((valid_paths++))
-            else
-                ((invalid_paths++))
-                log_debug "Warning: Invalid path in fpath: $path"
-            fi
-        done
-    else
-        log_warning "new_fpath array is empty, no paths to validate"
-    fi
-
-    log_debug "fpath contains $valid_paths valid and $invalid_paths invalid entries"
-
-    # Update fpath with the new ordered and deduplicated array
-    if [[ ${#new_fpath[@]} -gt 0 ]]; then
-        fpath=("${new_fpath[@]}")
-        log_debug "Updated fpath with ${#fpath[@]} entries"
-    else
-        log_warning "No valid completion directories found, fpath may be empty"
-    fi
-
-    # Force reload of completions with improved error handling
-    log_debug "Reloading completions with updated fpath"
-    initialize_completion_system "force"
-
-    # Verify the fpath was properly set
-    if [[ ${#fpath[@]} -eq 0 ]]; then
-        log_error "fpath is empty after setup! Completions will not work."
-    else
-        log_debug "fpath properly set with ${#fpath[@]} entries"
-    fi
-
-    # Dump completion system state for better debugging
-    log_debug "Updated fpath: ${fpath[*]}"
-    log_debug "Completion directories found: ${#added_paths[@]}"
-
-    # Check if completion system is working
-    if ! type compdef >/dev/null 2>&1; then
-        log_warning "compdef command not available - completion system may not be fully initialized"
-        # Try to recover with multiple methods
-        log_debug "Attempting to recover completion system..."
-        autoload -Uz compinit
-        compinit -u 2>/dev/null || compinit -i 2>/dev/null
-
-        # If still not available, try more aggressive loading
-        if ! type compdef >/dev/null 2>&1; then
-            log_debug "First recovery attempt failed, trying additional methods..."
-            # Try to source compinit directly
-            for funcdir in "${fpath[@]}"; do
-                if [[ -f "${funcdir}/compinit" ]]; then
-                    log_debug "Found compinit at ${funcdir}/compinit, sourcing it directly"
-                    # shellcheck disable=SC1090
-                    # shellcheck disable=SC1091
-                    source "${funcdir}/compinit" 2>/dev/null || true
-                    break
-                fi
-            done
-        fi
-
-        # Final check
-        if type compdef >/dev/null 2>&1; then
-            log_success "Successfully recovered completion system"
-        else
-            log_error "Failed to initialize completion system, compdef still not available"
-        fi
-    fi
+    return 0
 }
 
 # Run completion directory setup
@@ -1411,118 +845,8 @@ fi
 
 log_info "=== COMPLETION VERIFICATION ==="
 
-# Test completions for all configured tools
-completion_success=0
-completion_total=0
-
-# Check if we have any completion configs to test
-if [[ ${#tool_configs[@]} -eq 0 ]]; then
-    log_warning "No completion configurations defined to test"
-else
-    # shellcheck disable=SC2296,SC2154,SC2034
-    for tool in ${(k)tool_configs}; do
-        ((completion_total++))
-        if test_completion "$tool"; then
-            ((completion_success++))
-        fi
-    done
-fi
-
-# Verify essential completions are working
-log_info "=== ESSENTIAL COMPLETIONS TEST ==="
-
-# Properly declare array with typeset to avoid issues in different zsh versions
-typeset -i essential_passed=0
-typeset -i essential_total=${#essential_completions[@]}
-typeset -i essential_installed=0
-
-# Check if we have any essential completions to test
-if [[ $essential_total -eq 0 ]]; then
-    log_warning "No essential completions defined to test"
-else
-    log_debug "Testing ${#essential_completions[@]} essential completions"
-    for tool in "${essential_completions[@]}"; do
-        printf "%-30s ... " "Essential $tool completion"
-
-        # Check if tool is installed first
-        if command -v "$tool" >/dev/null 2>&1; then
-            ((essential_installed++))
-
-            # Try to fix completions before testing
-            if [[ "$tool" == "terraform" ]]; then
-                # Try to set up terraform completions
-                if command -v terraform >/dev/null 2>&1; then
-                    log_debug "Trying to configure terraform completions"
-                    complete -o nospace -C "$(command -v terraform)" terraform 2>/dev/null
-                fi
-            elif [[ "$tool" == "kubectl" ]]; then
-                # Try to set up kubectl completions
-                if command -v kubectl >/dev/null 2>&1; then
-                    log_debug "Trying to configure kubectl completions"
-                    mkdir -p "$HOME/.zsh/completions"
-                    kubectl completion zsh > "$HOME/.zsh/completions/_kubectl" 2>/dev/null
-                    # shellcheck disable=SC1090
-                    source <(kubectl completion zsh 2>/dev/null) || true
-                fi
-            elif [[ "$tool" == "helm" ]]; then
-                # Try to set up helm completions
-                if command -v helm >/dev/null 2>&1; then
-                    log_debug "Trying to configure helm completions"
-                    mkdir -p "$HOME/.zsh/completions"
-                    helm completion zsh > "$HOME/.zsh/completions/_helm" 2>/dev/null
-                fi
-            elif [[ "$tool" == "git" ]]; then
-                # Git completions are usually provided by zsh itself or by Homebrew
-                log_debug "Checking for git completions in fpath"
-                if [[ ${#fpath[@]} -gt 0 ]]; then
-                    for dir in "${fpath[@]}"; do
-                        if [[ -f "$dir/_git" ]]; then
-                            log_debug "Found git completion file at $dir/_git"
-                        fi
-                    done
-                else
-                    log_warning "fpath array is empty, cannot check for git completions"
-                fi
-            fi
-
-            # Reload completions with error handling
-            if ! compinit -u 2>/dev/null; then
-                log_warning "compinit failed with -u option, trying with -i option..."
-                compinit -i
-            fi
-
-            # Test if completion function exists
-            if typeset -f "_${tool}" &>/dev/null; then
-                echo "✅ PASS"
-                ((essential_passed++))
-                log_success "Essential completion for $tool is working"
-            elif zsh -c "autoload -U compinit && compinit -u && which _${tool}" >/dev/null 2>&1; then
-                echo "✅ PASS"
-                ((essential_passed++))
-                log_success "Essential completion for $tool is working"
-            else
-                # Special case handling
-                if [[ "$tool" == "terraform" ]] && command -v terraform >/dev/null 2>&1; then
-                    # Terraform uses a different completion mechanism
-                    echo "✅ PASS (custom)"
-                    ((essential_passed++))
-                    log_success "Terraform uses a custom completion system"
-                else
-                    echo "❌ FAIL"
-                    log_error "Essential completion for $tool is NOT working"
-                    log_debug "Completion function _${tool} not found"
-                    log_debug "Current fpath: ${fpath[*]}"
-                fi
-            fi
-        else
-            echo "⏭️  SKIPPED"
-            log_info "$tool not installed, skipping completion test"
-        fi
-    done
-fi
-
-# Log summary of essential completions
-log_debug "Essential tools: $essential_total defined, $essential_installed installed, $essential_passed with working completions"
+# Test completions for all tools
+test_all_completions
 
 # Verify completion directories are properly added to fpath
 log_info "=== COMPLETION DIRECTORIES VERIFICATION ==="
@@ -1682,13 +1006,91 @@ else
     exit 1
 fi
 
-# Function to handle completion test errors
-handle_completion_error() {
-    local exit_code="$1"
-    local tool="$2"
-    log_debug "$tool completion test failed with exit code $exit_code"
-    # Print the error output for debugging
-    test_completion "$tool" 2>&1 | while IFS= read -r line; do
-        log_debug "[$tool] $line"
+# Function to deduplicate fpath entries
+deduplicate_fpath() {
+    log_debug "Deduplicating fpath entries..."
+    
+    # Create temporary array for unique entries
+    local -a unique_fpath=()
+    local -A seen=()
+    
+    # Only add each path once
+    for path in "${fpath[@]}"; do
+        if [[ -n "$path" && -d "$path" && -z "${seen[$path]}" ]]; then
+            unique_fpath+=("$path")
+            seen[$path]=1
+        fi
     done
+    
+    # Replace fpath with deduplicated array
+    fpath=("${unique_fpath[@]}")
+    log_debug "Deduplicated fpath now contains ${#fpath[@]} unique entries"
 }
+
+# Function to fix zcompdump
+fix_zcompdump() {
+    log_info "Fixing zcompdump..."
+    
+    # Remove all zcompdump files
+    rm -f "${HOME}/.zcompdump"*(N) 2>/dev/null
+    rm -f "${ZDOTDIR:-$HOME}/.zcompdump"*(N) 2>/dev/null
+    
+    # Force regeneration of completion cache
+    autoload -Uz compinit
+    compinit -u -d "${ZDOTDIR:-$HOME}/.zcompdump"
+    
+    log_success "Regenerated zcompdump file"
+}
+
+# Function to setup fzf completion
+setup_fzf_completion() {
+    log_info "Setting up fzf completion..."
+    
+    local fzf_completion_file="/opt/homebrew/opt/fzf/shell/completion.zsh"
+    local intel_fzf_completion_file="/usr/local/opt/fzf/shell/completion.zsh"
+    
+    if [[ -f "$fzf_completion_file" ]]; then
+        # shellcheck disable=SC1091
+        source "$fzf_completion_file" 2>/dev/null || log_error "Failed to source fzf completion"
+    elif [[ -f "$intel_fzf_completion_file" ]]; then
+        # shellcheck disable=SC1091
+        source "$intel_fzf_completion_file" 2>/dev/null || log_error "Failed to source fzf completion"
+    else
+        log_error "fzf completion file not found"
+        return 1
+    fi
+    
+    # Verify fzf completion is working
+    if typeset -f "_fzf" >/dev/null 2>&1; then
+        log_success "fzf completion setup successful"
+        return 0
+    else
+        log_error "fzf completion setup failed"
+        return 1
+    fi
+}
+
+# Before testing completions, clean up the environment
+deduplicate_fpath
+fix_zcompdump
+setup_fzf_completion
+
+# Fix array handling in fpath checks
+check_fpath_contains() {
+    local target_path="$1"
+    local found=false
+    
+    for path in "${fpath[@]}"; do
+        if [[ "$path" == "$target_path" ]]; then
+            found=true
+            break
+        fi
+    done
+    
+    [[ "$found" == "true" ]]
+}
+
+# Update fpath checks to use the new function
+if ! check_fpath_contains "${HOME}/.zsh/completions"; then
+    fpath=("${HOME}/.zsh/completions" "${fpath[@]}")
+fi
