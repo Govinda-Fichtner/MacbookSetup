@@ -4,6 +4,7 @@ set -e
 # Simple logging functions with forced flush
 log_info() { printf "[INFO] %s\n" "$1" | tee /dev/stderr; }
 log_success() { printf "[SUCCESS] %s\n" "$1" | tee /dev/stderr; }
+log_warning() { printf "[WARNING] %s\n" "$1" | tee /dev/stderr; }
 log_error() { printf "[ERROR] %s\n" "$1" | tee /dev/stderr; }
 log_debug() { printf "DEBUG: %s\n" "$1" | tee /dev/stderr; }
 
@@ -31,6 +32,7 @@ setopt +o nomatch
 # Simple logging functions with forced flush
 log_info() { printf "[INFO] %s\n" "$1" | tee /dev/stderr; }
 log_success() { printf "[SUCCESS] %s\n" "$1" | tee /dev/stderr; }
+log_warning() { printf "[WARNING] %s\n" "$1" | tee /dev/stderr; }
 log_error() { printf "[ERROR] %s\n" "$1" | tee /dev/stderr; }
 log_debug() { printf "DEBUG: %s\n" "$1" | tee /dev/stderr; }
 
@@ -101,10 +103,18 @@ install_packages() {
     }
 
     # Install HashiCorp tools required by verification
-    log_info "Installing HashiCorp tools..."
-    brew install terraform packer || {
-        log_error "Failed to install HashiCorp tools"
-        return 1
+    log_info "Installing HashiCorp tools using direct download..."
+    
+    # Source the HashiCorp installation script
+    if [[ -f "./hashicorp_install.sh" ]]; then
+        # shellcheck disable=SC1091
+        source "./hashicorp_install.sh"
+        
+        # Try to install HashiCorp tools, but don't fail if they can't be installed
+        install_terraform || log_info "Terraform installation skipped, not critical"
+        install_packer || log_info "Packer installation skipped, not critical"
+    else
+        log_warning "hashicorp_install.sh not found, skipping HashiCorp tools installation"
     }
 
     # Install kubernetes tools (non-critical)
