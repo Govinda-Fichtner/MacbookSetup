@@ -37,18 +37,18 @@ main() {
     
     # Define tools to verify
     local -A tools=(
-        "brew" "Homebrew package manager"
-        "git" "Git version control"
-        "antidote" "Antidote plugin manager"
-        "rbenv" "Ruby version manager"
-        "pyenv" "Python version manager"
-        "direnv" "Directory environment manager"
-        "starship" "Starship prompt"
-        "packer" "HashiCorp Packer"
-        "terraform" "Terraform infrastructure tool"
-        "kubectl" "Kubernetes CLI"
-        "helm" "Kubernetes package manager"
-        "fzf" "Fuzzy finder"
+        ["brew"]="Homebrew package manager"
+        ["git"]="Git version control"
+        ["antidote"]="Antidote plugin manager"
+        ["rbenv"]="Ruby version manager"
+        ["pyenv"]="Python version manager"
+        ["direnv"]="Directory environment manager"
+        ["starship"]="Starship prompt"
+        ["packer"]="HashiCorp Packer"
+        ["terraform"]="Terraform infrastructure tool"
+        ["kubectl"]="Kubernetes CLI"
+        ["helm"]="Kubernetes package manager"
+        ["fzf"]="Fuzzy finder"
     )
     
     log_info "=== TOOL INSTALLATION VERIFICATION ==="
@@ -91,9 +91,9 @@ main() {
     
     # Check important configuration files
     local -A config_files=(
-        "${HOME}/.zshrc" "Zsh configuration file"
-        "${HOME}/.zsh_plugins.txt" "Antidote plugins file"
-        "Brewfile" "Homebrew package list"
+        ["${HOME}/.zshrc"]="Zsh configuration file"
+        ["${HOME}/.zsh_plugins.txt"]="Antidote plugins file"
+        ["Brewfile"]="Homebrew package list"
     )
     
     for file in ${(k)config_files}; do
@@ -131,10 +131,10 @@ main() {
     
     # Check completion directories
     local -A completion_dirs=(
-        "/opt/homebrew/share/zsh/site-functions" "Homebrew completions"
-        "/usr/share/zsh/site-functions" "System completions"
-        "${HOME}/.zsh/completions" "User completions"
-        "/opt/homebrew/opt/fzf/shell" "FZF completions"
+        ["/opt/homebrew/share/zsh/site-functions"]="Homebrew completions"
+        ["/usr/share/zsh/site-functions"]="System completions"
+        ["${HOME}/.zsh/completions"]="User completions"
+        ["/opt/homebrew/opt/fzf/shell"]="FZF completions"
     )
     
     for dir in ${(k)completion_dirs}; do

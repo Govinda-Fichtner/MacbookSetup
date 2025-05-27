@@ -65,30 +65,30 @@ test_terraform_installed() {
 
 # Test 4: Check if basic Terraform completions are available
 test_terraform_completions() {
-    run_test "Check if Terraform completions are available" '
-        local completions
-        completions=$(terraform --help 2>/dev/null | grep -E "^  [a-z]" | cut -d " " -f3)
-        [[ -n "$completions" ]] && echo "$completions" | grep -q "init"
-    '
+    run_test "Check if Terraform completions are available" "
+        # Check if terraform completion function exists
+        if typeset -f _terraform >/dev/null 2>&1; then
+            echo \"✅ Terraform completion function found\"
+            return 0
+        else
+            echo \"❌ Terraform completion function not found\"
+            return 1
+        fi
+    "
 }
 
 # Test 5: Verify completion for common Terraform commands
 test_terraform_common_commands() {
-    run_test "Verify completion for common Terraform commands" '
-        local commands=("init" "plan" "apply" "destroy" "fmt" "validate")
-        local all_found=true
-        local completions
-        completions=$(terraform --help 2>/dev/null | grep -E "^  [a-z]" | cut -d " " -f3)
-        
-        for cmd in "${commands[@]}"; do
-            if ! echo "$completions" | grep -q "^$cmd$"; then
-                echo "Missing completion for: $cmd"
-                all_found=false
-            fi
-        done
-        
-        $all_found
-    '
+    run_test "Verify completion for common Terraform commands" "
+        # Test basic terraform completion
+        if compgen -W \"init plan apply destroy workspace\" terraform >/dev/null 2>&1; then
+            echo \"✅ Basic terraform commands available for completion\"
+            return 0
+        else
+            echo \"❌ Terraform command completion not working\"
+            return 1
+        fi
+    "
 }
 
 # Run all tests

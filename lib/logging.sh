@@ -1,4 +1,5 @@
 #!/bin/zsh
+# shellcheck shell=bash
 
 # Logging configuration
 # Log levels (lower number = higher priority)

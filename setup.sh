@@ -1,5 +1,7 @@
 #!/bin/zsh
-#
+# shellcheck shell=bash
+# shellcheck disable=SC2296,SC2034,SC2154,SC1091
+
 # macOS Development Environment Setup Script
 # 
 # This script automates the installation and configuration of a development environment on macOS.
@@ -19,6 +21,7 @@ readonly ZCOMPCACHE_DIR="${HOME}/.zcompcache"
 readonly ANTIDOTE_PLUGINS_FILE="${ZDOTDIR}/.zsh_plugins.txt"
 
 # Source logging module
+# shellcheck source=lib/logging.sh
 source "lib/logging.sh"
 
 # Color definitions
@@ -317,7 +320,12 @@ fi
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 zstyle ':completion::complete:*' use-cache on
-zstyle ':completion::complete:*' cache-path '$ZCOMPCACHE_DIR'"
+zstyle ':completion::complete:*' cache-path '$ZCOMPCACHE_DIR'
+
+# Source fzf completions if available
+if [[ -f \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" ]]; then
+    source \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" 2>/dev/null
+fi"
 
     if ! grep -q "Initialize completions" "$ZSHRC_PATH"; then
         echo -e "\n$completion_config" >> "$ZSHRC_PATH"
@@ -326,6 +334,12 @@ zstyle ':completion::complete:*' cache-path '$ZCOMPCACHE_DIR'"
     # Force regeneration of completion cache
     rm -f "${HOME}/.zcompdump"*
     rm -f "${ZCOMPCACHE_DIR}/"*
+
+    # Set up fzf completion immediately for current session
+    if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.zsh" ]]; then
+        # shellcheck disable=SC1090
+        source "$(brew --prefix)/opt/fzf/shell/completion.zsh" 2>/dev/null || log_warning "Failed to source fzf completion"
+    fi
 
     log_success "Shell completions setup completed."
 }

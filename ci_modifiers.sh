@@ -1,6 +1,6 @@
+#!/bin/zsh
 # shellcheck shell=bash
 # shellcheck disable=SC2296,SC2034,SC2154
-#!/bin/zsh
 #
 # CI Modifier Script
 # This script modifies setup.sh to create a CI-compatible version
@@ -94,7 +94,7 @@ main() {
     if [[ ! -f "$SETUP_SCRIPT" ]]; then
         log_error "$SETUP_SCRIPT not found"
         exit 1
-    }
+    fi
 
     # Create CI setup script
     log_info "Creating CI-compatible version of $SETUP_SCRIPT..."
