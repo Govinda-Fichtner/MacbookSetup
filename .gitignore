@@ -51,7 +51,6 @@ tmp/
 
 # CI/Build artifacts
 ci_setup.sh
-verify_setup.sh
 *.artifact
 
 # Runtime data
