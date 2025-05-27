@@ -272,10 +272,17 @@ ohmyzsh/ohmyzsh path:plugins/git
 
 # Kubernetes plugins
 ohmyzsh/ohmyzsh path:plugins/kubectl
+ohmyzsh/ohmyzsh path:plugins/helm
+
+# Development tools completions
+ohmyzsh/ohmyzsh path:plugins/terraform
+ohmyzsh/ohmyzsh path:plugins/docker
+ohmyzsh/ohmyzsh path:plugins/docker-compose
 
 # Utility plugins
 ohmyzsh/ohmyzsh path:plugins/common-aliases
 ohmyzsh/ohmyzsh path:plugins/brew
+ohmyzsh/ohmyzsh path:plugins/fzf
 EOF
     fi
 
@@ -325,6 +332,27 @@ zstyle ':completion::complete:*' cache-path '$ZCOMPCACHE_DIR'
 # Source fzf completions if available
 if [[ -f \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" ]]; then
     source \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" 2>/dev/null
+fi
+
+# Additional completion sources
+# Terraform completion
+if command -v terraform >/dev/null 2>&1; then
+    complete -o nospace -C terraform terraform
+fi
+
+# Kubectl completion
+if command -v kubectl >/dev/null 2>&1; then
+    source <(kubectl completion zsh)
+fi
+
+# Helm completion
+if command -v helm >/dev/null 2>&1; then
+    source <(helm completion zsh)
+fi
+
+# Docker completion (if available via Homebrew)
+if [[ -f \"\$(brew --prefix)/etc/bash_completion.d/docker\" ]]; then
+    source \"\$(brew --prefix)/etc/bash_completion.d/docker\"
 fi"
 
     if ! grep -q "Initialize completions" "$ZSHRC_PATH"; then
