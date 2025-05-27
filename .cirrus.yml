@@ -60,12 +60,14 @@ env:
 
 # Template for system information (only used in daily validation)
 .system_info_template: &system_info_template
-  # Display system information for debugging
-  echo "=== System Information ==="
-  uname -a
-  sw_vers
-  echo "Shell: $SHELL"
-  echo "ZSH version: $(zsh --version)"
+  system_info_script:
+    - |
+      # Display system information for debugging
+      echo "=== System Information ==="
+      uname -a
+      sw_vers
+      echo "Shell: $SHELL"
+      echo "ZSH version: $(zsh --version)"
 
 # Template for CI setup script preparation
 .prepare_template: &prepare_template
