@@ -224,7 +224,7 @@ EOT
     autoload -Uz compinit
     compinit -i
 
-    # shellcheck disable=SC1090
+    # shellcheck disable=SC1090,SC1091
     source "${HOME}/.zshrc"
 
             log_success "Shell configuration completed"
