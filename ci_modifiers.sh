@@ -25,6 +25,7 @@ export HOMEBREW_NO_ENV_HINTS=1\
 ' ci_setup.sh
 
 # Remove root user check from validate_system function
+# shellcheck disable=SC2016
 sed -i.bak '/if \[\[ \$EUID -eq 0 \]\]/,+4d' ci_setup.sh
 
 # Add error output redirection to stderr for CI logging
