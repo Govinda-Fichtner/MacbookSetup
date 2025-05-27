@@ -86,14 +86,65 @@ log_debug "Current working directory: $PWD"
 log_debug "Home directory: $HOME"
 log_debug "Current fpath: $fpath"
 
-# Ensure we're using zsh
-if [[ "$(basename "$SHELL")" != "zsh" ]]; then
-    log_warning "Current shell is not zsh, switching to zsh"
-    exec /bin/zsh "$0"
+# Ensure we're running in zsh
+if [ -n "$BASH_VERSION" ]; then
+    exec /bin/zsh "$0" "$@"
 fi
 
-# Source zshrc in a new shell to avoid contamination
-zsh -c 'source ~/.zshrc' || log_warning "Failed to source ~/.zshrc in test shell"
+# Enable zsh features
+setopt extended_glob
+
+# Initialize completion system early
+autoload -Uz compinit
+compinit -u
+
+# Tool configurations
+typeset -A tool_configs
+tool_configs=(
+    [terraform]="custom|complete -o nospace -C $(command -v terraform) terraform|init plan apply destroy"
+    [git]="builtin|_git|checkout branch commit push pull"
+    [rbenv]="custom|eval $(rbenv init -)|install local global"
+    [pyenv]="custom|setup_pyenv_completion|install local global"
+    [direnv]="custom|eval $(direnv hook zsh)|allow deny"
+    [packer]="custom|[ -f ~/.zsh/completions/_packer ] || (mkdir -p ~/.zsh/completions && packer -autocomplete-install)|build init validate"
+    [starship]="custom|eval $(starship init zsh)|init configure preset"
+    [kubectl]="custom|source <(kubectl completion zsh) 2>/dev/null|get describe apply delete"
+    [helm]="custom|[ -f ~/.zsh/completions/_helm ] || helm completion zsh > ~/.zsh/completions/_helm|install upgrade rollback list"
+    [kubectx]="custom|[ -f ~/.zsh/completions/_kubectx ] || kubectx --completion zsh > ~/.zsh/completions/_kubectx|none"
+    [fzf]="custom|[ -f /opt/homebrew/opt/fzf/shell/completion.zsh ] && source /opt/homebrew/opt/fzf/shell/completion.zsh|-f --files --preview"
+)
+
+# Completion directories
+typeset -A completion_paths
+completion_paths=(
+    [homebrew]="/opt/homebrew/share/zsh/site-functions"
+    [homebrew_intel]="/usr/local/share/zsh/site-functions"
+    [user_completions]="$HOME/.zsh/completions"
+    [antidote]="$HOME/.antidote/completions"
+    [zsh_site]="/usr/share/zsh/site-functions"
+    [zsh_vendor]="/usr/share/zsh/vendor-completions"
+    [fzf_completions]="/opt/homebrew/opt/fzf/shell"
+)
+
+# Function to get tool configuration parts
+get_tool_config_part() {
+    local tool=$1
+    local part=$2  # type, source, or commands
+    local config=${tool_configs[$tool]}
+    local IFS='|'
+    local parts=($config)
+    
+    case $part in
+        type) echo ${parts[1]} ;;
+        source) echo ${parts[2]} ;;
+        commands) echo ${parts[3]} ;;
+    esac
+}
+
+# Function to get completion path
+get_completion_path() {
+    echo ${completion_paths[$1]}
+}
 
 # Verify essential commands
 commands=(
@@ -134,11 +185,11 @@ log_info "Verification completed"
 # type: antidote_plugin, builtin, or custom
 # source: plugin name for antidote, path for builtin, or command for custom
 # test_commands: space-separated list of commands to test completion
-declare -A completion_config
-# Initialize each key separately for zsh compatibility
-# shellcheck disable=SC2154
+typeset -A completion_config
+completion_config=()
+
+# Initialize completion_config array with individual assignments
 completion_config[terraform]="custom 'complete -o nospace -C \"$(command -v terraform)\" terraform' init plan apply destroy"
-# shellcheck disable=SC2154
 completion_config[git]="builtin _git checkout branch commit push pull"
 completion_config[rbenv]="custom 'eval \"$(rbenv init -)\"' install local global"
 completion_config[pyenv]="custom 'setup_pyenv_completion' install local global"
@@ -151,16 +202,17 @@ completion_config[kubectx]="custom '[ -f ~/.zsh/completions/_kubectx ] || (mkdir
 completion_config[fzf]="custom '[ -f /opt/homebrew/opt/fzf/shell/completion.zsh ] && source /opt/homebrew/opt/fzf/shell/completion.zsh' -f --files --preview"
 
 # Define locations for completion files to check during verification
-declare -A completion_locations
-completion_locations=(
-  ["homebrew"]="/opt/homebrew/share/zsh/site-functions"
-  ["homebrew_intel"]="/usr/local/share/zsh/site-functions"
-  ["user_completions"]="$HOME/.zsh/completions"
-  ["antidote"]="$HOME/.antidote/completions"
-  ["zsh_site"]="/usr/share/zsh/site-functions"
-  ["zsh_vendor"]="/usr/share/zsh/vendor-completions"
-  ["fzf_completions"]="/opt/homebrew/opt/fzf/shell"
-)
+typeset -A completion_locations
+completion_locations=()
+
+# Initialize completion_locations array with individual assignments
+completion_locations[homebrew]="/opt/homebrew/share/zsh/site-functions"
+completion_locations[homebrew_intel]="/usr/local/share/zsh/site-functions"
+completion_locations[user_completions]="$HOME/.zsh/completions"
+completion_locations[antidote]="$HOME/.antidote/completions"
+completion_locations[zsh_site]="/usr/share/zsh/site-functions"
+completion_locations[zsh_vendor]="/usr/share/zsh/vendor-completions"
+completion_locations[fzf_completions]="/opt/homebrew/opt/fzf/shell"
 
 # Function to test completion setup for a tool
 test_completion() {
@@ -1312,7 +1364,6 @@ else
       log_debug "Completion function _${tool} not found"
       log_debug "Current fpath: ${fpath[*]}"
     fi
-  fi
     else
       echo "⏭️  SKIPPED"
       log_info "$tool not installed, skipping completion test"

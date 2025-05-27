@@ -275,9 +275,13 @@ EOF
 
     # Add antidote configuration to .zshrc
     local antidote_config
-    antidote_config="source $(brew --prefix)/opt/antidote/share/antidote/antidote.zsh\nantidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt"
-    if ! grep -q "antidote load" "$ZSHRC_PATH"; then
-        echo -e "\n# Initialize antidote\n$antidote_config" >> "$ZSHRC_PATH"
+    antidote_config="# Initialize antidote
+[[ -e \$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh ]] && source \$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh
+autoload -Uz compinit && compinit
+antidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt"
+
+    if ! grep -q "Initialize antidote" "$ZSHRC_PATH"; then
+        echo -e "\n$antidote_config" >> "$ZSHRC_PATH"
     fi
 
     log_success "Antidote setup completed."
@@ -293,8 +297,14 @@ setup_shell_completions() {
     # Add completion configuration to .zshrc
     local completion_config
     completion_config="# Initialize completions
+# Ensure we're running in zsh
+if [ -n \"\$BASH_VERSION\" ]; then
+    exec /bin/zsh \"\$0\" \"\$@\"
+fi
+
+# Initialize completion system
 autoload -Uz compinit
-if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
+if [[ -f ~/.zcompdump && \$(find ~/.zcompdump -mtime +1) ]]; then
     compinit -i
 else
     compinit -C -i
