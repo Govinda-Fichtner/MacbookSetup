@@ -18,6 +18,9 @@ readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 readonly ZCOMPCACHE_DIR="${HOME}/.zcompcache"
 readonly ANTIDOTE_PLUGINS_FILE="${ZDOTDIR}/.zsh_plugins.txt"
 
+# Source logging module
+source "lib/logging.sh"
+
 # Color definitions
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'

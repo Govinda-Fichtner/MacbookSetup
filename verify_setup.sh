@@ -2,12 +2,9 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2296,SC2034,SC2154
 
-# Log formatting
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+# Source logging module
+# shellcheck source=lib/logging.sh
+source "lib/logging.sh"
 
 # Enable error reporting
 set -e
@@ -100,19 +97,47 @@ setopt extended_glob
 autoload -Uz compinit
 compinit -u
 
-# Tool configurations
-declare -A tool_configs
-tool_configs[terraform]="custom|complete -o nospace -C $(command -v terraform) terraform|init plan apply destroy"
-tool_configs[git]="builtin|_git|checkout branch commit push pull"
-tool_configs[rbenv]="custom|source <(rbenv init - zsh)|install local global"
-tool_configs[pyenv]="custom|source <(pyenv init - zsh)|install local global"
-tool_configs[direnv]="custom|source <(direnv hook zsh)|allow deny"
-tool_configs[packer]="custom|packer -autocomplete-install|build init validate"
-tool_configs[starship]="custom|source <(starship init zsh)|init configure preset"
-tool_configs[kubectl]="custom|source <(kubectl completion zsh)|get describe apply delete"
-tool_configs[helm]="custom|helm completion zsh > ~/.zsh/completions/_helm|install upgrade rollback list"
-tool_configs[kubectx]="custom|kubectx --completion zsh > ~/.zsh/completions/_kubectx|none"
-tool_configs[fzf]="custom|source /opt/homebrew/opt/fzf/shell/completion.zsh|-f --files --preview"
+# Fix source command safety
+source_safely() {
+    local file="$1"
+    if [[ -f "$file" ]]; then
+        # shellcheck disable=SC1090
+        source "$file" >/dev/null 2>&1
+        return $?
+    fi
+    return 1
+}
+
+# Update completion path handling
+get_completion_path() {
+    local tool="$1"
+    if [[ -n "${completion_paths[$tool]}" ]]; then
+        printf '%s' "${completion_paths[$tool]}"
+    else
+        return 1
+    fi
+}
+
+# Update fzf completion sourcing
+if ! source_safely "/opt/homebrew/opt/fzf/shell/completion.zsh"; then
+    log_debug "Failed to source fzf completion"
+    return 1
+fi
+
+# Update tool configuration array
+declare -A tool_configs=(
+    ["git"]="vcs|$(command -v git)|git branch"
+    ["terraform"]="hashicorp|$(command -v terraform)|terraform workspace list"
+    ["rbenv"]="ruby|$(command -v rbenv)|rbenv versions"
+    ["pyenv"]="python|$(command -v pyenv)|pyenv versions"
+    ["direnv"]="env|$(command -v direnv)|direnv status"
+    ["packer"]="hashicorp|$(command -v packer)|packer version"
+    ["starship"]="prompt|$(command -v starship)|starship prompt"
+    ["kubectl"]="k8s|$(command -v kubectl)|kubectl get pods"
+    ["helm"]="k8s|$(command -v helm)|helm list"
+    ["kubectx"]="k8s|$(command -v kubectx)|kubectx"
+    ["fzf"]="utils|$(command -v fzf)|fzf --version"
+)
 
 # Completion directories
 typeset -A completion_paths
@@ -139,11 +164,6 @@ get_tool_config_part() {
         source) echo ${parts[2]} ;;
         commands) echo ${parts[3]} ;;
     esac
-}
-
-# Function to get completion path
-get_completion_path() {
-    echo ${completion_paths[$1]}
 }
 
 # Verify essential commands
@@ -704,15 +724,11 @@ completion_total=0
             log_debug "Found configuration for $tool: ${tool_configs[$tool]}"
             ((completion_total++))
             
-            # Run test_completion with error handling
             if test_completion "$tool" 2>/dev/null; then
                 ((completion_success++))
                 log_debug "$tool completion test passed"
             else
-                local exit_code=$?
-                log_debug "$tool completion test failed with exit code $exit_code"
-                # Print the error output for debugging
-                test_completion "$tool"
+                handle_completion_error "$?" "$tool"
             fi
         else
             log_debug "No completion configuration found for $tool"
@@ -1665,3 +1681,14 @@ else
     # Use exit 1 instead of any other code to avoid the cryptic exit status 3
     exit 1
 fi
+
+# Function to handle completion test errors
+handle_completion_error() {
+    local exit_code="$1"
+    local tool="$2"
+    log_debug "$tool completion test failed with exit code $exit_code"
+    # Print the error output for debugging
+    test_completion "$tool" 2>&1 | while IFS= read -r line; do
+        log_debug "[$tool] $line"
+    done
+}
