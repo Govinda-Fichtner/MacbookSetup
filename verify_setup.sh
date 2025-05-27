@@ -157,6 +157,7 @@ check_commands=(
     "starship"
 )
 
+log_info "=== COMMAND VERIFICATION ==="
 for cmd in "${check_commands[@]}"; do
     if command -v "$cmd" >/dev/null 2>&1; then
         log_debug "$cmd is available ($(command -v "$cmd"))"
@@ -167,12 +168,33 @@ for cmd in "${check_commands[@]}"; do
 done
 
 # Verify shell plugins and completions
+log_info "=== COMPLETION VERIFICATION ==="
 log_info "Verifying shell configuration..."
 if [[ -f ~/.zsh_plugins.txt ]]; then
     log_debug "antidote plugins file exists"
 else
     log_warning "antidote plugins file missing"
 fi
+
+# Initialize completion system
+log_info "Initializing completion system..."
+autoload -Uz compinit
+compinit -u
+
+# Test completions for each tool
+log_info "Testing completions for each tool..."
+completion_success=0
+completion_total=0
+
+# Test each tool's completion
+for tool in "${(k)tool_configs[@]}"; do
+    ((completion_total++))
+    if test_completion "$tool"; then
+        ((completion_success++))
+    fi
+done
+
+log_info "Completion testing completed: $completion_success of $completion_total tools tested successfully"
 
 # Verify completion system
 log_info "Verifying completion system..."
@@ -230,7 +252,7 @@ test_completion() {
   local source=${remaining%% *}
   local test_commands=${remaining#* }
 
-  printf "%-30s ... " "$tool completion"
+  printf "\n%-30s ... " "$tool completion"
 
   # Skip test if tool is not installed
   if ! command -v "$tool" >/dev/null 2>&1; then
@@ -247,6 +269,7 @@ test_completion() {
         log_error "$tool completion plugin ($source) not in .zsh_plugins.txt"
         return 1
       fi
+      log_debug "Found antidote plugin: $source"
       ;;
 
     "builtin")
@@ -255,6 +278,7 @@ test_completion() {
         log_error "$tool built-in completion ($source) not available"
         return 1
       fi
+      log_debug "Found builtin completion: $source"
       ;;
 
     "custom")
@@ -266,11 +290,15 @@ test_completion() {
         eval "$source" >/dev/null 2>&1 || log_debug "Error output: $?"
         return 1
       fi
+      log_debug "Custom completion setup successful"
       ;;
   esac
 
   # Test if completion functions work for the specified commands
   local all_commands_complete=true
+  local commands_tested=0
+  local commands_passed=0
+
   # Split test_commands into an array and iterate
   local IFS=" "
   set -f
@@ -285,43 +313,49 @@ test_completion() {
     return 0
   fi
 
+  log_info "Testing completion for $tool commands:"
   for cmd in "$@"; do
+    printf "  %-28s ... " "$cmd"
+    ((commands_tested++))
     local result=0
     test_command_completion "$tool" "$cmd" || result=$?
 
     # Handle different return codes
     case $result in
       0)
-        # Success - do nothing
+        echo "✅ PASS"
+        ((commands_passed++))
         ;;
       1)
-        # Regular failure
+        echo "❌ FAIL"
         all_commands_complete=false
         log_warning "$tool completion for '$cmd' not working"
         ;;
       2)
-        # Parameter error
+        echo "❌ ERROR"
         all_commands_complete=false
         log_error "$tool completion test had invalid parameters"
         ;;
       3)
-        # Graceful fallback - consider it a success
+        echo "✅ PASS (fallback)"
+        ((commands_passed++))
         log_debug "$tool completion for '$cmd' using fallback mechanism"
         ;;
       *)
-        # Unknown error
+        echo "❌ ERROR"
         all_commands_complete=false
         log_warning "$tool completion for '$cmd' failed with code $result"
         ;;
     esac
   done
 
+  printf "%-30s ... " "$tool completion summary"
   if [[ "$all_commands_complete" == "true" ]]; then
-    echo "✅ PASS"
+    echo "✅ PASS ($commands_passed/$commands_tested)"
     log_success "$tool completion verified"
     return 0
   else
-    echo "⚠️  PARTIAL"
+    echo "⚠️  PARTIAL ($commands_passed/$commands_tested)"
     return 1
   fi
 }
