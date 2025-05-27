@@ -187,10 +187,12 @@ completion_success=0
 completion_total=0
 
 # Test each tool's completion
-for tool in "${(k)tool_configs[@]}"; do
-    ((completion_total++))
-    if test_completion "$tool"; then
-        ((completion_success++))
+for tool in terraform git rbenv pyenv direnv packer starship kubectl helm kubectx fzf; do
+    if [[ -n "${tool_configs[$tool]}" ]]; then
+        ((completion_total++))
+        if test_completion "$tool"; then
+            ((completion_success++))
+        fi
     fi
 done
 
