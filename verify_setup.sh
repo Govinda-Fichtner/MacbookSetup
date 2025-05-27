@@ -68,7 +68,18 @@ main() {
             local version=""
             case "$tool" in
                 "antidote")
-                    version="$(antidote --version 2>/dev/null || echo "installed")"
+                    # Check if antidote is available as function or via brew
+                    if typeset -f antidote >/dev/null 2>&1; then
+                        version="$(antidote --version 2>/dev/null || echo "installed as function")"
+                    elif brew list antidote >/dev/null 2>&1; then
+                        version="installed via Homebrew"
+                    else
+                        echo "❌ FAIL"
+                        log_error "$tool not found in PATH"
+                        continue
+                    fi
+                    echo "✅ PASS"
+                    ((success_count++))
                     ;;
                 "kubectl")
                     version="$(kubectl version --client --short 2>/dev/null | head -1 || echo "installed")"
@@ -82,8 +93,24 @@ main() {
             esac
             log_debug "$tool: $version"
         else
-            echo "❌ FAIL"
-            log_error "$tool not found in PATH"
+            # Special case for antidote - check if it's available as function or via brew
+            if [[ "$tool" == "antidote" ]]; then
+                if typeset -f antidote >/dev/null 2>&1; then
+                    echo "✅ PASS"
+                    ((success_count++))
+                    log_debug "$tool: installed as function"
+                elif brew list antidote >/dev/null 2>&1; then
+                    echo "✅ PASS"
+                    ((success_count++))
+                    log_debug "$tool: installed via Homebrew"
+                else
+                    echo "❌ FAIL"
+                    log_error "$tool not found in PATH, as function, or via Homebrew"
+                fi
+            else
+                echo "❌ FAIL"
+                log_error "$tool not found in PATH"
+            fi
         fi
     done
     
