@@ -12,27 +12,183 @@ env:
   NONINTERACTIVE: 1
   # Ensure proper PATH for commands
   PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
+  # For antidote plugin manager
+  ANTIDOTE_HOME: $HOME/.antidote
+
+# Reusable template for macOS instance configuration
+.macos_instance_template: &macos_instance_template
+  macos_instance:
+    image: ghcr.io/cirruslabs/macos-sonoma-base:latest
+    cpu: 4
+    memory: 8G
+
+  # Set a timeout for the entire task (3 hours)
+  timeout_in: 180m
+
+# Template for Homebrew caching
+.brew_cache_template: &brew_cache_template
+  brew_cache:
+    folder: /opt/homebrew
+    fingerprint_script:
+      - echo $CIRRUS_OS
+      - cat Brewfile || echo "No Brewfile"
+    populate_script:
+      - echo "Homebrew cache will be populated on first run"
+
+# Template for repository cloning
+.clone_template: &clone_template
+  clone_script:
+    - git clone $CIRRUS_REPO_CLONE_URL .
+
+# Template for shellcheck validation
+.shellcheck_template: &shellcheck_template
+  shellcheck_script:
+    - |
+      # Install Homebrew if needed
+      if ! command -v brew &>/dev/null; then
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+      fi
+
+      # Install ShellCheck
+      brew install shellcheck
+
+      # Validate shell scripts
+      shellcheck -s bash ci_modifiers.sh
+      shellcheck -s bash setup.sh
+      shellcheck -s bash verify_setup.sh.template
+
+# Template for system information (only used in daily validation)
+.system_info_template: &system_info_template
+  # Display system information for debugging
+  echo "=== System Information ==="
+  uname -a
+  sw_vers
+  echo "Shell: $SHELL"
+  echo "ZSH version: $(zsh --version)"
+
+# Template for CI setup script preparation
+.prepare_template: &prepare_template
+  prepare_script:
+    - |
+      # Ensure script is executable
+      chmod +x ci_modifiers.sh
+
+      # Run the CI modifiers script directly in zsh
+      # This generates ci_setup.sh without needing to source functions
+      zsh ./ci_modifiers.sh
+
+      # Verify the script was created successfully
+      if [[ ! -f ci_setup.sh ]]; then
+        echo "Failed to generate ci_setup.sh"
+        exit 1
+      fi
+
+      # Make the generated script executable
+      chmod +x ci_setup.sh
+
+      # Validate the generated ci_setup.sh script
+      echo "Validating generated ci_setup.sh script..."
+      shellcheck -s bash ci_setup.sh
+      echo "ci_setup.sh validation complete."
+
+# Template for creating test script
+.create_test_template: &create_test_template
+  create_test_script:
+    - |
+      # Create verification script from template
+      cp verify_setup.sh.template verify_setup.sh
+      chmod +x verify_setup.sh
+
+      # Create .zsh_plugins.txt for antidote if it doesn't exist
+      if [[ ! -f ~/.zsh_plugins.txt ]]; then
+        mkdir -p ~/.antidote
+        cat > ~/.zsh_plugins.txt << EOF
+# Core functionality
+zsh-users/zsh-completions
+zsh-users/zsh-autosuggestions
+zsh-users/zsh-syntax-highlighting
+
+# Git integration
+ohmyzsh/ohmyzsh path:plugins/git
+
+# Kubernetes tools
+ohmyzsh/ohmyzsh path:plugins/kubectl
+ohmyzsh/ohmyzsh path:plugins/helm
+EOF
+        echo "Created default .zsh_plugins.txt for antidote"
+      fi
+
+# Template for running the setup
+.setup_template: &setup_template
+  setup_script:
+    - |
+      # Ensure brew is in PATH for Apple Silicon
+      [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+
+      # Install antidote if using it
+      if grep -q "antidote" setup.sh; then
+        brew install antidote
+      fi
+
+      # Run the setup script
+      zsh ./ci_setup.sh
+
+      # Show installed package versions
+      echo "=== Installed Versions ==="
+      command -v brew && brew --version
+      command -v git && git --version
+      command -v antidote && antidote --version || echo "antidote has no version command"
+      command -v rbenv && rbenv --version
+      command -v pyenv && pyenv --version
+      command -v terraform && terraform --version
+      command -v starship && starship --version
+
+# Template for verification
+.verify_template: &verify_template
+  verify_script:
+    - |
+      # Ensure the shell is properly loaded
+      echo "Running verification script..."
+      # Source zshrc to ensure all configurations are loaded
+      source ~/.zshrc || echo "Failed to source ~/.zshrc"
+
+      # Create a log file for verification
+      zsh ./verify_setup.sh 2>&1 | tee verify.log
+
+      # Check the exit status of the verification
+      if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+        echo "Verification failed. See verify.log for details."
+        exit 1
+      else
+        echo "Verification succeeded."
+      fi
+
+# Template for artifact collection
+.artifacts_template: &artifacts_template
+  always:
+    logs_artifacts:
+      path: "*.log"
+      type: text/plain
+    shell_artifacts:
+      path: "~/.zshrc"
+      type: text/plain
+    plugins_artifacts:
+      path: "~/.zsh_plugins.txt"
+      type: text/plain
 
 # Daily scheduled validation build
 daily_validation_task:
   name: daily_compatibility_check
   trigger_type: scheduled
   cron: "0 0 * * *"  # Run at midnight UTC every day
-  
-  # Use macOS Ventura on Apple Silicon
-  macos_instance:
-    image: ghcr.io/cirruslabs/macos-ventura-base:latest
-    cpu: 4
-    memory: 8G
-  
-  # Set a timeout for the entire task (3 hours)
-  timeout_in: 180m
-  
-  # Clone the repository
-  clone_script:
-    - git clone $CIRRUS_REPO_CLONE_URL .
-  
-  # Validate shell scripts with ShellCheck
+
+  # Include common configurations using templates
+  <<: *macos_instance_template
+  <<: *brew_cache_template
+  <<: *clone_template
+
+  # Validate shell scripts with ShellCheck including system info
   shellcheck_script:
     - |
       # Install Homebrew if needed
@@ -40,128 +196,40 @@ daily_validation_task:
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
-      
+
       # Install ShellCheck
       brew install shellcheck
-      
+
       # Validate shell scripts
       shellcheck -s bash ci_modifiers.sh
       shellcheck -s bash setup.sh
       shellcheck -s bash verify_setup.sh.template
-  
-  # Generate CI setup script by patching the original setup.sh
-  prepare_script:
-    - |
-      # Ensure script is executable
-      chmod +x ci_modifiers.sh
-      
-      # Run the CI modifiers script directly in zsh
-      # This generates ci_setup.sh without needing to source functions
-      zsh ./ci_modifiers.sh
-      
-      # Verify the script was created successfully
-      if [[ ! -f ci_setup.sh ]]; then
-        echo "Failed to generate ci_setup.sh"
-        exit 1
-      fi
-      
-      # Make the generated script executable
-      chmod +x ci_setup.sh
-      
-      # Validate the generated ci_setup.sh script
-      echo "Validating generated ci_setup.sh script..."
-      shellcheck -s bash ci_setup.sh
-      echo "ci_setup.sh validation complete."
-  
-  # Create a test script to verify installations
-  create_test_script:
-    - cp verify_setup.sh.template verify_setup.sh
-    - chmod +x verify_setup.sh
-  
-  # Run the actual setup
-  setup_script:
-    - zsh ./ci_setup.sh
 
-  # Verify the installation
-  verify_script:
-    - zsh ./verify_setup.sh
-  
-  # Always collect logs for debugging
-  always:
-    logs_artifacts:
-      path: "*.log"
-      type: text/plain
+      # Display system information for debugging
+      echo "=== System Information ==="
+      uname -a
+      sw_vers
+      echo "Shell: $SHELL"
+      echo "ZSH version: $(zsh --version)"
 
-# Task for testing the setup script on macOS ARM
+  # Include remaining common configurations
+  <<: *prepare_template
+  <<: *create_test_template
+  <<: *setup_template
+  <<: *verify_template
+  <<: *artifacts_template
+
+# Task for testing the setup script on macOS ARM (on-demand)
 macos_arm_test_task:
-  # Use macOS Ventura on Apple Silicon
-  macos_instance:
-    image: ghcr.io/cirruslabs/macos-ventura-base:latest
-    cpu: 4
-    memory: 8G
-  
-  # Set a timeout for the entire task (3 hours)
-  timeout_in: 180m
-  
-  # Clone the repository
-  clone_script:
-    - git clone $CIRRUS_REPO_CLONE_URL .
-  
-  # Validate shell scripts with ShellCheck
-  shellcheck_script:
-    - |
-      # Install Homebrew if needed
-      if ! command -v brew &>/dev/null; then
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
-      fi
-      
-      # Install ShellCheck
-      brew install shellcheck
-      
-      # Validate shell scripts
-      shellcheck -s bash ci_modifiers.sh
-      shellcheck -s bash setup.sh
-      shellcheck -s bash verify_setup.sh.template
-  
-  # Generate CI setup script by patching the original setup.sh
-  prepare_script:
-    - |
-      # Ensure script is executable
-      chmod +x ci_modifiers.sh
-      
-      # Run the CI modifiers script directly in zsh
-      zsh ./ci_modifiers.sh
-      
-      # Verify the script was created successfully
-      if [[ ! -f ci_setup.sh ]]; then
-        echo "Failed to generate ci_setup.sh"
-        exit 1
-      fi
-      
-      # Make the generated script executable
-      chmod +x ci_setup.sh
-      
-      # Validate the generated ci_setup.sh script
-      echo "Validating generated ci_setup.sh script..."
-      shellcheck -s bash ci_setup.sh
-      echo "ci_setup.sh validation complete."
-  
-  # Create a test script to verify installations
-  create_test_script:
-    - cp verify_setup.sh.template verify_setup.sh
-    - chmod +x verify_setup.sh
-  
-  # Run the actual setup
-  setup_script:
-    - zsh ./ci_setup.sh
+  name: macos_arm_test
 
-  # Verify the installation
-  verify_script:
-    - zsh ./verify_setup.sh
-  
-  # Always collect logs for debugging
-  always:
-    logs_artifacts:
-      path: "*.log"
-      type: text/plain
+  # Include common configurations using templates
+  <<: *macos_instance_template
+  <<: *brew_cache_template
+  <<: *clone_template
+  <<: *shellcheck_template
+  <<: *prepare_template
+  <<: *create_test_template
+  <<: *setup_template
+  <<: *verify_template
+  <<: *artifacts_template

@@ -34,104 +34,71 @@ log_success() { printf "[SUCCESS] %s\n" "$1" | tee /dev/stderr; }
 log_error() { printf "[ERROR] %s\n" "$1" | tee /dev/stderr; }
 log_debug() { printf "DEBUG: %s\n" "$1" | tee /dev/stderr; }
 
-# Function to patch zinit
-patch_zinit_init() {
-    log_info "Finding zinit installation..."
-    local zinit_path
-    
-    # Split declaration and assignment for proper error handling
-    zinit_path="$(brew --prefix)/opt/zinit/zinit.zsh"
-    if [[ ! -f "$zinit_path" ]]; then
-        log_error "Zinit not found at: $zinit_path"
+# Function to setup antidote plugins
+setup_antidote_plugins() {
+    log_info "Setting up antidote plugins..."
+    local plugins_file="${HOME}/.zsh_plugins.txt"
+
+    # Create plugins file if it doesn't exist
+    if [[ ! -f "${plugins_file}" ]]; then
+        log_info "Creating antidote plugins file: ${plugins_file}"
+
+        # Create the plugins file with commonly used plugins
+        cat > "${plugins_file}" << 'EOF'
+# Core ZSH enhancements
+zsh-users/zsh-syntax-highlighting
+zsh-users/zsh-autosuggestions
+zsh-users/zsh-completions
+zsh-users/zsh-history-substring-search
+
+# Git enhancements
+wfxr/forgit
+
+# Tool integrations
+ohmyzsh/ohmyzsh path:plugins/kubectl
+ohmyzsh/ohmyzsh path:plugins/docker
+ohmyzsh/ohmyzsh path:plugins/docker-compose
+
+# Utility plugins
+supercrabtree/k
+b4b4r07/enhancd
+EOF
+        log_success "Created antidote plugins file"
+    else
+        log_info "Antidote plugins file already exists"
+    fi
+
+    # Verify the plugins file exists
+    if [[ ! -f "${plugins_file}" ]]; then
+        log_error "Failed to create antidote plugins file"
         return 1
     fi
 
-    log_success "Found zinit at: $zinit_path"
-    
-    # Display original content with line numbers
-    log_debug "Initial zinit script content:"
-    printf "DEBUG: Line %d: %s\n" "$(nl -ba "$zinit_path")" | tee /dev/stderr
-    
-    # Show typeset patterns with line numbers
-    log_debug "Searching for typeset patterns..."
-    grep -n 'typeset.*-g' "$zinit_path" | while IFS=':' read -r line content; do
-        printf "DEBUG: Found pattern at line %d: %s\n" "$line" "$content" | tee /dev/stderr
-    done
-    
-    # Create backup if it doesn't exist
-    if [[ ! -f "${zinit_path}.bak" ]]; then
-        cp "$zinit_path" "${zinit_path}.bak" || {
-            log_error "Failed to create backup of zinit script"
-            return 1
-        }
-    fi
-
-    # Patch zinit script
-    log_info "Patching zinit script..."
-    local tmp_file="${zinit_path}.tmp"
-    cp "$zinit_path" "$tmp_file" || return 1
-    
-    # Ensure the temporary file exists
-    if [[ ! -f "$tmp_file" ]]; then
-        log_error "Failed to create temporary file"
-        return 1
-    fi
-    
-    # Check initial content
-    log_debug "Temporary file created, size: $(wc -l < "$tmp_file") lines"
-    
-    # Process patterns
-    local pattern_count=0
-    local replaced_count=0
-    
-    # Check each pattern type
-    for type in "A" "a" "U" ""; do
-        local search="typeset[[:space:]]*-g${type}[[:space:]]"
-        local replace="typeset ${type:+ -$type }"
-        
-        # Count matches
-        local matches
-        matches=$(grep -c "$search" "$tmp_file" || echo 0)
-        ((pattern_count += matches))
-        
-        if ((matches > 0)); then
-            log_debug "Found $matches occurrences of pattern: $search"
-            sed -i '' -E "s/$search/$replace/g" "$tmp_file" && ((replaced_count += matches))
-        fi
-    done
-    
-    log_debug "Found $pattern_count patterns, replaced $replaced_count"
-    
-    # Verify patch success
-    if grep -q "typeset.*-g" "$tmp_file"; then
-        log_error "Patching verification failed"
-        log_debug "Remaining patterns:"
-        grep -n "typeset.*-g" "$tmp_file" | while IFS=':' read -r line content; do
-            printf "DEBUG: Pattern remains at line %d: %s\n" "$line" "$content" | tee /dev/stderr
-        done
-        rm -f "$tmp_file"
-        return 1
-    fi
-    
-    # Show final content
-    log_debug "Final content:"
-    printf "DEBUG: Line %d: %s\n" "$(nl -ba "$tmp_file")" | tee /dev/stderr
-    
-    mv "$tmp_file" "$zinit_path"
-    log_success "Successfully patched zinit script"
+    log_success "Antidote plugins setup complete"
     return 0
 }
 
 # Install packages
 install_packages() {
     log_info "Installing packages..."
-    
-    # Install git and zinit first
-    brew install git zinit || return 1
-    patch_zinit_init || return 1
-    
+
+    # Install git and antidote first
+    brew install git antidote || {
+        log_error "Failed to install git and antidote"
+        return 1
+    }
+
     # Install development tools
-    brew install rbenv pyenv direnv starship || return 1
+    brew install rbenv pyenv direnv starship || {
+        log_error "Failed to install development tools"
+        return 1
+    }
+
+    # Install completion utilities
+    brew install zsh-completions fzf || {
+        log_error "Failed to install completion tools"
+        return 1
+    }
 
     # Install HashiCorp tools required by verification
     log_info "Installing HashiCorp tools..."
@@ -139,47 +106,136 @@ install_packages() {
         log_error "Failed to install HashiCorp tools"
         return 1
     }
-    
+
+    # Install kubernetes tools (non-critical)
+    brew install kubectl kubectx || log_info "Kubernetes tools installation skipped, not critical"
+
+    # Setup antidote plugins
+    setup_antidote_plugins || {
+        log_error "Failed to setup antidote plugins"
+        return 1
+    }
+
+    log_success "Package installation complete"
     return 0
 }
 
 # Configure shell
 configure_shell() {
     log_info "Configuring shell..."
-    
-    mkdir -p "$HOME/.zcompcache"
-    touch "$HOME/.zshrc"
-    
-    local zinit_path
-    # Split declaration and assignment for proper error handling
-    zinit_path="$(brew --prefix)/opt/zinit/zinit.zsh"
-    echo "source $zinit_path" >> "$HOME/.zshrc"
-    
-    if command -v rbenv >/dev/null; then
-        eval "$(rbenv init -)"
-    fi
 
-    if command -v pyenv >/dev/null; then
-        eval "$(pyenv init --path)"
-        eval "$(pyenv init -)"
+    # Create required directories
+    mkdir -p "${HOME}/.zcompcache"
+    touch "${HOME}/.zshrc"
+
+    # Create/overwrite .zshrc with proper configuration
+    log_info "Writing shell configuration to .zshrc..."
+
+    # Create temporary file first to avoid issues with redirection
+    local tmp_zshrc="${HOME}/.zshrc.tmp"
+    cat > "${tmp_zshrc}" << 'EOT'
+# ZSH Configuration
+
+# Enable extended globbing
+setopt extended_glob
+# Avoid no match errors
+setopt null_glob
+
+# Load antidote plugin manager
+source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+
+# Initialize antidote with static loading
+antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
+
+# Initialize completion system
+autoload -Uz compinit
+compinit -i
+
+# Initialize rbenv if available
+if command -v rbenv >/dev/null; then
+    eval "$(rbenv init -)"
+fi
+
+# Initialize pyenv if available
+if command -v pyenv >/dev/null; then
+    eval "$(pyenv init --path)"
+    eval "$(pyenv init -)"
+fi
+
+# Initialize direnv if available
+if command -v direnv >/dev/null; then
+    eval "$(direnv hook zsh)"
+fi
+
+# Initialize starship prompt if available
+if command -v starship >/dev/null; then
+    eval "$(starship init zsh)"
+fi
+
+# Initialize fzf if available
+if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.zsh" ]]; then
+    source "$(brew --prefix)/opt/fzf/shell/completion.zsh"
+fi
+
+if [[ -f "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh" ]]; then
+    source "$(brew --prefix)/opt/fzf/shell/key-bindings.zsh"
+fi
+
+# Kubernetes completions
+if command -v kubectl >/dev/null; then
+    source <(kubectl completion zsh)
+fi
+
+# HashiCorp tool completions
+if command -v terraform >/dev/null; then
+    complete -o nospace -C "$(command -v terraform)" terraform
+fi
+
+if command -v packer >/dev/null; then
+    complete -o nospace -C "$(command -v packer)" packer
+fi
+
+# Kubectx and kubens completions (safe handling)
+if command -v kubectx >/dev/null; then
+    # Capture completion script output and evaluate it safely
+    kubectx_comp="$(kubectx --completion zsh 2>/dev/null)" || true
+    if [[ -n "${kubectx_comp}" ]]; then
+        eval "${kubectx_comp}"
     fi
-    
-    rm -f "$HOME/.zcompdump"* 2>/dev/null || true
-    rm -f "$HOME/.zcompcache/"* 2>/dev/null || true
-    
+fi
+
+if command -v kubens >/dev/null; then
+    # Capture completion script output and evaluate it safely
+    kubens_comp="$(kubens --completion zsh 2>/dev/null)" || true
+    if [[ -n "${kubens_comp}" ]]; then
+        eval "${kubens_comp}"
+    fi
+fi
+EOT
+
+    # Move the temporary file to the actual .zshrc
+    mv "${tmp_zshrc}" "${HOME}/.zshrc"
+
+    # Clean up completion cache
+    rm -f "${HOME}/.zcompdump"* 2>/dev/null || true
+    rm -f "${HOME}/.zcompcache/"* 2>/dev/null || true
+
+    # Initialize completion system
     autoload -Uz compinit
     compinit -i
-    
-    # shellcheck disable=SC1091
-    source "$HOME/.zshrc"
-    
+
+    # shellcheck disable=SC1090
+    source "${HOME}/.zshrc"
+
+    log_success "Shell configuration completed"
     return 0
+}
 }
 
 # Main function
 main() {
     log_info "Starting CI setup..."
-    
+
     # Install Homebrew if needed
     if ! command -v brew >/dev/null; then
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -187,10 +243,10 @@ main() {
             eval "$(/opt/homebrew/bin/brew shellenv)"
         fi
     fi
-    
+
     install_packages || exit 1
     configure_shell || exit 1
-    
+
     log_success "CI setup completed"
 }
 

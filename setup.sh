@@ -94,11 +94,10 @@ install_packages() {
 # To use this file for installation, run: brew bundle
 
 # Taps (Third-party repositories)
-tap "getantibody/antibody"
 
 # Formulae (Command-line packages)
 brew "git"
-brew "zinit"
+brew "antidote"
 brew "rbenv"
 brew "pyenv"
 brew "direnv"
@@ -139,21 +138,45 @@ configure_shell() {
     fi
   }
   
-  # Add zinit configuration first
-  add_to_zshrc "source.*zinit.zsh" "source $(brew --prefix)/opt/zinit/zinit.zsh
+  # Add antidote configuration first
+  add_to_zshrc "source.*antidote.*share/antidote/antidote.zsh" "source $(brew --prefix)/opt/antidote/share/antidote/antidote.zsh
 
-# Configure zinit completions
-autoload -Uz _zinit
-(( \${+_comps} )) && _comps[zinit]=_zinit
+# Create plugins file if it doesn't exist
+if [[ ! -f \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt ]]; then
+  cat > \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt << EOF
+# Essential ZSH plugins for improved experience
 
-# Load zinit plugins
-zinit wait lucid light-mode for \\
-  atinit\"zicompinit; zicdreplay\" \\
-    zdharma/fast-syntax-highlighting \\
-  atload\"_zsh_autosuggest_start\" \\
-    zsh-users/zsh-autosuggestions \\
-  atload\"zicompinit; zicdreplay\" \\
-    macunha1/zsh-terraform" "zinit setup"
+# Syntax highlighting - highlights commands as you type
+zsh-users/zsh-syntax-highlighting
+
+# Autosuggestions - suggests commands as you type based on history
+zsh-users/zsh-autosuggestions
+
+# Completions - additional completion definitions
+zsh-users/zsh-completions
+
+# History substring search - search history with up/down arrows
+zsh-users/zsh-history-substring-search
+
+# z - jump around (directory navigation)
+agkozak/zsh-z
+
+# Git aliases and utilities
+ohmyzsh/ohmyzsh path:plugins/git
+
+# Kubectl plugin
+ohmyzsh/ohmyzsh path:plugins/kubectl
+
+# Helper for common path operations
+ohmyzsh/ohmyzsh path:plugins/common-aliases
+
+# Homebrew completion and aliases
+ohmyzsh/ohmyzsh path:plugins/brew
+EOF
+fi
+
+# Load plugins
+antidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt" "antidote setup"
 
   # Add rbenv configuration
   add_to_zshrc "rbenv init" "eval \"\$(rbenv init - zsh)\"" "rbenv setup"
