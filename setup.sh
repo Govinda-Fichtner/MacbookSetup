@@ -15,7 +15,7 @@ set -e
 # Script configuration
 readonly SCRIPT_VERSION="1.0.0"
 readonly ZSHRC_PATH="${HOME}/.zshrc"
-readonly ZDOTDIR="${ZDOTDIR:-$HOME}"
+ZDOTDIR="${ZDOTDIR:-$HOME}"
 readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 readonly ZCOMPCACHE_DIR="${HOME}/.zcompcache"
 readonly ANTIDOTE_PLUGINS_FILE="${ZDOTDIR}/.zsh_plugins.txt"
