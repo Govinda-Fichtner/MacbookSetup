@@ -149,9 +149,11 @@ install_homebrew() {
     
     # Configure Homebrew PATH based on architecture
     if [[ "$(uname -m)" == "arm64" ]]; then
+        # shellcheck disable=SC2016
         echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$ZSHRC_PATH"
         eval "$(/opt/homebrew/bin/brew shellenv)"
     else
+        # shellcheck disable=SC2016
         echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$ZSHRC_PATH"
         eval "$(/usr/local/bin/brew shellenv)"
     fi
