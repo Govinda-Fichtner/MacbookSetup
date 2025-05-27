@@ -129,8 +129,9 @@ get_tool_config_part() {
     local tool=$1
     local part=$2  # type, source, or commands
     local config=${tool_configs[$tool]}
-    local IFS='|'
-    local parts=($config)
+    local -a parts
+    parts=()
+    IFS='|' read -A parts <<< "$config"
     
     case $part in
         type) echo ${parts[1]} ;;
@@ -145,15 +146,14 @@ get_completion_path() {
 }
 
 # Verify essential commands
-commands=(
-    "brew"
-    "git"
-    "terraform"
-    "packer"
-    "rbenv"
-    "pyenv"
-    "starship"
-)
+commands=()
+commands+=("brew")
+commands+=("git")
+commands+=("terraform")
+commands+=("packer")
+commands+=("rbenv")
+commands+=("pyenv")
+commands+=("starship")
 
 for cmd in "${commands[@]}"; do
     if command -v "$cmd" >/dev/null 2>&1; then
@@ -1199,18 +1199,32 @@ else
 fi
 
 # Array of commands to verify
-declare -A verify_commands
-verify_commands=(
-  ["brew"]="Homebrew installation"
-  ["git"]="Git installation"
-  ["antidote"]="Antidote plugin manager"
-  ["rbenv"]="rbenv installation"
-  ["pyenv"]="pyenv installation"
-  ["direnv"]="direnv installation"
-  ["starship"]="Starship prompt"
-  ["packer"]="HashiCorp Packer"
-  ["terraform"]="Terraform installation"
-)
+declare -a verify_commands
+verify_commands=()
+verify_commands[brew]="Homebrew installation"
+verify_commands[git]="Git installation"
+verify_commands[antidote]="Antidote plugin manager"
+verify_commands[rbenv]="rbenv installation"
+verify_commands[pyenv]="pyenv installation"
+verify_commands[direnv]="direnv installation"
+verify_commands[starship]="Starship prompt"
+verify_commands[packer]="HashiCorp Packer"
+verify_commands[terraform]="Terraform installation"
+
+# Essential plugins array
+declare -a essential_plugins
+essential_plugins=()
+essential_plugins+=("zsh-users/zsh-completions")
+essential_plugins+=("zsh-users/zsh-autosuggestions")
+essential_plugins+=("zsh-users/zsh-syntax-highlighting")
+
+# Essential completions array
+declare -a essential_completions
+essential_completions=()
+essential_completions+=("terraform")
+essential_completions+=("git")
+essential_completions+=("kubectl")
+essential_completions+=("helm")
 
 # Counter for successful checks
 success_count=0
@@ -1279,8 +1293,6 @@ fi
 log_info "=== ESSENTIAL COMPLETIONS TEST ==="
 
 # Properly declare array with typeset to avoid issues in different zsh versions
-typeset -a essential_completions
-essential_completions=("terraform" "git" "kubectl" "helm")
 typeset -i essential_passed=0
 typeset -i essential_total=${#essential_completions[@]}
 typeset -i essential_installed=0
