@@ -18,7 +18,6 @@ brew "helm"             # Kubernetes package manager
 brew "k9s"              # Terminal UI for Kubernetes
 brew "kubectx"          # Kubernetes context switcher
 brew "kustomize"        # Kubernetes configuration customization
-brew "packer"           # HashiCorp tool for building machine images
 brew "buildkit"         # Next-generation container image builder
 brew "dive"             # Tool for exploring Docker images
 brew "ctop"             # Top-like interface for container metrics

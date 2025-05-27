@@ -28,9 +28,6 @@ export HOMEBREW_NO_ENV_HINTS=1\
 # shellcheck disable=SC2016
 sed -i.bak '/if \[\[ \$EUID -eq 0 \]\]/,+4d' ci_setup.sh
 
-# Add error output redirection to stderr for CI logging
-sed -i.bak 's/printf "\(.*\)"/printf "\1" | tee \/dev\/stderr/g' ci_setup.sh
-
 # Clean up backup files
 rm -f ci_setup.sh.bak
 
