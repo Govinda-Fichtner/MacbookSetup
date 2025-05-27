@@ -184,7 +184,7 @@ test_completion() {
   local IFS=" "
   set -f
   # Ensure we're handling spaces in test_commands properly
-  set -- $test_commands
+  set -- "$test_commands"
   set +f
 
   # Check if we have any commands to test
@@ -320,6 +320,7 @@ test_command_completion() {
   # Check other common completion directories
   if [[ "${#completion_locations[@]}" -gt 0 ]]; then
     # shellcheck disable=SC2154
+    # shellcheck disable=SC2066
     for location_key in "${(@k)completion_locations}"; do
       local location
       location="${completion_locations[$location_key]}"
@@ -427,6 +428,7 @@ test_command_completion() {
           compinit -u
         fi
         # Also try direct sourcing as a fallback
+        # shellcheck disable=SC1090
         source <(kubectl completion zsh 2>/dev/null) || true
       elif [[ "$tool" == "kubectx" ]]; then
         if ! [[ -f "$HOME/.zsh/completions/_kubectx" ]]; then
@@ -730,6 +732,7 @@ setup_completion_directories() {
   fi
 
   # Add other completion directories in a controlled order
+  # shellcheck disable=SC2066
   for location_key in "${(@k)completion_locations}"; do
     local location="${completion_locations[$location_key]}"
     safe_add_to_fpath "$location" "completion directory ($location_key)"
@@ -822,6 +825,7 @@ setup_completion_directories() {
         if [[ -f "${funcdir}/compinit" ]]; then
           log_debug "Found compinit at ${funcdir}/compinit, sourcing it directly"
           # shellcheck disable=SC1090
+          # shellcheck disable=SC1091
           source "${funcdir}/compinit" 2>/dev/null || true
           break
         fi
@@ -841,6 +845,7 @@ setup_completion_directories() {
 setup_completion_directories
 
 # Function to verify completion file existence
+# shellcheck disable=SC2317
 verify_completion_file() {
   local tool=$1
   local completion_path="${HOME}/.zsh/completions/_${tool}"
@@ -957,6 +962,7 @@ if command -v pyenv >/dev/null 2>&1; then
   if [[ ! -d "${PYENV_ROOT}" ]]; then
     log_error "PYENV_ROOT points to non-existent directory: ${PYENV_ROOT}"
     # Try to detect the correct path
+    # shellcheck disable=SC2168
     local possible_roots=("$HOME/.pyenv" "/opt/homebrew/opt/pyenv" "/usr/local/opt/pyenv")
     for possible_root in "${possible_roots[@]}"; do
       if [[ -d "$possible_root" ]]; then
@@ -1037,6 +1043,7 @@ if command -v rbenv >/dev/null 2>&1; then
       fi
 
       # Check if rbenv shims directory exists
+      # shellcheck disable=SC2168
       local rbenv_root
       rbenv_root="$(rbenv root 2>/dev/null || echo "$HOME/.rbenv")"
       if [[ ! -d "${rbenv_root}/shims" ]]; then
@@ -1078,6 +1085,7 @@ if command -v rbenv >/dev/null 2>&1; then
       fi
 
       # Add completions directory to fpath if needed
+      # shellcheck disable=SC2168
       local path_exists=false
       if [[ ${#fpath[@]} -gt 0 ]]; then
         for path in "${fpath[@]}"; do
@@ -1292,6 +1300,7 @@ else
   log_debug "Checking ${#completion_locations[@]} completion directories"
 
   # shellcheck disable=SC2154
+  # shellcheck disable=SC2066
   for location_key in "${(@k)completion_locations}"; do
     # shellcheck disable=SC2154
     location="${completion_locations[$location_key]}"
@@ -1301,6 +1310,7 @@ else
     if [[ -d "$location" ]]; then
       ((completion_dirs_existing++))
       # Count completion files for better diagnostics
+      # shellcheck disable=SC2168
       local file_count=0
       if [[ -d "$location" ]]; then
         file_count=$(find "$location" -name "_*" 2>/dev/null | wc -l | tr -d '[:space:]')
@@ -1309,6 +1319,7 @@ else
       fi
 
       # Check if directory is in fpath
+      # shellcheck disable=SC2168
       local path_exists=false
       if [[ ${#fpath[@]} -gt 0 ]]; then
         for path in "${fpath[@]}"; do
@@ -1423,6 +1434,7 @@ else
   log_error "Verification failed! Some components were not installed or configured correctly."
   log_info "Tips to fix common issues:"
   log_info "• Ensure your .zshrc loads completion system with 'autoload -Uz compinit && compinit'"
+  # shellcheck disable=SC2128
   log_info "• Add missing completion directories to fpath with 'fpath=(~/.zsh/completions $fpath)'"
   log_info "• Make sure Homebrew and essential tools are properly installed"
   log_info "• Run 'mkdir -p ~/.zsh/completions' to create the user completions directory"
