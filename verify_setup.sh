@@ -9,6 +9,17 @@ source "lib/logging.sh"
 # Enable error reporting
 set -e
 
+# Function to ensure a directory exists
+ensure_dir() {
+    local dir="$1"
+    if [[ ! -d "$dir" ]]; then
+        mkdir -p "$dir" || {
+            log_error "Failed to create directory: $dir"
+            return 1
+        }
+    fi
+}
+
 # Function to handle completion test errors
 handle_completion_error() {
     local exit_code="$1"
