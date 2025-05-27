@@ -100,31 +100,29 @@ compinit -u
 
 # Tool configurations
 typeset -A tool_configs
-tool_configs=(
-    [terraform]="custom|complete -o nospace -C $(command -v terraform) terraform|init plan apply destroy"
-    [git]="builtin|_git|checkout branch commit push pull"
-    [rbenv]="custom|eval $(rbenv init -)|install local global"
-    [pyenv]="custom|setup_pyenv_completion|install local global"
-    [direnv]="custom|eval $(direnv hook zsh)|allow deny"
-    [packer]="custom|[ -f ~/.zsh/completions/_packer ] || (mkdir -p ~/.zsh/completions && packer -autocomplete-install)|build init validate"
-    [starship]="custom|eval $(starship init zsh)|init configure preset"
-    [kubectl]="custom|source <(kubectl completion zsh) 2>/dev/null|get describe apply delete"
-    [helm]="custom|[ -f ~/.zsh/completions/_helm ] || helm completion zsh > ~/.zsh/completions/_helm|install upgrade rollback list"
-    [kubectx]="custom|[ -f ~/.zsh/completions/_kubectx ] || kubectx --completion zsh > ~/.zsh/completions/_kubectx|none"
-    [fzf]="custom|[ -f /opt/homebrew/opt/fzf/shell/completion.zsh ] && source /opt/homebrew/opt/fzf/shell/completion.zsh|-f --files --preview"
-)
+tool_configs=()
+tool_configs[terraform]="custom|complete -o nospace -C $(command -v terraform) terraform|init plan apply destroy"
+tool_configs[git]="builtin|_git|checkout branch commit push pull"
+tool_configs[rbenv]="custom|eval \"$(rbenv init -)\"|install local global"
+tool_configs[pyenv]="custom|setup_pyenv_completion|install local global"
+tool_configs[direnv]="custom|eval \"$(direnv hook zsh)\"|allow deny"
+tool_configs[packer]="custom|[ -f ~/.zsh/completions/_packer ] || (mkdir -p ~/.zsh/completions && packer -autocomplete-install)|build init validate"
+tool_configs[starship]="custom|eval \"$(starship init zsh)\"|init configure preset"
+tool_configs[kubectl]="custom|source <(kubectl completion zsh) 2>/dev/null|get describe apply delete"
+tool_configs[helm]="custom|[ -f ~/.zsh/completions/_helm ] || helm completion zsh > ~/.zsh/completions/_helm|install upgrade rollback list"
+tool_configs[kubectx]="custom|[ -f ~/.zsh/completions/_kubectx ] || kubectx --completion zsh > ~/.zsh/completions/_kubectx|none"
+tool_configs[fzf]="custom|[ -f /opt/homebrew/opt/fzf/shell/completion.zsh ] && source /opt/homebrew/opt/fzf/shell/completion.zsh|-f --files --preview"
 
 # Completion directories
 typeset -A completion_paths
-completion_paths=(
-    [homebrew]="/opt/homebrew/share/zsh/site-functions"
-    [homebrew_intel]="/usr/local/share/zsh/site-functions"
-    [user_completions]="$HOME/.zsh/completions"
-    [antidote]="$HOME/.antidote/completions"
-    [zsh_site]="/usr/share/zsh/site-functions"
-    [zsh_vendor]="/usr/share/zsh/vendor-completions"
-    [fzf_completions]="/opt/homebrew/opt/fzf/shell"
-)
+completion_paths=()
+completion_paths[homebrew]="/opt/homebrew/share/zsh/site-functions"
+completion_paths[homebrew_intel]="/usr/local/share/zsh/site-functions"
+completion_paths[user_completions]="$HOME/.zsh/completions"
+completion_paths[antidote]="$HOME/.antidote/completions"
+completion_paths[zsh_site]="/usr/share/zsh/site-functions"
+completion_paths[zsh_vendor]="/usr/share/zsh/vendor-completions"
+completion_paths[fzf_completions]="/opt/homebrew/opt/fzf/shell"
 
 # Function to get tool configuration parts
 get_tool_config_part() {
