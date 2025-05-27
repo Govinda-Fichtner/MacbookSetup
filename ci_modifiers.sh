@@ -1,6 +1,6 @@
 #!/bin/zsh
 # shellcheck shell=bash
-# shellcheck disable=SC2296,SC2034,SC2154
+# shellcheck disable=SC2296,SC2034,SC2154,SC1091
 #
 # CI Modifier Script
 # This script modifies setup.sh to create a CI-compatible version
