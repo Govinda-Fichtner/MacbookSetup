@@ -106,7 +106,9 @@ end_progress() {
 }
 
 # Initialize log level from environment variable if set
-[[ -n "$MACBOOK_SETUP_LOG_LEVEL" ]] && set_log_level "$MACBOOK_SETUP_LOG_LEVEL"
+if [[ -n "${MACBOOK_SETUP_LOG_LEVEL:-}" ]]; then
+    set_log_level "$MACBOOK_SETUP_LOG_LEVEL"
+fi
 
 # Export functions and variables
 export CURRENT_LOG_LEVEL
