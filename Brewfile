@@ -32,6 +32,7 @@ cask "windsurf"
 cask "zed"
 cask "warp"
 cask "orbstack"         # Fast, light Docker & Linux on macOS with Kubernetes support
+cask "claude"           # Anthropic's official Claude AI desktop app
 
 # Fonts - These Nerd Fonts are required for Starship prompt to display special icons correctly
 # These fonts are now available through the main Homebrew cask repository (no special tap needed)

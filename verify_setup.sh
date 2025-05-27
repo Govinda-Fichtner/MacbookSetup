@@ -9,19 +9,37 @@
 readonly SCRIPT_VERSION="1.0.0"
 readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 
-# Color definitions
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly BLUE='\033[0;34m'
-readonly YELLOW='\033[0;33m'
-readonly NC='\033[0m' # No Color
+# Check if running in CI or quiet mode
+QUIET_MODE="${CI:-false}"
+if [[ "${MACBOOK_SETUP_QUIET:-}" == "true" ]]; then
+    QUIET_MODE="true"
+fi
+
+# Color definitions (disabled in quiet mode)
+if [[ "$QUIET_MODE" == "true" ]]; then
+    readonly RED=''
+    readonly GREEN=''
+    readonly BLUE=''
+    readonly YELLOW=''
+    readonly NC=''
+else
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly BLUE='\033[0;34m'
+    readonly YELLOW='\033[0;33m'
+    readonly NC='\033[0m' # No Color
+fi
 
 # Logging functions
 log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1" >&2; }
 log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" >&2; }
 log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1" >&2; }
 log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
-log_debug() { printf "[DEBUG] %s\n" "$1" >&2; }
+log_debug() { 
+    if [[ "$QUIET_MODE" != "true" ]]; then
+        printf "[DEBUG] %s\n" "$1" >&2; 
+    fi
+}
 
 # Utility functions
 check_command() {
@@ -111,6 +129,40 @@ main() {
                 echo "❌ FAIL"
                 log_error "$tool not found in PATH"
             fi
+        fi
+    done
+    
+    log_info "=== GUI APPLICATIONS VERIFICATION ==="
+    
+    # Check GUI applications installed via Homebrew casks
+    local -A gui_apps=(
+        ["claude"]="Claude AI desktop app"
+        ["cursor"]="Cursor code editor"
+        ["iterm2"]="iTerm2 terminal"
+        ["raycast"]="Raycast launcher"
+        ["windsurf"]="Windsurf editor"
+        ["zed"]="Zed editor"
+        ["warp"]="Warp terminal"
+        ["orbstack"]="OrbStack container platform"
+    )
+    
+    for app in ${(k)gui_apps}; do
+        local description="${gui_apps[$app]}"
+        ((total_checks++))
+        
+        printf "%-35s ... " "$description"
+        
+        if brew list --cask "$app" >/dev/null 2>&1; then
+            echo "✅ PASS"
+            ((success_count++))
+            
+            # Get version info if possible
+            local version
+            version=$(brew list --cask --versions "$app" 2>/dev/null | head -1 || echo "installed")
+            log_debug "$app: $version"
+        else
+            echo "❌ FAIL"
+            log_error "$app cask not installed via Homebrew"
         fi
     done
     
