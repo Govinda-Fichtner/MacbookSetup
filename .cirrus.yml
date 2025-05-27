@@ -106,20 +106,18 @@ env:
       # Create .zsh_plugins.txt for antidote if it doesn't exist
       if [[ ! -f ~/.zsh_plugins.txt ]]; then
         mkdir -p ~/.antidote
-        # Create plugins file without using heredoc to avoid YAML parsing issues
-        cat > ~/.zsh_plugins.txt << EOF
-        # Core functionality
-        zsh-users/zsh-completions
-        zsh-users/zsh-autosuggestions
-        zsh-users/zsh-syntax-highlighting
-
-        # Git integration
-        ohmyzsh/ohmyzsh path:plugins/git
-
-        # Kubernetes tools
-        ohmyzsh/ohmyzsh path:plugins/kubectl
-        ohmyzsh/ohmyzsh path:plugins/helm
-        EOF
+        # Create plugins file using echo commands to avoid heredoc issues
+        echo "# Core functionality" > ~/.zsh_plugins.txt
+        echo "zsh-users/zsh-completions" >> ~/.zsh_plugins.txt
+        echo "zsh-users/zsh-autosuggestions" >> ~/.zsh_plugins.txt
+        echo "zsh-users/zsh-syntax-highlighting" >> ~/.zsh_plugins.txt
+        echo "" >> ~/.zsh_plugins.txt
+        echo "# Git integration" >> ~/.zsh_plugins.txt
+        echo "ohmyzsh/ohmyzsh path:plugins/git" >> ~/.zsh_plugins.txt
+        echo "" >> ~/.zsh_plugins.txt
+        echo "# Kubernetes tools" >> ~/.zsh_plugins.txt
+        echo "ohmyzsh/ohmyzsh path:plugins/kubectl" >> ~/.zsh_plugins.txt
+        echo "ohmyzsh/ohmyzsh path:plugins/helm" >> ~/.zsh_plugins.txt
         echo "Created default .zsh_plugins.txt for antidote"
       fi
 
