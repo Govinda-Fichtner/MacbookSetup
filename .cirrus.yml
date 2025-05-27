@@ -58,7 +58,7 @@ env:
       # Validate shell scripts
       shellcheck -s bash ci_modifiers.sh
       shellcheck -s bash setup.sh
-      shellcheck -s bash verify_setup.sh.template
+      shellcheck -s bash verify_setup.sh
 
 # Template for system information (only used in daily validation)
 .system_info_template: &system_info_template
@@ -100,8 +100,7 @@ env:
 .create_test_template: &create_test_template
   create_test_script:
     - |
-      # Create verification script from template
-      cp verify_setup.sh.template verify_setup.sh
+      # Ensure verification script is executable
       chmod +x verify_setup.sh
 
       # Create .zsh_plugins.txt for antidote if it doesn't exist
@@ -211,7 +210,7 @@ daily_validation_task:
       # Validate shell scripts
       shellcheck -s bash ci_modifiers.sh
       shellcheck -s bash setup.sh
-      shellcheck -s bash verify_setup.sh.template
+      shellcheck -s bash verify_setup.sh
 
       # Display system information for debugging
       echo "=== System Information ==="
