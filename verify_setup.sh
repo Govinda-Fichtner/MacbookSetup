@@ -9,6 +9,9 @@ source "lib/logging.sh"
 # Enable error reporting
 set -e
 
+# Script configuration
+readonly COMPLETION_DIR="${HOME}/.zsh/completions"
+
 # Function to ensure a directory exists
 ensure_dir() {
     local dir="$1"
