@@ -129,7 +129,7 @@ install_hashicorp_tool() {
 
 install_hashicorp_tools() {
     log_info "Installing HashiCorp tools..."
-    install_hashicorp_tool "terraform" "1.6.0" || log_warning "Terraform installation skipped"
+    install_hashicorp_tool "terraform" "1.12.1" || log_warning "Terraform installation skipped"
     install_hashicorp_tool "packer" "1.12.0" || log_warning "Packer installation skipped"
 }
 
@@ -293,7 +293,7 @@ setup_shell_completions() {
     # Add completion configuration to .zshrc
     local completion_config="# Initialize completions
 autoload -Uz compinit
-if [[ -n ~/.zcompdump(#qN.mh+24) ]]; then
+if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
     compinit -i
 else
     compinit -C -i

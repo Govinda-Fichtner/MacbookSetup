@@ -22,7 +22,6 @@ brew "buildkit"         # Next-generation container image builder
 brew "dive"             # Tool for exploring Docker images
 brew "ctop"             # Top-like interface for container metrics
 brew "htop"             # Enhanced interactive process viewer
-brew "terraform"        # Infrastructure as code tool
 
 # Casks (GUI applications)
 cask "cursor"

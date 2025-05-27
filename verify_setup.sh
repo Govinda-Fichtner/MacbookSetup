@@ -9,6 +9,9 @@ BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
+# Enable error reporting
+set -e
+
 # Early completion initialization to ensure completions are available
 # This is important for the verification process
 # Load compinit function
@@ -69,26 +72,62 @@ initialize_completion_system "force"
 setopt NULL_GLOB 2>/dev/null || true
 
 # Logging functions
-log_info() {
-  echo -e "${BLUE}[INFO]${NC} $1"
-}
+log_info() { printf "\033[0;34m[INFO]\033[0m %s\n" "$1" >&2; }
+log_debug() { printf "[DEBUG] %s\n" "$1" >&2; }
+log_warning() { printf "\033[0;33m[WARNING]\033[0m %s\n" "$1" >&2; }
 
-log_success() {
-  echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+log_info "Starting verification process..."
 
-log_warning() {
-  echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+# Debug information
+log_debug "Current shell: $SHELL"
+log_debug "Current user: $USER"
+log_debug "Current PATH: $PATH"
+log_debug "Current working directory: $PWD"
+log_debug "Home directory: $HOME"
+log_debug "Current fpath: $fpath"
 
-log_error() {
-  echo -e "${RED}[ERROR]${NC} $1"
-}
+# Ensure we're using zsh
+if [[ "$(basename "$SHELL")" != "zsh" ]]; then
+    log_warning "Current shell is not zsh, switching to zsh"
+    exec /bin/zsh "$0"
+fi
 
-# Add debug logging to help diagnose issues
-log_debug() {
-  echo -e "[DEBUG] $1"
-}
+# Source zshrc in a new shell to avoid contamination
+zsh -c 'source ~/.zshrc' || log_warning "Failed to source ~/.zshrc in test shell"
+
+# Verify essential commands
+commands=(
+    "brew"
+    "git"
+    "terraform"
+    "packer"
+    "rbenv"
+    "pyenv"
+    "starship"
+)
+
+for cmd in "${commands[@]}"; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+        log_debug "$cmd is available ($(command -v "$cmd"))"
+        "$cmd" --version 2>&1 || log_warning "Could not get version for $cmd"
+    else
+        log_warning "$cmd is not available"
+    fi
+done
+
+# Verify shell plugins and completions
+log_info "Verifying shell configuration..."
+if [[ -f ~/.zsh_plugins.txt ]]; then
+    log_debug "antidote plugins file exists"
+else
+    log_warning "antidote plugins file missing"
+fi
+
+# Verify completion system
+log_info "Verifying completion system..."
+zsh -c 'autoload -Uz compinit && compinit -C' || log_warning "Completion initialization failed"
+
+log_info "Verification completed"
 
 # Completion verification configuration
 # Format: tool_name=(type source test_commands)
@@ -815,7 +854,7 @@ setup_completion_directories() {
     # Try to recover with multiple methods
     log_debug "Attempting to recover completion system..."
     autoload -Uz compinit
-    compinit -u 2>/dev/null || compinit -i 2>/dev/null || compinit 2>/dev/null
+    compinit -u 2>/dev/null || compinit -i 2>/dev/null
 
     # If still not available, try more aggressive loading
     if ! type compdef >/dev/null 2>&1; then
