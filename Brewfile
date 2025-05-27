@@ -11,6 +11,7 @@ brew "rbenv"
 brew "pyenv"
 brew "direnv"
 brew "starship"         # Cross-shell customizable prompt
+brew "fzf"              # Command-line fuzzy finder
 
 # Kubernetes and Container Tools
 brew "kubectl"          # Kubernetes command-line tool
