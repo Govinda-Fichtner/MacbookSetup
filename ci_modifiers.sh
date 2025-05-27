@@ -227,10 +227,9 @@ EOT
     # shellcheck disable=SC1090
     source "${HOME}/.zshrc"
 
-    log_success "Shell configuration completed"
-    return 0
-}
-}
+            log_success "Shell configuration completed"
+            return 0
+        }
 
 # Main function
 main() {
