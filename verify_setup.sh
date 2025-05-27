@@ -146,16 +146,18 @@ get_completion_path() {
 }
 
 # Verify essential commands
-commands=()
-commands+=("brew")
-commands+=("git")
-commands+=("terraform")
-commands+=("packer")
-commands+=("rbenv")
-commands+=("pyenv")
-commands+=("starship")
+typeset -a check_commands
+check_commands=(
+    "brew"
+    "git"
+    "terraform"
+    "packer"
+    "rbenv"
+    "pyenv"
+    "starship"
+)
 
-for cmd in "${commands[@]}"; do
+for cmd in "${check_commands[@]}"; do
     if command -v "$cmd" >/dev/null 2>&1; then
         log_debug "$cmd is available ($(command -v "$cmd"))"
         "$cmd" --version 2>&1 || log_warning "Could not get version for $cmd"
@@ -1199,7 +1201,7 @@ else
 fi
 
 # Array of commands to verify
-declare -a verify_commands
+typeset -A verify_commands
 verify_commands=()
 verify_commands[brew]="Homebrew installation"
 verify_commands[git]="Git installation"
@@ -1211,21 +1213,6 @@ verify_commands[starship]="Starship prompt"
 verify_commands[packer]="HashiCorp Packer"
 verify_commands[terraform]="Terraform installation"
 
-# Essential plugins array
-declare -a essential_plugins
-essential_plugins=()
-essential_plugins+=("zsh-users/zsh-completions")
-essential_plugins+=("zsh-users/zsh-autosuggestions")
-essential_plugins+=("zsh-users/zsh-syntax-highlighting")
-
-# Essential completions array
-declare -a essential_completions
-essential_completions=()
-essential_completions+=("terraform")
-essential_completions+=("git")
-essential_completions+=("kubectl")
-essential_completions+=("helm")
-
 # Counter for successful checks
 success_count=0
 total_checks=${#verify_commands}
@@ -1233,24 +1220,22 @@ total_checks=${#verify_commands}
 log_info "=== INSTALLATION VERIFICATION ==="
 
 # Check each command with more detailed output
-# shellcheck disable=SC2296,SC2154,SC2034
 for cmd in ${(k)verify_commands}; do
-  # shellcheck disable=SC2154
-  description=${verify_commands[$cmd]}
-  printf "%-30s ... " "$description"
+    description=${verify_commands[$cmd]}
+    printf "%-30s ... " "$description"
 
-  if command -v "$cmd" >/dev/null 2>&1; then
-    echo "✅ PASS"
-    ((success_count++))
-    log_info "Command '$cmd' found at: $(command -v "$cmd")"
-    # More robust version command that won't fail if --version isn't supported
-    version_out=$("$cmd" --version 2>&1 || echo "Version command not supported")
-    log_info "Version: $(echo "$version_out" | head -n1)"
-  else
-    echo "❌ FAIL"
-    log_error "Command '$cmd' not found in PATH"
-    log_debug "Current PATH: $PATH"
-  fi
+    if command -v "$cmd" >/dev/null 2>&1; then
+        echo "✅ PASS"
+        ((success_count++))
+        log_info "Command '$cmd' found at: $(command -v "$cmd")"
+        # More robust version command that won't fail if --version isn't supported
+        version_out=$("$cmd" --version 2>&1 || echo "Version command not supported")
+        log_info "Version: $(echo "$version_out" | head -n1)"
+    else
+        echo "❌ FAIL"
+        log_error "Command '$cmd' not found in PATH"
+        log_debug "Current PATH: $PATH"
+    fi
 done
 
 # Verify antidote plugins file exists and has content
