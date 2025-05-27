@@ -46,8 +46,10 @@ env:
     - |
       # Install Homebrew if needed
       if ! command -v brew &>/dev/null; then
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+        /bin/bash -c "$(curl -fsSL \
+          https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        [[ "$(uname -m)" == "arm64" ]] && \
+          eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
 
       # Install ShellCheck
@@ -105,19 +107,19 @@ env:
       # Create .zsh_plugins.txt for antidote if it doesn't exist
       if [[ ! -f ~/.zsh_plugins.txt ]]; then
         mkdir -p ~/.antidote
-        cat > ~/.zsh_plugins.txt << EOF
-# Core functionality
-zsh-users/zsh-completions
-zsh-users/zsh-autosuggestions
-zsh-users/zsh-syntax-highlighting
+        cat > ~/.zsh_plugins.txt << 'EOT'
+        # Core functionality
+        zsh-users/zsh-completions
+        zsh-users/zsh-autosuggestions
+        zsh-users/zsh-syntax-highlighting
 
-# Git integration
-ohmyzsh/ohmyzsh path:plugins/git
+        # Git integration
+        ohmyzsh/ohmyzsh path:plugins/git
 
-# Kubernetes tools
-ohmyzsh/ohmyzsh path:plugins/kubectl
-ohmyzsh/ohmyzsh path:plugins/helm
-EOF
+        # Kubernetes tools
+        ohmyzsh/ohmyzsh path:plugins/kubectl
+        ohmyzsh/ohmyzsh path:plugins/helm
+        EOT
         echo "Created default .zsh_plugins.txt for antidote"
       fi
 
@@ -126,7 +128,8 @@ EOF
   setup_script:
     - |
       # Ensure brew is in PATH for Apple Silicon
-      [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+      [[ "$(uname -m)" == "arm64" ]] && \
+        eval "$(/opt/homebrew/bin/brew shellenv)"
 
       # Install antidote if using it
       if grep -q "antidote" setup.sh; then
@@ -140,7 +143,8 @@ EOF
       echo "=== Installed Versions ==="
       command -v brew && brew --version
       command -v git && git --version
-      command -v antidote && antidote --version || echo "antidote has no version command"
+      command -v antidote && antidote --version || \
+        echo "antidote has no version command"
       command -v rbenv && rbenv --version
       command -v pyenv && pyenv --version
       command -v terraform && terraform --version
@@ -195,8 +199,10 @@ daily_validation_task:
     - |
       # Install Homebrew if needed
       if ! command -v brew &>/dev/null; then
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+        /bin/bash -c "$(curl -fsSL \
+          https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        [[ "$(uname -m)" == "arm64" ]] && \
+          eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
 
       # Install ShellCheck
