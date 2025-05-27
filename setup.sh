@@ -291,7 +291,8 @@ setup_shell_completions() {
     ensure_dir "$ZCOMPCACHE_DIR"
 
     # Add completion configuration to .zshrc
-    local completion_config="# Initialize completions
+    local completion_config
+    completion_config="# Initialize completions
 autoload -Uz compinit
 if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
     compinit -i
