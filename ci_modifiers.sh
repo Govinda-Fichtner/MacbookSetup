@@ -81,6 +81,54 @@ export ZDOTDIR="${ZDOTDIR:-$HOME}"
 # Ensure non-interactive mode
 export DEBIAN_FRONTEND=noninteractive
 export HOMEBREW_NO_ANALYTICS=1
+
+# Initialize OrbStack and Docker for CI
+if command -v orb >/dev/null 2>&1; then
+    # Add OrbStack bin to PATH
+    eval "$(orb shell-setup zsh 2>/dev/null)"
+    
+    # Initialize OrbStack service
+    orb start --quiet || true
+    
+    # Wait for OrbStack to be ready
+    for i in {1..30}; do
+        if orb status | grep -q "running"; then
+            break
+        fi
+        sleep 1
+    done
+fi
+
+# Ensure Docker is available and running
+if command -v docker >/dev/null 2>&1; then
+    # Wait for Docker to be ready
+    for i in {1..30}; do
+        if docker info >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+fi
+
+# Set up completions directory
+mkdir -p "${HOME}/.zsh/completions"
+
+# Generate completions
+if command -v docker >/dev/null 2>&1; then
+    docker completion zsh > "${HOME}/.zsh/completions/_docker"
+fi
+
+if command -v orb >/dev/null 2>&1; then
+    orb completion zsh > "${HOME}/.zsh/completions/_orb"
+fi
+
+if command -v kubectl >/dev/null 2>&1; then
+    kubectl completion zsh > "${HOME}/.zsh/completions/_kubectl"
+fi
+
+if command -v helm >/dev/null 2>&1; then
+    helm completion zsh > "${HOME}/.zsh/completions/_helm"
+fi
 EOF
 
     log_success "Added CI-specific configurations"

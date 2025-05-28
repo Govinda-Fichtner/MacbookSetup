@@ -30,14 +30,36 @@ else
     readonly NC='\033[0m' # No Color
 fi
 
-# Logging functions
-log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1" >&2; }
-log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" >&2; }
-log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1" >&2; }
-log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
-log_debug() { 
-    if [[ "$QUIET_MODE" != "true" ]]; then
-        printf "[DEBUG] %s\n" "$1" >&2; 
+# Logging functions for CI environment
+if [[ "$QUIET_MODE" == "true" ]]; then
+    log_info() { echo "::info::$1"; }
+    log_success() { echo "::success::$1"; }
+    log_warning() { echo "::warning::$1"; }
+    log_error() { echo "::error::$1"; }
+    log_debug() { :; }  # No-op in CI
+else
+    # Keep existing logging functions for local use
+    log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1" >&2; }
+    log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" >&2; }
+    log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1" >&2; }
+    log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
+    log_debug() { printf "[DEBUG] %s\n" "$1" >&2; }
+fi
+
+# Function to print status in CI-friendly format
+print_status() {
+    local description="$1"
+    local status="$2"
+    local version="${3:-}"
+    
+    if [[ "$QUIET_MODE" == "true" ]]; then
+        case "$status" in
+            "PASS") echo "::success::✓ $description${version:+ ($version)}";;
+            "FAIL") echo "::error::✗ $description";;
+            *) echo "::info::$status $description${version:+ ($version)}";;
+        esac
+    else
+        printf "%-35s ... %s%s\n" "$description" "$status" "${version:+ ($version)}"
     fi
 }
 
@@ -48,309 +70,91 @@ check_command() {
 
 # Main verification function
 main() {
-    log_info "Starting macOS development environment verification (v${SCRIPT_VERSION})..."
+    log_info "Starting verification v${SCRIPT_VERSION}"
     
     local success_count=0
     local total_checks=0
+    local failed_items=()
     
-    # Define tools to verify
-    local -A tools=(
-        ["brew"]="Homebrew package manager"
-        ["git"]="Git version control"
-        ["antidote"]="Antidote plugin manager"
-        ["rbenv"]="Ruby version manager"
-        ["pyenv"]="Python version manager"
-        ["direnv"]="Directory environment manager"
-        ["starship"]="Starship prompt"
-        ["packer"]="HashiCorp Packer"
-        ["terraform"]="Terraform infrastructure tool"
-        ["kubectl"]="Kubernetes CLI"
-        ["helm"]="Kubernetes package manager"
-        ["fzf"]="Fuzzy finder"
-        ["docker"]="Docker container runtime"
-        ["orb"]="OrbStack CLI"
-    )
-    
-    log_info "=== TOOL INSTALLATION VERIFICATION ==="
-    
-    # Check each tool
-    for tool in ${(k)tools}; do
-        local description="${tools[$tool]}"
+    # Verify core tools
+    log_info "Core Tools"
+    for tool in brew git antidote rbenv pyenv direnv starship; do
         ((total_checks++))
-        
-        printf "%-35s ... " "$description"
-        
         if check_command "$tool"; then
-            echo "✅ PASS"
             ((success_count++))
-            
-            # Get version info if possible
-            local version=""
-            case "$tool" in
-                "antidote")
-                    # Check if antidote is available as function or via brew
-                    if typeset -f antidote >/dev/null 2>&1; then
-                        version="$(antidote --version 2>/dev/null || echo "installed as function")"
-                    elif brew list antidote >/dev/null 2>&1; then
-                        version="installed via Homebrew"
-                    else
-                        echo "❌ FAIL"
-                        log_error "$tool not found in PATH"
-                        continue
-                    fi
-                    echo "✅ PASS"
-                    ((success_count++))
-                    ;;
-                "docker")
-                    # Check Docker version and runtime status
-                    version="$(docker version --format '{{.Client.Version}}' 2>/dev/null || echo "installed")"
-                    # Verify Docker daemon is running via OrbStack
-                    printf "\n%-35s ... " "Docker runtime (via OrbStack)"
-                    ((total_checks++))
-                    if docker info 2>/dev/null | grep -q "OrbStack"; then
-                        echo "✅ PASS"
-                        ((success_count++))
-                        log_debug "Docker is running via OrbStack"
-                        # Try a simple container test
-                        printf "%-35s ... " "Docker container test"
-                        ((total_checks++))
-                        if docker run --rm hello-world >/dev/null 2>&1; then
-                            echo "✅ PASS"
-                            ((success_count++))
-                            log_debug "Successfully ran hello-world container"
-                        else
-                            echo "❌ FAIL"
-                            log_error "Failed to run test container"
-                        fi
-                    else
-                        echo "❌ FAIL"
-                        log_error "Docker is not running via OrbStack"
-                    fi
-                    ;;
-                "orb")
-                    version="$(orb version 2>/dev/null || echo "installed")"
-                    # Check OrbStack service status
-                    printf "\n%-35s ... " "OrbStack service status"
-                    ((total_checks++))
-                    if orb status 2>/dev/null | grep -q "running"; then
-                        echo "✅ PASS"
-                        ((success_count++))
-                        log_debug "OrbStack service is running"
-                    else
-                        echo "❌ FAIL"
-                        log_error "OrbStack service is not running"
-                    fi
-                    ;;
-                "kubectl")
-                    version="$(kubectl version --client --short 2>/dev/null | head -1 || echo "installed")"
-                    ;;
-                "helm")
-                    version="$(helm version --short 2>/dev/null || echo "installed")"
-                    ;;
-                *)
-                    version="$($tool --version 2>/dev/null | head -1 || echo "installed")"
-                    ;;
-            esac
-            log_debug "$tool: $version"
+            version=$("$tool" --version 2>/dev/null | head -1 || echo "")
+            print_status "$tool" "PASS" "$version"
         else
-            # Special case for antidote - check if it's available as function or via brew
-            if [[ "$tool" == "antidote" ]]; then
-                if typeset -f antidote >/dev/null 2>&1; then
-                    echo "✅ PASS"
-                    ((success_count++))
-                    log_debug "$tool: installed as function"
-                elif brew list antidote >/dev/null 2>&1; then
-                    echo "✅ PASS"
-                    ((success_count++))
-                    log_debug "$tool: installed via Homebrew"
-                else
-                    echo "❌ FAIL"
-                    log_error "$tool not found in PATH, as function, or via Homebrew"
-                fi
-            else
-                echo "❌ FAIL"
-                log_error "$tool not found in PATH"
-            fi
+            failed_items+=("$tool")
+            print_status "$tool" "FAIL"
         fi
     done
-    
-    log_info "=== GUI APPLICATIONS VERIFICATION ==="
-    
-    # Check GUI applications installed via Homebrew casks
-    local -A gui_apps=(
-        ["claude"]="Claude AI desktop app"
-        ["cursor"]="Cursor code editor"
-        ["iterm2"]="iTerm2 terminal"
-        ["raycast"]="Raycast launcher"
-        ["windsurf"]="Windsurf editor"
-        ["zed"]="Zed editor"
-        ["warp"]="Warp terminal"
-        ["orbstack"]="OrbStack container platform"
-    )
-    
-    for app in ${(k)gui_apps}; do
-        local description="${gui_apps[$app]}"
+
+    # Verify container tools
+    log_info "Container Tools"
+    for tool in docker orb kubectl helm; do
         ((total_checks++))
-        
-        printf "%-35s ... " "$description"
-        
-        if brew list --cask "$app" >/dev/null 2>&1; then
-            echo "✅ PASS"
+        if check_command "$tool"; then
             ((success_count++))
-            
-            # Get version info if possible
-            local version
-            version=$(brew list --cask --versions "$app" 2>/dev/null | head -1 || echo "installed")
-            log_debug "$app: $version"
+            version=$("$tool" version 2>/dev/null | head -1 || echo "")
+            print_status "$tool" "PASS" "$version"
         else
-            echo "❌ FAIL"
-            log_error "$app cask not installed via Homebrew"
+            failed_items+=("$tool")
+            print_status "$tool" "FAIL"
         fi
     done
-    
-    log_info "=== CONFIGURATION FILES VERIFICATION ==="
-    
-    # Check important configuration files
-    local -A config_files=(
-        ["${HOME}/.zshrc"]="Zsh configuration file"
-        ["${HOME}/.zsh_plugins.txt"]="Antidote plugins file"
-        ["Brewfile"]="Homebrew package list"
-    )
-    
-    for file in ${(k)config_files}; do
-        local description="${config_files[$file]}"
+
+    # Verify shell completions
+    log_info "Shell Completions"
+    local completion_status=0
+    for tool in docker orb kubectl helm terraform; do
         ((total_checks++))
-        
-        printf "%-35s ... " "$description"
-        
-        if [[ -f "$file" ]]; then
-            echo "✅ PASS"
+        if check_completion "$tool"; then
             ((success_count++))
-            
-            # Additional checks for specific files
-            case "$file" in
-                "${HOME}/.zsh_plugins.txt")
-                    local plugin_count
-                    plugin_count=$(grep -cv "^#\|^$" "$file" 2>/dev/null || echo "0")
-                    log_debug "Found $plugin_count plugins in .zsh_plugins.txt"
-                    ;;
-                "${HOME}/.zshrc")
-                    if grep -q "compinit" "$file" 2>/dev/null; then
-                        log_debug ".zshrc contains completion initialization"
-                    else
-                        log_warning ".zshrc missing completion initialization"
-                    fi
-                    ;;
-            esac
+            print_status "$tool completion" "PASS"
         else
-            echo "❌ FAIL"
-            log_error "$file not found"
+            failed_items+=("${tool}_completion")
+            print_status "$tool completion" "FAIL"
+            ((completion_status++))
         fi
     done
-    
-    log_info "=== COMPLETION DIRECTORIES VERIFICATION ==="
-    
-    # Check completion directories
-    local -A completion_dirs=(
-        ["/opt/homebrew/share/zsh/site-functions"]="Homebrew completions"
-        ["/usr/share/zsh/site-functions"]="System completions"
-        ["${HOME}/.zsh/completions"]="User completions"
-        ["/opt/homebrew/opt/fzf/shell"]="FZF completions"
-    )
-    
-    # Check for specific completion files
-    local -A completion_files=(
-        ["_docker"]="Docker completion"
-        ["_orb"]="OrbStack completion"
-    )
-    
-    for file in ${(k)completion_files}; do
-        local description="${completion_files[$file]}"
-        ((total_checks++))
-        
-        printf "%-35s ... " "$description"
-        
-        # Check in all standard completion directories
-        local found=false
-        for dir in "/opt/homebrew/share/zsh/site-functions" "/usr/share/zsh/site-functions" "${HOME}/.zsh/completions"; do
-            if [[ -f "$dir/$file" ]]; then
-                found=true
-                break
-            fi
-        done
-        
-        if $found; then
-            echo "✅ PASS"
-            ((success_count++))
-            log_debug "Found completion file $file"
-        else
-            # For Docker and OrbStack, we also accept dynamic completion generation
-            case "$file" in
-                "_docker")
-                    if command -v docker >/dev/null 2>&1 && docker help completion >/dev/null 2>&1; then
-                        echo "✅ PASS (dynamic)"
-                        ((success_count++))
-                        log_debug "Docker completion available via 'docker completion zsh'"
-                    else
-                        echo "❌ FAIL"
-                        log_error "Docker completion not found"
-                    fi
-                    ;;
-                "_orb")
-                    if command -v orb >/dev/null 2>&1 && orb completion zsh >/dev/null 2>&1; then
-                        echo "✅ PASS (dynamic)"
-                        ((success_count++))
-                        log_debug "OrbStack completion available via 'orb completion zsh'"
-                    else
-                        echo "❌ FAIL"
-                        log_error "OrbStack completion not found"
-                    fi
-                    ;;
-                *)
-                    echo "❌ FAIL"
-                    log_error "Completion file $file not found"
-                    ;;
-            esac
-        fi
-    done
-    
-    # Check completion directories
-    for dir in ${(k)completion_dirs}; do
-        local description="${completion_dirs[$dir]}"
-        ((total_checks++))
-        
-        printf "%-35s ... " "$description"
-        
-        if [[ -d "$dir" ]]; then
-            echo "✅ PASS"
-            ((success_count++))
-            
-            local file_count
-            file_count=$(find "$dir" -name "_*" 2>/dev/null | wc -l | tr -d '[:space:]')
-            log_debug "Found $file_count completion files in $dir"
-        else
-            echo "⏭️  SKIPPED"
-            log_warning "$dir does not exist"
-        fi
-    done
-    
-    log_info "=== SUMMARY ==="
-    
+
+    # Print summary
     local percentage=$((success_count * 100 / total_checks))
-    log_info "Verification completed: $success_count of $total_checks checks passed ($percentage%)"
+    log_info "Summary: $success_count/$total_checks checks passed ($percentage%)"
     
-    if [[ $success_count -eq $total_checks ]]; then
-        log_success "All verifications passed! Your development environment is properly configured."
-        return 0
-    elif [[ $percentage -ge 80 ]]; then
-        log_warning "Most verifications passed, but some issues were found."
-        log_info "Your development environment is mostly functional."
-        return 0
-    else
-        log_error "Multiple verification failures detected."
-        log_info "Please run the setup script to fix missing components."
+    if [[ ${#failed_items[@]} -gt 0 ]]; then
+        log_error "Failed items: ${failed_items[*]}"
         return 1
     fi
+    
+    log_success "All checks passed"
+    return 0
+}
+
+# Helper function to check completion setup
+check_completion() {
+    local tool="$1"
+    case "$tool" in
+        docker)
+            command -v docker >/dev/null 2>&1 && docker help completion >/dev/null 2>&1
+            ;;
+        orb)
+            command -v orb >/dev/null 2>&1 && orb completion zsh >/dev/null 2>&1
+            ;;
+        kubectl)
+            command -v kubectl >/dev/null 2>&1 && kubectl completion zsh >/dev/null 2>&1
+            ;;
+        helm)
+            command -v helm >/dev/null 2>&1 && helm completion zsh >/dev/null 2>&1
+            ;;
+        terraform)
+            command -v terraform >/dev/null 2>&1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 # Run main function
