@@ -101,17 +101,51 @@ main() {
                     echo "✅ PASS"
                     ((success_count++))
                     ;;
+                "docker")
+                    # Check Docker version and runtime status
+                    version="$(docker version --format '{{.Client.Version}}' 2>/dev/null || echo "installed")"
+                    # Verify Docker daemon is running via OrbStack
+                    printf "\n%-35s ... " "Docker runtime (via OrbStack)"
+                    ((total_checks++))
+                    if docker info 2>/dev/null | grep -q "OrbStack"; then
+                        echo "✅ PASS"
+                        ((success_count++))
+                        log_debug "Docker is running via OrbStack"
+                        # Try a simple container test
+                        printf "%-35s ... " "Docker container test"
+                        ((total_checks++))
+                        if docker run --rm hello-world >/dev/null 2>&1; then
+                            echo "✅ PASS"
+                            ((success_count++))
+                            log_debug "Successfully ran hello-world container"
+                        else
+                            echo "❌ FAIL"
+                            log_error "Failed to run test container"
+                        fi
+                    else
+                        echo "❌ FAIL"
+                        log_error "Docker is not running via OrbStack"
+                    fi
+                    ;;
+                "orb")
+                    version="$(orb version 2>/dev/null || echo "installed")"
+                    # Check OrbStack service status
+                    printf "\n%-35s ... " "OrbStack service status"
+                    ((total_checks++))
+                    if orb status 2>/dev/null | grep -q "running"; then
+                        echo "✅ PASS"
+                        ((success_count++))
+                        log_debug "OrbStack service is running"
+                    else
+                        echo "❌ FAIL"
+                        log_error "OrbStack service is not running"
+                    fi
+                    ;;
                 "kubectl")
                     version="$(kubectl version --client --short 2>/dev/null | head -1 || echo "installed")"
                     ;;
                 "helm")
                     version="$(helm version --short 2>/dev/null || echo "installed")"
-                    ;;
-                "docker")
-                    version="$(docker version --format '{{.Client.Version}}' 2>/dev/null || echo "installed")"
-                    ;;
-                "orb")
-                    version="$(orb version 2>/dev/null || echo "installed")"
                     ;;
                 *)
                     version="$($tool --version 2>/dev/null | head -1 || echo "installed")"
