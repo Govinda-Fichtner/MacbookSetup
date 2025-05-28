@@ -40,6 +40,37 @@ env:
   clone_script:
     - git clone $CIRRUS_REPO_CLONE_URL .
 
+# Template for Docker and OrbStack setup
+.container_setup_template: &container_setup_template
+  container_setup_script:
+    - |
+      # Install OrbStack
+      brew install --cask orbstack
+
+      # Wait for OrbStack to be ready
+      for i in {1..30}; do
+        if orb status 2>/dev/null | grep -q "running"; then
+          break
+        fi
+        sleep 1
+      done
+
+      # Install Docker
+      brew install docker
+
+      # Wait for Docker to be ready
+      for i in {1..30}; do
+        if docker info >/dev/null 2>&1; then
+          break
+        fi
+        sleep 1
+      done
+
+      # Generate completions
+      mkdir -p "${HOME}/.zsh/completions"
+      docker completion zsh > "${HOME}/.zsh/completions/_docker" 2>/dev/null
+      orb completion zsh > "${HOME}/.zsh/completions/_orb" 2>/dev/null
+
 # Template for shellcheck validation
 .shellcheck_template: &shellcheck_template
   shellcheck_script:
@@ -201,6 +232,8 @@ daily_validation_task:
   <<: *macos_instance_template
   <<: *brew_cache_template
   <<: *clone_template
+  <<: *container_setup_template
+  <<: *shellcheck_template
 
   # Validate shell scripts with ShellCheck including system info
   shellcheck_script:
@@ -247,6 +280,24 @@ macos_arm_test_task:
   <<: *macos_instance_template
   <<: *brew_cache_template
   <<: *clone_template
+  <<: *container_setup_template
+  <<: *shellcheck_template
+  <<: *prepare_template
+  <<: *create_test_template
+  <<: *setup_template
+  <<: *verify_template
+  <<: *artifacts_template
+
+# Main validation task
+validate_task:
+  name: validate_setup
+  depends_on: []  # No dependencies for this task
+
+  # Use templates
+  <<: *macos_instance_template
+  <<: *brew_cache_template
+  <<: *clone_template
+  <<: *container_setup_template  # Add container setup before other steps
   <<: *shellcheck_template
   <<: *prepare_template
   <<: *create_test_template
