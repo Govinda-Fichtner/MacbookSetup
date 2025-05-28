@@ -40,9 +40,9 @@ env:
   clone_script:
     - git clone $CIRRUS_REPO_CLONE_URL .
 
-# Template for Docker and OrbStack setup
-.container_setup_template: &container_setup_template
-  container_setup_script:
+# Template for shellcheck validation
+.shellcheck_template: &shellcheck_template
+  shellcheck_script:
     - |
       # Install Homebrew if needed
       if ! command -v brew &>/dev/null; then
@@ -52,37 +52,6 @@ env:
           eval "$(/opt/homebrew/bin/brew shellenv)"
       fi
 
-      # Install OrbStack
-      brew install --cask orbstack
-
-      # Wait for OrbStack to be ready
-      for i in {1..30}; do
-        if orb status 2>/dev/null | grep -q "running"; then
-          break
-        fi
-        sleep 1
-      done
-
-      # Install Docker
-      brew install docker
-
-      # Wait for Docker to be ready
-      for i in {1..30}; do
-        if docker info >/dev/null 2>&1; then
-          break
-        fi
-        sleep 1
-      done
-
-      # Generate completions
-      mkdir -p "${HOME}/.zsh/completions"
-      docker completion zsh > "${HOME}/.zsh/completions/_docker" 2>/dev/null
-      orb completion zsh > "${HOME}/.zsh/completions/_orb" 2>/dev/null
-
-# Template for shellcheck validation
-.shellcheck_template: &shellcheck_template
-  shellcheck_script:
-    - |
       # Install ShellCheck
       brew install shellcheck
 
@@ -94,6 +63,17 @@ env:
         --source-path="${HOME}" \
         --exclude=SC1091,SC2296,SC2034,SC2154,SC2016 \
         ci_modifiers.sh setup.sh verify_setup.sh
+
+# Template for system information (only used in daily validation)
+.system_info_template: &system_info_template
+  system_info_script:
+    - |
+      # Display system information for debugging
+      echo "=== System Information ==="
+      uname -a
+      sw_vers
+      echo "Shell: $SHELL"
+      echo "ZSH version: $(zsh --version)"
 
 # Template for CI setup script preparation
 .prepare_template: &prepare_template
@@ -211,16 +191,62 @@ env:
       path: "~/.zsh_plugins.txt"
       type: text/plain
 
-# Main validation task
-validate_task:
-  name: validate_setup
-  depends_on: []  # No dependencies for this task
+# Daily scheduled validation build
+daily_validation_task:
+  name: daily_compatibility_check
+  trigger_type: scheduled
+  cron: "0 0 * * *"  # Run at midnight UTC every day
 
-  # Use templates in the correct order
+  # Include common configurations using templates
   <<: *macos_instance_template
   <<: *brew_cache_template
   <<: *clone_template
-  <<: *container_setup_template  # Install Docker and OrbStack first
+
+  # Validate shell scripts with ShellCheck including system info
+  shellcheck_script:
+    - |
+      # Install Homebrew if needed
+      if ! command -v brew &>/dev/null; then
+        /bin/bash -c "$(curl -fsSL \
+          https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        [[ "$(uname -m)" == "arm64" ]] && \
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+      fi
+
+      # Install ShellCheck
+      brew install shellcheck
+
+      # Validate shell scripts
+      shellcheck -s bash \
+        --external-sources \
+        --source-path=SCRIPTDIR \
+        --source-path="${PWD}/lib" \
+        --source-path="${HOME}" \
+        --exclude=SC1091,SC2296,SC2034,SC2154,SC2016 \
+        ci_modifiers.sh setup.sh verify_setup.sh
+
+      # Display system information for debugging
+      echo "=== System Information ==="
+      uname -a
+      sw_vers
+      echo "Shell: $SHELL"
+      echo "ZSH version: $(zsh --version)"
+
+  # Include remaining common configurations
+  <<: *prepare_template
+  <<: *create_test_template
+  <<: *setup_template
+  <<: *verify_template
+  <<: *artifacts_template
+
+# Task for testing the setup script on macOS ARM (on-demand)
+macos_arm_test_task:
+  name: macos_arm_test
+
+  # Include common configurations using templates
+  <<: *macos_instance_template
+  <<: *brew_cache_template
+  <<: *clone_template
   <<: *shellcheck_template
   <<: *prepare_template
   <<: *create_test_template
