@@ -8,17 +8,17 @@
 set -euo pipefail
 
 # Default values
-typeset NOTIFICATION_SOUND="Funk"
-typeset CI_DASHBOARD="https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup"
+NOTIFICATION_SOUND="Funk"
+CI_DASHBOARD="https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup"
 
 # Function to send notification
-send_notification() {
-    typeset status=$1
-    typeset message=${2:-"No message provided"}
-    typeset title="Cirrus CI"
-    typeset subtitle=""
+function send_notification {
+    build_status="$1"
+    build_message="${2:-No message provided}"
+    title="Cirrus CI"
+    subtitle=""
     
-    case $status in
+    case "$build_status" in
         "failure")
             subtitle="Build Failed"
             NOTIFICATION_SOUND="Basso"
@@ -28,7 +28,7 @@ send_notification() {
             NOTIFICATION_SOUND="Glass"
             ;;
         *)
-            subtitle="Build Status: $status"
+            subtitle="Build Status: $build_status"
             ;;
     esac
     
@@ -37,20 +37,18 @@ send_notification() {
         terminal-notifier \
             -title "$title" \
             -subtitle "$subtitle" \
-            -message "$message" \
+            -message "$build_message" \
             -sound "$NOTIFICATION_SOUND" \
             -open "$CI_DASHBOARD"
     else
         # Fallback to osascript
-        osascript -e "display notification \"$message\" with title \"$title\" subtitle \"$subtitle\" sound name \"$NOTIFICATION_SOUND\""
+        osascript -e "display notification \"$build_message\" with title \"$title\" subtitle \"$subtitle\" sound name \"$NOTIFICATION_SOUND\""
     fi
 }
 
 # Function to get build errors from log
-get_build_errors() {
-    typeset commit_hash
+function get_build_errors {
     commit_hash=$(git rev-parse HEAD)
-    typeset errors
     
     # Fetch and parse errors from the verification log
     errors=$(curl -s "https://api.cirrus-ci.com/v1/task/${commit_hash}/logs/verify.log" | grep '::error::' || true)
@@ -63,20 +61,20 @@ get_build_errors() {
 }
 
 # Main execution
-main() {
-    typeset status=${1:-"unknown"}
-    typeset message=${2:-$(get_build_errors)}
+function main {
+    build_status="${1:-unknown}"
+    build_message="${2:-$(get_build_errors)}"
     
-    send_notification "$status" "$message"
+    send_notification "$build_status" "$build_message"
     
     # If it's a failure, also log to a file for reference
-    if [[ "$status" == "failure" ]]; then
+    if [[ "$build_status" == "failure" ]]; then
         mkdir -p "${HOME}/.cirrus/logs"
         {
             echo "=== Build Failure ==="
             echo "Date: $(date)"
-            echo "Status: $status"
-            echo "Message: $message"
+            echo "Status: $build_status"
+            echo "Message: $build_message"
             echo "Dashboard: $CI_DASHBOARD"
             echo "====================" 
         } >> "${HOME}/.cirrus/logs/build_failures.log"
