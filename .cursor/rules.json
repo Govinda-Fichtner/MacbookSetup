@@ -4,6 +4,17 @@
     {
       "name": "shell-script-validation",
       "description": "Enforce shell script best practices and prevent common CI errors",
+      "documentation": {
+        "url": "https://www.shellcheck.net/wiki/SC1091",
+        "description": "Rules to prevent common shell script CI errors and ensure proper validation.",
+        "guidelines": [
+          "Always run ShellCheck after every change of shell scripts to ensure they are not flawed",
+          "Use absolute paths when sourcing files to prevent ShellCheck SC1091 errors",
+          "Add proper ShellCheck directives for known exceptions",
+          "Control command output in CI environments",
+          "Maintain consistent shell script headers"
+        ]
+      },
       "patterns": [
         {
           "pattern": "\\.sh$",
@@ -32,31 +43,7 @@
               "pattern": "\\bsource\\s+[\"']?\\$\\{?ZDOTDIR",
               "message": "When sourcing zsh config files, add # shellcheck disable=SC1091 above the line",
               "severity": "warning"
-            }
-          ]
-        }
-      ],
-      "actions": {
-        "on-save": "validate",
-        "quick-fix": {
-          "SC1091": {
-            "pattern": "source\\s+([\"']?)(.*?)\\1",
-            "replacement": "# shellcheck disable=SC1091\nsource $1$2$1"
-          }
-        }
-      },
-      "documentation": {
-        "url": "https://www.shellcheck.net/wiki/SC1091",
-        "description": "Rules to prevent common shell script CI errors, particularly around file sourcing and ShellCheck validation."
-      }
-    },
-    {
-      "name": "shell-script-headers",
-      "description": "Enforce consistent shell script headers and shellcheck directives",
-      "patterns": [
-        {
-          "pattern": "\\.sh$",
-          "checks": [
+            },
             {
               "type": "regex",
               "pattern": "^#!/bin/(ba)?sh",
@@ -69,18 +56,7 @@
               "message": "Shell scripts should declare shellcheck shell type",
               "inverse": true,
               "severity": "error"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "ci-output-control",
-      "description": "Enforce practices to reduce CI output noise",
-      "patterns": [
-        {
-          "pattern": "\\.sh$",
-          "checks": [
+            },
             {
               "type": "regex",
               "pattern": "(?<!2>&1|>/dev/null)\\s+[|>]",
@@ -95,7 +71,16 @@
             }
           ]
         }
-      ]
+      ],
+      "actions": {
+        "on-save": "validate",
+        "quick-fix": {
+          "SC1091": {
+            "pattern": "source\\s+([\"']?)(.*?)\\1",
+            "replacement": "# shellcheck disable=SC1091\nsource $1$2$1"
+          }
+        }
+      }
     }
   ],
   "settings": {
