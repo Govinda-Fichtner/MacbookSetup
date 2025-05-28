@@ -1,6 +1,6 @@
 #!/bin/zsh
 # shellcheck shell=bash
-# shellcheck disable=SC2296,SC2034,SC2154
+# shellcheck disable=SC2296,SC2034,SC2154,SC2076
 
 # macOS Development Environment Verification Script
 # This script verifies that all tools and configurations are properly installed
@@ -13,13 +13,6 @@ readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 QUIET_MODE="${CI:-false}"
 if [[ "${MACBOOK_SETUP_QUIET:-}" == "true" ]]; then
     QUIET_MODE="true"
-fi
-
-# Optional tools in CI environment
-if [[ "$QUIET_MODE" == "true" ]]; then
-    OPTIONAL_TOOLS=(docker orb)
-else
-    OPTIONAL_TOOLS=()
 fi
 
 # Color definitions (disabled in quiet mode)
@@ -158,14 +151,8 @@ main() {
             version=$("$tool" version 2>/dev/null | head -1 || echo "")
             print_status "$tool" "PASS" "$version"
         else
-            # Skip optional tools in CI
-            if [[ " ${OPTIONAL_TOOLS[*]} " =~ " ${tool} " ]]; then
-                print_status "$tool" "SKIP" "(optional in CI)"
-                ((success_count++))
-            else
-                failed_items+=("$tool")
-                print_status "$tool" "FAIL"
-            fi
+            failed_items+=("$tool")
+            print_status "$tool" "FAIL"
         fi
     done
 
@@ -177,14 +164,8 @@ main() {
             ((success_count++))
             print_status "$tool completion" "PASS"
         else
-            # Skip optional tools in CI
-            if [[ " ${OPTIONAL_TOOLS[*]} " =~ " ${tool} " ]]; then
-                print_status "$tool completion" "SKIP" "(optional in CI)"
-                ((success_count++))
-            else
-                failed_items+=("${tool}_completion")
-                print_status "$tool completion" "FAIL"
-            fi
+            failed_items+=("${tool}_completion")
+            print_status "$tool completion" "FAIL"
         fi
     done
 
