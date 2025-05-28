@@ -81,18 +81,24 @@ export ZDOTDIR="${ZDOTDIR:-$HOME}"
 # Ensure non-interactive mode
 export DEBIAN_FRONTEND=noninteractive
 export HOMEBREW_NO_ANALYTICS=1
+export HOMEBREW_NO_ENV_HINTS=1
+
+# Ensure we're running in zsh
+if [ -n "$BASH_VERSION" ]; then
+    exec /bin/zsh "$0" "$@"
+fi
 
 # Initialize OrbStack and Docker for CI
 if command -v orb >/dev/null 2>&1; then
     # Add OrbStack bin to PATH
-    eval "$(orb shell-setup zsh 2>/dev/null)"
+    eval "$(orb shell-setup zsh 2>/dev/null)" >/dev/null 2>&1
     
     # Initialize OrbStack service
-    orb start --quiet || true
+    orb start --quiet >/dev/null 2>&1 || true
     
     # Wait for OrbStack to be ready
     for i in {1..30}; do
-        if orb status | grep -q "running"; then
+        if orb status 2>/dev/null | grep -q "running"; then
             break
         fi
         sleep 1
@@ -113,22 +119,42 @@ fi
 # Set up completions directory
 mkdir -p "${HOME}/.zsh/completions"
 
-# Generate completions
+# Generate completions silently
 if command -v docker >/dev/null 2>&1; then
-    docker completion zsh > "${HOME}/.zsh/completions/_docker"
+    docker completion zsh > "${HOME}/.zsh/completions/_docker" 2>/dev/null
 fi
 
 if command -v orb >/dev/null 2>&1; then
-    orb completion zsh > "${HOME}/.zsh/completions/_orb"
+    orb completion zsh > "${HOME}/.zsh/completions/_orb" 2>/dev/null
 fi
 
 if command -v kubectl >/dev/null 2>&1; then
-    kubectl completion zsh > "${HOME}/.zsh/completions/_kubectl"
+    kubectl completion zsh > "${HOME}/.zsh/completions/_kubectl" 2>/dev/null
 fi
 
 if command -v helm >/dev/null 2>&1; then
-    helm completion zsh > "${HOME}/.zsh/completions/_helm"
+    helm completion zsh > "${HOME}/.zsh/completions/_helm" 2>/dev/null
 fi
+
+# Add completion configuration to .zshrc
+cat >> "${ZDOTDIR:-$HOME}/.zshrc" << 'ZSHRC_EOF'
+# Initialize completion system
+autoload -Uz compinit
+if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
+    compinit -i >/dev/null 2>&1
+else
+    compinit -C -i >/dev/null 2>&1
+fi
+
+# Add completions directory to fpath
+fpath=("${HOME}/.zsh/completions" $fpath)
+
+# Completion settings
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+zstyle ':completion::complete:*' use-cache on
+zstyle ':completion::complete:*' cache-path "$HOME/.zcompcache"
+ZSHRC_EOF
 EOF
 
     log_success "Added CI-specific configurations"

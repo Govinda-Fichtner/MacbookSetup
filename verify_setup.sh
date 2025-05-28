@@ -49,23 +49,69 @@ fi
 # Function to print status in CI-friendly format
 print_status() {
     local description="$1"
-    local status="$2"
+    local result="$2"
     local version="${3:-}"
     
     if [[ "$QUIET_MODE" == "true" ]]; then
-        case "$status" in
+        case "$result" in
             "PASS") echo "::success::✓ $description${version:+ ($version)}";;
             "FAIL") echo "::error::✗ $description";;
-            *) echo "::info::$status $description${version:+ ($version)}";;
+            *) echo "::info::$result $description${version:+ ($version)}";;
         esac
     else
-        printf "%-35s ... %s%s\n" "$description" "$status" "${version:+ ($version)}"
+        printf "%-35s ... %s%s\n" "$description" "$result" "${version:+ ($version)}"
     fi
 }
 
 # Utility functions
 check_command() {
     command -v "$1" >/dev/null 2>&1
+}
+
+# Helper function to check completion setup
+check_completion() {
+    local tool="$1"
+    case "$tool" in
+        docker)
+            command -v docker >/dev/null 2>&1 && docker help completion >/dev/null 2>&1
+            ;;
+        orb)
+            command -v orb >/dev/null 2>&1 && orb completion zsh >/dev/null 2>&1
+            ;;
+        kubectl)
+            command -v kubectl >/dev/null 2>&1 && kubectl completion zsh >/dev/null 2>&1
+            ;;
+        helm)
+            command -v helm >/dev/null 2>&1 && helm completion zsh >/dev/null 2>&1
+            ;;
+        terraform)
+            command -v terraform >/dev/null 2>&1
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Function to verify shell configuration
+verify_shell_config() {
+    log_info "Verifying shell configuration"
+    
+    # Source zshrc silently
+    if [ -f "${ZDOTDIR:-$HOME}/.zshrc" ]; then
+        source "${ZDOTDIR:-$HOME}/.zshrc" >/dev/null 2>&1 || {
+            log_error "Failed to source .zshrc"
+            return 1
+        }
+    fi
+    
+    # Verify shell is zsh
+    if [[ "$SHELL" != *"zsh"* ]]; then
+        log_error "Current shell is not zsh: $SHELL"
+        return 1
+    fi
+    
+    return 0
 }
 
 # Main verification function
@@ -75,6 +121,12 @@ main() {
     local success_count=0
     local total_checks=0
     local failed_items=()
+    
+    # Verify shell configuration first
+    verify_shell_config || {
+        log_error "Shell configuration verification failed"
+        return 1
+    }
     
     # Verify core tools
     log_info "Core Tools"
@@ -106,16 +158,14 @@ main() {
 
     # Verify shell completions
     log_info "Shell Completions"
-    local completion_status=0
     for tool in docker orb kubectl helm terraform; do
         ((total_checks++))
-        if check_completion "$tool"; then
+        if check_completion "$tool" >/dev/null 2>&1; then
             ((success_count++))
             print_status "$tool completion" "PASS"
         else
             failed_items+=("${tool}_completion")
             print_status "$tool completion" "FAIL"
-            ((completion_status++))
         fi
     done
 
@@ -130,31 +180,6 @@ main() {
     
     log_success "All checks passed"
     return 0
-}
-
-# Helper function to check completion setup
-check_completion() {
-    local tool="$1"
-    case "$tool" in
-        docker)
-            command -v docker >/dev/null 2>&1 && docker help completion >/dev/null 2>&1
-            ;;
-        orb)
-            command -v orb >/dev/null 2>&1 && orb completion zsh >/dev/null 2>&1
-            ;;
-        kubectl)
-            command -v kubectl >/dev/null 2>&1 && kubectl completion zsh >/dev/null 2>&1
-            ;;
-        helm)
-            command -v helm >/dev/null 2>&1 && helm completion zsh >/dev/null 2>&1
-            ;;
-        terraform)
-            command -v terraform >/dev/null 2>&1
-            ;;
-        *)
-            return 1
-            ;;
-    esac
 }
 
 # Run main function
