@@ -67,6 +67,8 @@ main() {
         ["kubectl"]="Kubernetes CLI"
         ["helm"]="Kubernetes package manager"
         ["fzf"]="Fuzzy finder"
+        ["docker"]="Docker container runtime"
+        ["orb"]="OrbStack CLI"
     )
     
     log_info "=== TOOL INSTALLATION VERIFICATION ==="
@@ -104,6 +106,12 @@ main() {
                     ;;
                 "helm")
                     version="$(helm version --short 2>/dev/null || echo "installed")"
+                    ;;
+                "docker")
+                    version="$(docker version --format '{{.Client.Version}}' 2>/dev/null || echo "installed")"
+                    ;;
+                "orb")
+                    version="$(orb version 2>/dev/null || echo "installed")"
                     ;;
                 *)
                     version="$($tool --version 2>/dev/null | head -1 || echo "installed")"
@@ -216,6 +224,63 @@ main() {
         ["/opt/homebrew/opt/fzf/shell"]="FZF completions"
     )
     
+    # Check for specific completion files
+    local -A completion_files=(
+        ["_docker"]="Docker completion"
+        ["_orb"]="OrbStack completion"
+    )
+    
+    for file in ${(k)completion_files}; do
+        local description="${completion_files[$file]}"
+        ((total_checks++))
+        
+        printf "%-35s ... " "$description"
+        
+        # Check in all standard completion directories
+        local found=false
+        for dir in "/opt/homebrew/share/zsh/site-functions" "/usr/share/zsh/site-functions" "${HOME}/.zsh/completions"; do
+            if [[ -f "$dir/$file" ]]; then
+                found=true
+                break
+            fi
+        done
+        
+        if $found; then
+            echo "✅ PASS"
+            ((success_count++))
+            log_debug "Found completion file $file"
+        else
+            # For Docker and OrbStack, we also accept dynamic completion generation
+            case "$file" in
+                "_docker")
+                    if command -v docker >/dev/null 2>&1 && docker help completion >/dev/null 2>&1; then
+                        echo "✅ PASS (dynamic)"
+                        ((success_count++))
+                        log_debug "Docker completion available via 'docker completion zsh'"
+                    else
+                        echo "❌ FAIL"
+                        log_error "Docker completion not found"
+                    fi
+                    ;;
+                "_orb")
+                    if command -v orb >/dev/null 2>&1 && orb completion zsh >/dev/null 2>&1; then
+                        echo "✅ PASS (dynamic)"
+                        ((success_count++))
+                        log_debug "OrbStack completion available via 'orb completion zsh'"
+                    else
+                        echo "❌ FAIL"
+                        log_error "OrbStack completion not found"
+                    fi
+                    ;;
+                *)
+                    echo "❌ FAIL"
+                    log_error "Completion file $file not found"
+                    ;;
+            esac
+        fi
+    done
+    
+    # Check completion directories
     for dir in ${(k)completion_dirs}; do
         local description="${completion_dirs[$dir]}"
         ((total_checks++))
