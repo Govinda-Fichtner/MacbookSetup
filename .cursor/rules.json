@@ -119,14 +119,14 @@
       "actions": {
         "on-save": "validate",
         "on-commit": {
-          "command": "git rev-parse HEAD | xargs -I {} echo 'Monitoring CI run for commit {}' && open https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup/{}",
-          "message": "Opening CI run for monitoring. Please ensure the build passes before proceeding."
+          "command": "cirrus validate && open https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup",
+          "message": "Opening Cirrus CI dashboard for build monitoring. Please ensure the build passes before proceeding with further changes."
         }
       }
     },
     {
       "name": "ci-monitoring",
-      "description": "Enforce CI monitoring practices",
+      "description": "Enforce CI monitoring practices and handle failures",
       "patterns": [
         {
           "pattern": ".*",
@@ -137,20 +137,44 @@
                 "require-ci-check": true,
                 "wait-for-completion": true,
                 "auto-fix-attempts": 3,
-                "monitor-url": "https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup"
+                "monitor-url": "https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup",
+                "post-commit-actions": [
+                  {
+                    "command": "cirrus validate",
+                    "message": "Validating configuration locally before CI run."
+                  },
+                  {
+                    "command": "open https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup",
+                    "message": "Opening Cirrus CI dashboard. Monitor the build and address any failures."
+                  }
+                ],
+                "failure-actions": [
+                  {
+                    "command": "./scripts/ci_notify.sh failure",
+                    "message": "Notifying of CI build failure"
+                  }
+                ],
+                "success-actions": [
+                  {
+                    "command": "./scripts/ci_notify.sh success",
+                    "message": "Notifying of CI build success"
+                  }
+                ]
               }
             }
           ]
         }
       ],
       "documentation": {
-        "description": "Rules to ensure proper CI monitoring and follow-up",
+        "description": "Rules to ensure proper CI monitoring and failure handling",
         "guidelines": [
-          "Monitor CI runs after each commit",
-          "Fix any failing checks promptly",
-          "Ensure configurations stay aligned",
-          "Document any required follow-up work",
-          "Keep build status green"
+          "Monitor CI runs after each commit via web interface and notifications",
+          "Check verification logs for specific errors",
+          "Address failing checks immediately",
+          "Ensure all required tools are installed via Brewfile",
+          "Keep build status green",
+          "Run local validation before pushing",
+          "Review build failure logs in ~/.cirrus/logs/build_failures.log"
         ]
       }
     }
@@ -166,7 +190,24 @@
     },
     "ci-monitoring": {
       "enabled": true,
-      "autofix": false
+      "autofix": false,
+      "web-monitoring": true,
+      "notification": {
+        "enabled": true,
+        "sounds": true,
+        "log-failures": true
+      },
+      "verify-checks": [
+        "docker",
+        "orb",
+        "kubectl",
+        "helm",
+        "docker_completion",
+        "orb_completion",
+        "kubectl_completion",
+        "helm_completion",
+        "terraform_completion"
+      ]
     }
   }
 } 

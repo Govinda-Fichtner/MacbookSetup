@@ -3,6 +3,9 @@
 # To use this file for installation, run: brew bundle
 
 # Taps (Third-party repositories)
+tap "homebrew/core"
+tap "homebrew/bundle"
+tap "cirruslabs/cli"  # Added for Cirrus CI tooling
 
 # Formulae (Command-line packages)
 brew "git"
@@ -12,6 +15,7 @@ brew "pyenv"
 brew "direnv"
 brew "starship"         # Cross-shell customizable prompt
 brew "fzf"              # Command-line fuzzy finder
+brew "terminal-notifier" # macOS notification system integration
 
 # Kubernetes and Container Tools
 brew "kubectl"          # Kubernetes command-line tool
@@ -38,4 +42,12 @@ cask "claude"           # Anthropic's official Claude AI desktop app
 # These fonts are now available through the main Homebrew cask repository (no special tap needed)
 cask "font-fira-code-nerd-font"         # Popular coding font with Nerd Font icons, works well with Starship
 cask "font-jetbrains-mono-nerd-font"    # Clean, crisp font with Nerd Font icons, excellent for terminal use
+
+# Development Tools
+brew "zsh"
+brew "antidote"      # Plugin manager for zsh
+brew "docker"
+
+# CI/CD Tools
+brew "cirruslabs/cli/cirrus"  # Cirrus CI CLI for local validation and monitoring
 
