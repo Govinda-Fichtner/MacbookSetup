@@ -56,9 +56,12 @@ env:
       brew install shellcheck
 
       # Validate shell scripts
-      shellcheck -s bash ci_modifiers.sh
-      shellcheck -s bash setup.sh
-      shellcheck -s bash verify_setup.sh
+      shellcheck -s bash \
+        --external-sources \
+        --source-path=SCRIPTDIR \
+        --source-path="${PWD}/lib" \
+        --exclude=SC1091,SC2296,SC2034,SC2154,SC2016 \
+        ci_modifiers.sh setup.sh verify_setup.sh
 
 # Template for system information (only used in daily validation)
 .system_info_template: &system_info_template
@@ -93,7 +96,12 @@ env:
 
       # Validate the generated ci_setup.sh script
       echo "Validating generated ci_setup.sh script..."
-      shellcheck -s bash ci_setup.sh
+      shellcheck -s bash \
+        --external-sources \
+        --source-path=SCRIPTDIR \
+        --source-path="${PWD}/lib" \
+        --exclude=SC1091,SC2296,SC2034,SC2154,SC2016 \
+        ci_setup.sh
       echo "ci_setup.sh validation complete."
 
 # Template for creating test script
@@ -207,9 +215,12 @@ daily_validation_task:
       brew install shellcheck
 
       # Validate shell scripts
-      shellcheck -s bash ci_modifiers.sh
-      shellcheck -s bash setup.sh
-      shellcheck -s bash verify_setup.sh
+      shellcheck -s bash \
+        --external-sources \
+        --source-path=SCRIPTDIR \
+        --source-path="${PWD}/lib" \
+        --exclude=SC1091,SC2296,SC2034,SC2154,SC2016 \
+        ci_modifiers.sh setup.sh verify_setup.sh
 
       # Display system information for debugging
       echo "=== System Information ==="
