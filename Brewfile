@@ -3,8 +3,6 @@
 # To use this file for installation, run: brew bundle
 
 # Taps (Third-party repositories)
-tap "homebrew/core"
-tap "homebrew/bundle"
 tap "cirruslabs/cli"  # Added for Cirrus CI tooling
 
 # Formulae (Command-line packages)

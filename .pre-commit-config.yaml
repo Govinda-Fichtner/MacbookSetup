@@ -29,3 +29,13 @@ repos:
     hooks:
       - id: yamllint
         args: ["-c", ".yamllint.yaml"]
+
+  - repo: local
+    hooks:
+      - id: pre-commit-logger
+        name: Log pre-commit results
+        entry: scripts/log_precommit.sh
+        language: script
+        stages: [pre-commit]
+        always_run: true
+        pass_filenames: false
