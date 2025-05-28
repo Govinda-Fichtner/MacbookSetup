@@ -8,15 +8,15 @@
 set -euo pipefail
 
 # Default values
-NOTIFICATION_SOUND="Funk"
-CI_DASHBOARD="https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup"
+typeset NOTIFICATION_SOUND="Funk"
+typeset CI_DASHBOARD="https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup"
 
 # Function to send notification
 send_notification() {
-    local status=$1
-    local message=${2:-"No message provided"}
-    local title="Cirrus CI"
-    local subtitle=""
+    typeset status=$1
+    typeset message=${2:-"No message provided"}
+    typeset title="Cirrus CI"
+    typeset subtitle=""
     
     case $status in
         "failure")
@@ -48,9 +48,9 @@ send_notification() {
 
 # Function to get build errors from log
 get_build_errors() {
-    local commit_hash
+    typeset commit_hash
     commit_hash=$(git rev-parse HEAD)
-    local errors
+    typeset errors
     
     # Fetch and parse errors from the verification log
     errors=$(curl -s "https://api.cirrus-ci.com/v1/task/${commit_hash}/logs/verify.log" | grep '::error::' || true)
@@ -64,8 +64,8 @@ get_build_errors() {
 
 # Main execution
 main() {
-    local status=${1:-"unknown"}
-    local message=${2:-$(get_build_errors)}
+    typeset status=${1:-"unknown"}
+    typeset message=${2:-$(get_build_errors)}
     
     send_notification "$status" "$message"
     
