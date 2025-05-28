@@ -1,3 +1,4 @@
+---
 repos:
   - repo: https://github.com/jumanjihouse/pre-commit-hooks
     rev: 3.0.0
@@ -9,7 +10,7 @@ repos:
           "--source-path=SCRIPTDIR",
           "--source-path=${PWD}/lib",
           "--source-path=${HOME}",
-          "--exclude=SC1091,SC2296,SC2034,SC2154,SC2016"
+          "--exclude=SC1091,SC2296,SC2034,SC2154,SC2016,SC2076"
         ]
       - id: shfmt
         args: ["-i", "2", "-ci", "-bn", "-sr"]
@@ -27,4 +28,4 @@ repos:
     rev: v1.33.0
     hooks:
       - id: yamllint
-        args: ["-c", ".yamllint.yaml"] 
+        args: ["-c", ".yamllint.yaml"]

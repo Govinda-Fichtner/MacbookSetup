@@ -112,4 +112,3 @@ If you have any questions about contributing, feel free to open an issue labeled
 ---
 
 Thank you for taking the time to contribute! Your efforts help make this project better for everyone.
-

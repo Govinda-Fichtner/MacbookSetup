@@ -197,10 +197,10 @@ daily_validation_task:
   trigger_type: scheduled
   cron: "0 0 * * *"  # Run at midnight UTC every day
 
-  # Include common configurations using templates
-  <<: *macos_instance_template
-  <<: *brew_cache_template
-  <<: *clone_template
+  # Include all configurations using templates
+  <<: [*macos_instance_template, *brew_cache_template, *clone_template,
+       *prepare_template, *create_test_template, *setup_template,
+       *verify_template, *artifacts_template]
 
   # Validate shell scripts with ShellCheck including system info
   shellcheck_script:
@@ -232,24 +232,11 @@ daily_validation_task:
       echo "Shell: $SHELL"
       echo "ZSH version: $(zsh --version)"
 
-  # Include remaining common configurations
-  <<: *prepare_template
-  <<: *create_test_template
-  <<: *setup_template
-  <<: *verify_template
-  <<: *artifacts_template
-
 # Task for testing the setup script on macOS ARM (on-demand)
 macos_arm_test_task:
   name: macos_arm_test
 
   # Include common configurations using templates
-  <<: *macos_instance_template
-  <<: *brew_cache_template
-  <<: *clone_template
-  <<: *shellcheck_template
-  <<: *prepare_template
-  <<: *create_test_template
-  <<: *setup_template
-  <<: *verify_template
-  <<: *artifacts_template
+  <<: [*macos_instance_template, *brew_cache_template, *clone_template,
+       *shellcheck_template, *prepare_template, *create_test_template,
+       *setup_template, *verify_template, *artifacts_template]

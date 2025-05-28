@@ -98,4 +98,3 @@ The following hooks are configured:
   - Trailing whitespace removal
   - Shebang checks
   - Executable permissions
-
