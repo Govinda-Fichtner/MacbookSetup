@@ -34,7 +34,7 @@
                 "severity": "style",
                 "external-sources": true,
                 "check-sourced": true,
-                "source-path": ["${workspace}", "${workspace}/lib"],
+                "source-path": ["${workspace}", "${workspace}/lib", "${HOME}"],
                 "disable": ["SC1091", "SC2296", "SC2034", "SC2154", "SC2016"],
                 "enable": ["all"],
                 "format": "json"
@@ -87,12 +87,86 @@
           }
         }
       }
+    },
+    {
+      "name": "ci-pre-commit-alignment",
+      "description": "Ensure alignment between CI and pre-commit configurations",
+      "patterns": [
+        {
+          "pattern": "\\.cirrus\\.yml$|\\.pre-commit-config\\.yaml$",
+          "checks": [
+            {
+              "type": "regex",
+              "pattern": "shellcheck.*--exclude=([^\\s]+)",
+              "message": "ShellCheck exclude rules must match between CI and pre-commit configurations",
+              "severity": "error"
+            },
+            {
+              "type": "regex",
+              "pattern": "shellcheck.*--source-path=([^\\s]+)",
+              "message": "ShellCheck source paths must match between CI and pre-commit configurations",
+              "severity": "error"
+            },
+            {
+              "type": "regex",
+              "pattern": "shfmt.*-i\\s+([0-9]+)",
+              "message": "shfmt indentation settings must be consistent across configurations",
+              "severity": "error"
+            }
+          ]
+        }
+      ],
+      "actions": {
+        "on-save": "validate",
+        "on-commit": {
+          "command": "git rev-parse HEAD | xargs -I {} echo 'Monitoring CI run for commit {}' && open https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup/{}",
+          "message": "Opening CI run for monitoring. Please ensure the build passes before proceeding."
+        }
+      }
+    },
+    {
+      "name": "ci-monitoring",
+      "description": "Enforce CI monitoring practices",
+      "patterns": [
+        {
+          "pattern": ".*",
+          "checks": [
+            {
+              "type": "commit",
+              "options": {
+                "require-ci-check": true,
+                "wait-for-completion": true,
+                "auto-fix-attempts": 3,
+                "monitor-url": "https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup"
+              }
+            }
+          ]
+        }
+      ],
+      "documentation": {
+        "description": "Rules to ensure proper CI monitoring and follow-up",
+        "guidelines": [
+          "Monitor CI runs after each commit",
+          "Fix any failing checks promptly",
+          "Ensure configurations stay aligned",
+          "Document any required follow-up work",
+          "Keep build status green"
+        ]
+      }
     }
   ],
   "settings": {
     "shell-script-validation": {
       "enabled": true,
       "autofix": true
+    },
+    "ci-pre-commit-alignment": {
+      "enabled": true,
+      "autofix": false
+    },
+    "ci-monitoring": {
+      "enabled": true,
+      "autofix": false
     }
   }
 } 
