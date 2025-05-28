@@ -5,15 +5,23 @@
       "name": "shell-script-validation",
       "description": "Enforce shell script best practices and prevent common CI errors",
       "documentation": {
-        "url": "https://www.shellcheck.net/wiki/SC1091",
+        "url": "https://www.shellcheck.net/wiki",
         "description": "Rules to prevent common shell script CI errors and ensure proper validation.",
         "guidelines": [
           "Always run ShellCheck after every change of shell scripts to ensure they are not flawed",
           "Use absolute paths when sourcing files to prevent ShellCheck SC1091 errors",
           "Add proper ShellCheck directives for known exceptions",
           "Control command output in CI environments",
-          "Maintain consistent shell script headers"
-        ]
+          "Maintain consistent shell script headers",
+          "Use zsh as primary shell with bash compatibility mode for ShellCheck"
+        ],
+        "disabled_rules": {
+          "SC1091": "Not following source - needed for dynamic includes",
+          "SC2296": "Parameter expansion array access - needed for zsh compatibility",
+          "SC2034": "Unused variables - needed for zsh compatibility",
+          "SC2154": "Referenced but not assigned - needed for zsh compatibility",
+          "SC2016": "Expressions in single quotes - needed for eval safety"
+        }
       },
       "patterns": [
         {
@@ -26,16 +34,23 @@
                 "severity": "style",
                 "external-sources": true,
                 "check-sourced": true,
-                "source-path": ["${workspace}"],
-                "disable": ["SC1091"],
+                "source-path": ["${workspace}", "${workspace}/lib"],
+                "disable": ["SC1091", "SC2296", "SC2034", "SC2154", "SC2016"],
                 "enable": ["all"],
                 "format": "json"
               }
             },
             {
               "type": "regex",
-              "pattern": "source\\s+[\"']?[^/]",
-              "message": "Use absolute paths when sourcing files to prevent ShellCheck SC1091 errors",
+              "pattern": "^#!/bin/zsh\\n# shellcheck shell=bash\\n# shellcheck disable=([A-Z0-9,]+)$",
+              "message": "Shell scripts should have proper header with shellcheck directives",
+              "inverse": true,
+              "severity": "error"
+            },
+            {
+              "type": "regex",
+              "pattern": "source\\s+[\"']?[^/$]",
+              "message": "Use absolute paths or ./ prefix when sourcing files",
               "severity": "warning"
             },
             {
@@ -43,19 +58,6 @@
               "pattern": "\\bsource\\s+[\"']?\\$\\{?ZDOTDIR",
               "message": "When sourcing zsh config files, add # shellcheck disable=SC1091 above the line",
               "severity": "warning"
-            },
-            {
-              "type": "regex",
-              "pattern": "^#!/bin/(ba)?sh",
-              "message": "Shell scripts should use #!/bin/zsh for consistency",
-              "severity": "error"
-            },
-            {
-              "type": "regex",
-              "pattern": "^#!/bin/zsh\\n# shellcheck shell=bash",
-              "message": "Shell scripts should declare shellcheck shell type",
-              "inverse": true,
-              "severity": "error"
             },
             {
               "type": "regex",
@@ -78,6 +80,10 @@
           "SC1091": {
             "pattern": "source\\s+([\"']?)(.*?)\\1",
             "replacement": "# shellcheck disable=SC1091\nsource $1$2$1"
+          },
+          "missing-header": {
+            "pattern": "^#!.*\\n(?!# shellcheck)",
+            "replacement": "#!/bin/zsh\n# shellcheck shell=bash\n# shellcheck disable=SC2296,SC2034,SC2154,SC1091\n"
           }
         }
       }
