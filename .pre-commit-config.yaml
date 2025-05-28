@@ -7,6 +7,8 @@ repos:
           "--shell=bash",
           "--external-sources",
           "--source-path=SCRIPTDIR",
+          "--source-path=${PWD}/lib",
+          "--source-path=${HOME}",
           "--exclude=SC1091,SC2296,SC2034,SC2154,SC2016"
         ]
       - id: shfmt
