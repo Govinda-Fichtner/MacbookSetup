@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "name": "shell-script-validation",
+      "description": "Enforce shell script best practices and prevent common CI errors",
+      "patterns": [
+        {
+          "pattern": "\\.sh$",
+          "checks": [
+            {
+              "type": "shellcheck",
+              "options": {
+                "shell": "bash",
+                "severity": "style",
+                "external-sources": true,
+                "check-sourced": true,
+                "source-path": ["${workspace}"],
+                "disable": ["SC1091"],
+                "enable": ["all"],
+                "format": "json"
+              }
+            },
+            {
+              "type": "regex",
+              "pattern": "source\\s+[\"']?[^/]",
+              "message": "Use absolute paths when sourcing files to prevent ShellCheck SC1091 errors",
+              "severity": "warning"
+            },
+            {
+              "type": "regex",
+              "pattern": "\\bsource\\s+[\"']?\\$\\{?ZDOTDIR",
+              "message": "When sourcing zsh config files, add # shellcheck disable=SC1091 above the line",
+              "severity": "warning"
+            }
+          ]
+        }
+      ],
+      "actions": {
+        "on-save": "validate",
+        "quick-fix": {
+          "SC1091": {
+            "pattern": "source\\s+([\"']?)(.*?)\\1",
+            "replacement": "# shellcheck disable=SC1091\nsource $1$2$1"
+          }
+        }
+      },
+      "documentation": {
+        "url": "https://www.shellcheck.net/wiki/SC1091",
+        "description": "Rules to prevent common shell script CI errors, particularly around file sourcing and ShellCheck validation."
+      }
+    },
+    {
+      "name": "shell-script-headers",
+      "description": "Enforce consistent shell script headers and shellcheck directives",
+      "patterns": [
+        {
+          "pattern": "\\.sh$",
+          "checks": [
+            {
+              "type": "regex",
+              "pattern": "^#!/bin/(ba)?sh",
+              "message": "Shell scripts should use #!/bin/zsh for consistency",
+              "severity": "error"
+            },
+            {
+              "type": "regex",
+              "pattern": "^#!/bin/zsh\\n# shellcheck shell=bash",
+              "message": "Shell scripts should declare shellcheck shell type",
+              "inverse": true,
+              "severity": "error"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ci-output-control",
+      "description": "Enforce practices to reduce CI output noise",
+      "patterns": [
+        {
+          "pattern": "\\.sh$",
+          "checks": [
+            {
+              "type": "regex",
+              "pattern": "(?<!2>&1|>/dev/null)\\s+[|>]",
+              "message": "Command output should be explicitly redirected in CI scripts",
+              "severity": "warning"
+            },
+            {
+              "type": "regex",
+              "pattern": "eval\\s+\"\\$\\([^)]+\\)\"\\s*(?!>/dev/null)",
+              "message": "Eval command output should be redirected to control CI output",
+              "severity": "warning"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "shell-script-validation": {
+      "enabled": true,
+      "autofix": true
+    }
+  }
+} 
