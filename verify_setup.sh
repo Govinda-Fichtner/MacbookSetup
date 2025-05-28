@@ -97,19 +97,25 @@ check_completion() {
 verify_shell_config() {
   log_info "Verifying shell configuration"
 
-  # Source zshrc silently
-  if [ -f "${ZDOTDIR:-$HOME}/.zshrc" ]; then
-    source "${ZDOTDIR:-$HOME}/.zshrc" > /dev/null 2>&1 || {
-      log_error "Failed to source .zshrc"
-      return 1
-    }
-  fi
-
   # Verify shell is zsh
   if [[ "$SHELL" != *"zsh"* ]]; then
     log_error "Current shell is not zsh: $SHELL"
     return 1
   fi
+
+  # Check for essential shell files without sourcing them
+  local essential_files=(
+    "${ZDOTDIR:-$HOME}/.zshrc"
+    "${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
+    "${ZDOTDIR:-$HOME}/.zsh_aliases"
+  )
+
+  for file in "${essential_files[@]}"; do
+    if [[ ! -f "$file" ]]; then
+      log_error "Missing essential file: $file"
+      return 1
+    fi
+  done
 
   return 0
 }
