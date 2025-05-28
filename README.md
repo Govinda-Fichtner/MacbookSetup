@@ -69,3 +69,33 @@ The setup includes a comprehensive completion testing framework that verifies:
 
 This completion testing ensures that developers have full access to command-line completions, improving productivity and reducing errors.
 
+## Development
+
+### Pre-commit Hooks
+
+This project uses pre-commit hooks to ensure code quality and consistency. To set up pre-commit:
+
+1. Install pre-commit:
+   ```bash
+   brew install pre-commit
+   ```
+
+2. Install the hooks:
+   ```bash
+   pre-commit install
+   ```
+
+3. (Optional) Run against all files:
+   ```bash
+   pre-commit run --all-files
+   ```
+
+The following hooks are configured:
+- ShellCheck: Validates shell scripts
+- YAML lint: Ensures YAML file consistency
+- General file hygiene:
+  - End of file fixing
+  - Trailing whitespace removal
+  - Shebang checks
+  - Executable permissions
+
