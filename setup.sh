@@ -327,17 +327,17 @@ fi
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 zstyle ':completion::complete:*' use-cache on
-zstyle ':completion::complete:*' cache-path '$ZCOMPCACHE_DIR'
+zstyle ':completion::complete:*' cache-path \"\$ZCOMPCACHE_DIR\"
 
 # Source fzf completions if available
-if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.zsh" ]]; then
-    source "$(brew --prefix)/opt/fzf/shell/completion.zsh" 2>/dev/null
+if [[ -f \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" ]]; then
+    source \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" 2>/dev/null
 fi
 
 # Additional completion sources
 # OrbStack completion
 if command -v orb >/dev/null 2>&1; then
-    eval "$(orb completion zsh)"
+    eval \"\$(orb completion zsh)\"
 fi
 
 # Docker completion
