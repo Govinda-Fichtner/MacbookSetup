@@ -285,6 +285,7 @@ verify_shell_config() {
 # Function to verify software tools
 verify_software_tools() {
   log_info "Verifying software tools"
+  local failed_tools=()
 
   # Core tools
   log_info "Core Tools"
@@ -294,7 +295,7 @@ verify_software_tools() {
       print_status "$tool" "PASS" "$version"
     else
       print_status "$tool" "FAIL"
-      return 1
+      failed_tools+=("$tool")
     fi
   done
 
@@ -306,7 +307,7 @@ verify_software_tools() {
       print_status "$tool" "PASS" "$version"
     else
       print_status "$tool" "FAIL"
-      return 1
+      failed_tools+=("$tool")
     fi
   done
 
@@ -318,9 +319,14 @@ verify_software_tools() {
       print_status "$tool" "PASS" "$version"
     else
       print_status "$tool" "FAIL"
-      return 1
+      failed_tools+=("$tool")
     fi
   done
+
+  if [[ ${#failed_tools[@]} -gt 0 ]]; then
+    log_error "Failed tools: ${failed_tools[*]}"
+    return 1
+  fi
 
   log_success "Software tools verified"
   return 0
@@ -329,6 +335,7 @@ verify_software_tools() {
 # Function to verify shell completions
 verify_shell_completions() {
   log_info "Verifying shell completions"
+  local failed_completions=()
 
   # Create completions directory if it doesn't exist
   mkdir -p "${HOME}/.zsh/completions"
@@ -340,7 +347,7 @@ verify_shell_completions() {
       print_status "$tool completion" "PASS"
     else
       print_status "$tool completion" "FAIL"
-      return 1
+      failed_completions+=("$tool")
     fi
   done
 
@@ -351,7 +358,7 @@ verify_shell_completions() {
       print_status "$tool completion" "PASS"
     else
       print_status "$tool completion" "FAIL"
-      return 1
+      failed_completions+=("$tool")
     fi
   done
 
@@ -362,9 +369,14 @@ verify_shell_completions() {
       print_status "$tool completion" "PASS"
     else
       print_status "$tool completion" "FAIL"
-      return 1
+      failed_completions+=("$tool")
     fi
   done
+
+  if [[ ${#failed_completions[@]} -gt 0 ]]; then
+    log_error "Failed completions: ${failed_completions[*]}"
+    return 1
+  fi
 
   log_success "Shell completions verified"
   return 0
@@ -373,6 +385,7 @@ verify_shell_completions() {
 # Function to verify zsh plugins
 verify_zsh_plugins() {
   log_info "Verifying zsh plugins"
+  local failed_plugins=()
 
   # Check if plugins file exists
   if [[ ! -f "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" ]]; then
@@ -387,7 +400,7 @@ verify_zsh_plugins() {
       print_status "$plugin" "PASS"
     else
       print_status "$plugin" "FAIL"
-      return 1
+      failed_plugins+=("$plugin")
     fi
   done
 
@@ -398,9 +411,14 @@ verify_zsh_plugins() {
       print_status "$plugin" "PASS"
     else
       print_status "$plugin" "FAIL"
-      return 1
+      failed_plugins+=("$plugin")
     fi
   done
+
+  if [[ ${#failed_plugins[@]} -gt 0 ]]; then
+    log_error "Failed plugins: ${failed_plugins[*]}"
+    return 1
+  fi
 
   log_success "Zsh plugins verified"
   return 0
@@ -417,79 +435,56 @@ main() {
   fi
 
   log_info "Starting verification v${SCRIPT_VERSION}"
+  local verification_failed=false
 
   # Verify shell configuration first
-  verify_shell_config || {
+  if ! verify_shell_config; then
     log_error "Shell configuration verification failed"
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      exec 1>&3 # Restore stdout
-      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-      rm -f "$temp_log"
-    fi
-    return 1
-  }
+    verification_failed=true
+  fi
 
   # Verify Antidote setup
-  verify_antidote || {
+  if ! verify_antidote; then
     log_error "Antidote verification failed"
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      exec 1>&3 # Restore stdout
-      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-      rm -f "$temp_log"
-    fi
-    return 1
-  }
+    verification_failed=true
+  fi
 
   # Verify software tools
-  verify_software_tools || {
+  if ! verify_software_tools; then
     log_error "Software tools verification failed"
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      exec 1>&3 # Restore stdout
-      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-      rm -f "$temp_log"
-    fi
-    return 1
-  }
+    verification_failed=true
+  fi
 
   # Verify shell completions
-  verify_shell_completions || {
+  if ! verify_shell_completions; then
     log_error "Shell completions verification failed"
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      exec 1>&3 # Restore stdout
-      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-      rm -f "$temp_log"
-    fi
-    return 1
-  }
+    verification_failed=true
+  fi
 
   # Verify zsh plugins
-  verify_zsh_plugins || {
+  if ! verify_zsh_plugins; then
     log_error "Zsh plugins verification failed"
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      exec 1>&3 # Restore stdout
-      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-      rm -f "$temp_log"
-    fi
-    return 1
-  }
+    verification_failed=true
+  fi
 
   # Verify OrbStack setup
-  verify_orbstack || {
+  if ! verify_orbstack; then
     log_error "OrbStack verification failed"
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      exec 1>&3 # Restore stdout
-      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-      rm -f "$temp_log"
-    fi
-    return 1
-  }
+    verification_failed=true
+  fi
 
-  log_success "All checks passed"
   if [[ "$QUIET_MODE" == "true" ]]; then
     exec 1>&3 # Restore stdout
     grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
     rm -f "$temp_log"
   fi
+
+  if [[ "$verification_failed" == "true" ]]; then
+    log_error "Verification failed - see above for details"
+    return 1
+  fi
+
+  log_success "All checks passed"
   return 0
 }
 
