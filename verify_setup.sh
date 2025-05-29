@@ -10,6 +10,12 @@ if [ -n "$BASH_VERSION" ]; then
   exec /bin/zsh "$0" "$@"
 fi
 
+# Initialize Antidote early
+if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
+  source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+  antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
+fi
+
 # Script configuration
 readonly SCRIPT_VERSION="1.0.0"
 readonly COMPLETION_DIR="${HOME}/.zsh/completions"
@@ -110,6 +116,38 @@ print_status() {
 # Utility functions
 check_command() {
   command -v "$1" > /dev/null 2>&1
+}
+
+# Function to verify Antidote setup
+verify_antidote() {
+  log_info "Verifying Antidote setup"
+
+  # Check if Antidote is installed
+  if ! check_command antidote; then
+    log_error "Antidote is not installed"
+    return 1
+  fi
+
+  # Check if Antidote directory exists
+  if [[ ! -d "${ZDOTDIR:-$HOME}/.antidote" ]]; then
+    log_error "Antidote directory not found"
+    return 1
+  fi
+
+  # Check if plugins file exists
+  if [[ ! -f "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" ]]; then
+    log_error "Antidote plugins file not found"
+    return 1
+  fi
+
+  # Check if Antidote is properly initialized
+  if ! typeset -f __antidote_setup > /dev/null; then
+    log_error "Antidote is not properly initialized"
+    return 1
+  fi
+
+  log_success "Antidote setup verified"
+  return 0
 }
 
 # Helper function to check completion setup
@@ -213,6 +251,12 @@ verify_shell_config() {
       return 1
     fi
   done
+
+  # Verify Antidote setup
+  verify_antidote || {
+    log_error "Antidote verification failed"
+    return 1
+  }
 
   return 0
 }
