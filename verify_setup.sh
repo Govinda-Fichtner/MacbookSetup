@@ -292,7 +292,7 @@ verify_software_tools() {
 
   # Container tools
   log_info "Container Tools"
-  for tool in docker orb orbctl kubectl helm; do
+  for tool in orb orbctl kubectl helm; do
     if check_command "$tool"; then
       version=$("$tool" version 2> /dev/null | head -1 || echo "")
       print_status PASS "$tool" "$version"
@@ -301,6 +301,19 @@ verify_software_tools() {
       failed_tools+=("$tool")
     fi
   done
+
+  # Docker is provided by OrbStack
+  if [[ "${SKIP_ORBSTACK:-false}" == "true" ]]; then
+    print_status SKIP "docker" "Skipped (provided by OrbStack)"
+  else
+    if check_command "docker"; then
+      version=$(docker version --format '{{.Client.Version}}' 2> /dev/null || echo "")
+      print_status PASS "docker" "$version"
+    else
+      print_status FAIL "docker"
+      failed_tools+=("docker")
+    fi
+  fi
 
   # Infrastructure tools
   log_info "Infrastructure Tools"
@@ -344,7 +357,7 @@ verify_shell_completions() {
 
   # Container completions
   log_info "Container Completions"
-  for tool in docker orb orbctl kubectl helm; do
+  for tool in kubectl helm; do
     if check_completion "$tool"; then
       print_status PASS "$tool completion"
     else
@@ -352,6 +365,22 @@ verify_shell_completions() {
       failed_completions+=("$tool")
     fi
   done
+
+  # Docker and OrbStack completions
+  if [[ "${SKIP_ORBSTACK:-false}" == "true" ]]; then
+    print_status SKIP "docker completion" "Skipped (provided by OrbStack)"
+    print_status SKIP "orb completion" "Skipped (OrbStack disabled)"
+    print_status SKIP "orbctl completion" "Skipped (OrbStack disabled)"
+  else
+    for tool in docker orb orbctl; do
+      if check_completion "$tool"; then
+        print_status PASS "$tool completion"
+      else
+        print_status FAIL "$tool completion"
+        failed_completions+=("$tool")
+      fi
+    done
+  fi
 
   # Infrastructure completions
   log_info "Infrastructure Completions"
