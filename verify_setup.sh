@@ -20,6 +20,20 @@ if [[ "${MACBOOK_SETUP_QUIET:-}" == "true" ]]; then
   QUIET_MODE="true"
 fi
 
+# In CI mode, suppress all shell initialization output
+if [[ "$QUIET_MODE" == "true" ]]; then
+  # Redirect all shell initialization output to /dev/null
+  exec 2> /dev/null
+  # Disable shell features that produce output
+  setopt NO_NOTIFY
+  setopt NO_AUTO_CD
+  setopt NO_BEEP
+  # Disable plugin loading output
+  ZSH_AUTOSUGGEST_USE_ASYNC=true
+  ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
+  ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+fi
+
 # Color definitions (disabled in quiet mode)
 if [[ "$QUIET_MODE" == "true" ]]; then
   readonly RED=''
@@ -37,10 +51,10 @@ fi
 
 # Logging functions for CI environment
 if [[ "$QUIET_MODE" == "true" ]]; then
-  log_info() { echo "::info::$1"; }
-  log_success() { echo "::success::$1"; }
-  log_warning() { echo "::warning::$1"; }
-  log_error() { echo "::error::$1"; }
+  log_info() { echo "::info::$1" >&3; }
+  log_success() { echo "::success::$1" >&3; }
+  log_warning() { echo "::warning::$1" >&3; }
+  log_error() { echo "::error::$1" >&3; }
   log_debug() { :; } # No-op in CI
 else
   # Keep existing logging functions for local use
@@ -59,9 +73,9 @@ print_status() {
 
   if [[ "$QUIET_MODE" == "true" ]]; then
     case "$result" in
-      "PASS") echo "::success::✓ $description${version:+ ($version)}" ;;
-      "FAIL") echo "::error::✗ $description" ;;
-      *) echo "::info::$result $description${version:+ ($version)}" ;;
+      "PASS") echo "::success::✓ $description${version:+ ($version)}" >&3 ;;
+      "FAIL") echo "::error::✗ $description" >&3 ;;
+      *) echo "::info::$result $description${version:+ ($version)}" >&3 ;;
     esac
   else
     printf "%-35s ... %s%s\n" "$description" "$result" "${version:+ ($version)}"
@@ -180,11 +194,13 @@ verify_shell_config() {
 
 # Main verification function
 main() {
-  # Redirect all output to a temporary file
-  local temp_log
-  temp_log=$(mktemp)
-  exec 3>&1                # Save stdout
-  exec 1> "$temp_log" 2>&1 # Redirect stdout and stderr to temp file
+  # In CI mode, redirect all output to a temporary file
+  if [[ "$QUIET_MODE" == "true" ]]; then
+    local temp_log
+    temp_log=$(mktemp)
+    exec 3>&1                # Save stdout
+    exec 1> "$temp_log" 2>&1 # Redirect stdout and stderr to temp file
+  fi
 
   log_info "Starting verification v${SCRIPT_VERSION}"
 
@@ -195,18 +211,22 @@ main() {
   # Verify shell configuration first
   verify_shell_config || {
     log_error "Shell configuration verification failed"
-    exec 1>&3 # Restore stdout
-    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-    rm -f "$temp_log"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      exec 1>&3 # Restore stdout
+      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+      rm -f "$temp_log"
+    fi
     return 1
   }
 
   # Verify OrbStack setup
   verify_orbstack || {
     log_error "OrbStack verification failed"
-    exec 1>&3 # Restore stdout
-    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-    rm -f "$temp_log"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      exec 1>&3 # Restore stdout
+      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+      rm -f "$temp_log"
+    fi
     return 1
   }
 
@@ -257,16 +277,20 @@ main() {
 
   if [[ ${#failed_items[@]} -gt 0 ]]; then
     log_error "Failed items: ${failed_items[*]}"
-    exec 1>&3 # Restore stdout
-    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-    rm -f "$temp_log"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      exec 1>&3 # Restore stdout
+      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+      rm -f "$temp_log"
+    fi
     return 1
   fi
 
   log_success "All checks passed"
-  exec 1>&3 # Restore stdout
-  grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-  rm -f "$temp_log"
+  if [[ "$QUIET_MODE" == "true" ]]; then
+    exec 1>&3 # Restore stdout
+    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+    rm -f "$temp_log"
+  fi
   return 0
 }
 
