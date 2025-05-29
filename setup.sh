@@ -208,6 +208,18 @@ install_packages() {
   # Setup OrbStack
   setup_orbstack || log_warning "OrbStack setup incomplete"
 
+  # Setup OrbStack completions after installation
+  if command -v orbctl > /dev/null 2>&1; then
+    log_info "Setting up OrbStack completions..."
+    orbctl completion zsh > "${COMPLETION_DIR}/_orbctl" 2> /dev/null || log_warning "Failed to generate orbctl completion"
+
+    if [[ -f "${SCRIPT_DIR}/completions/_orb" ]]; then
+      cp "${SCRIPT_DIR}/completions/_orb" "${COMPLETION_DIR}/_orb" 2> /dev/null || log_warning "Failed to install custom orb completion"
+    fi
+  else
+    log_warning "OrbStack not found, skipping completion setup"
+  fi
+
   log_success "Package installation completed."
 }
 
@@ -327,18 +339,6 @@ setup_shell_completions() {
   # Ensure completion directories exist
   ensure_dir "$COMPLETION_DIR"
   ensure_dir "$ZCOMPCACHE_DIR"
-
-  # OrbStack completions: generate orbctl and install custom orb completion
-  if command -v orbctl > /dev/null 2>&1; then
-    log_info "Setting up OrbStack completions..."
-    orbctl completion zsh > "${COMPLETION_DIR}/_orbctl" 2> /dev/null || log_warning "Failed to generate orbctl completion"
-
-    if [[ -f "${SCRIPT_DIR}/completions/_orb" ]]; then
-      cp "${SCRIPT_DIR}/completions/_orb" "${COMPLETION_DIR}/_orb" 2> /dev/null || log_warning "Failed to install custom orb completion"
-    fi
-  else
-    log_warning "OrbStack not found, skipping completion setup"
-  fi
 
   # Add completion configuration to .zshrc
   # shellcheck disable=SC2124
