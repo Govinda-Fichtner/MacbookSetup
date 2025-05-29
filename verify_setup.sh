@@ -64,7 +64,12 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 RESET='\033[0m'
 
-# Print a status line with color and symbol
+# Add the missing check_command function
+check_command() {
+  command -v "$1" > /dev/null 2>&1
+}
+
+# Fix print_status to use a local variable for status
 print_status() {
   local status=$1
   local label=$2
