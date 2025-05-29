@@ -173,8 +173,18 @@ setup_orbstack() {
   log_info "Setting up OrbStack..."
   if ! check_command orbctl; then
     log_error "OrbStack is not installed. Please install it first."
-    exit 1
+    return 1
   fi
+
+  # Start OrbStack if it's not running
+  if ! orbctl status > /dev/null 2>&1; then
+    log_info "Starting OrbStack..."
+    orbctl start || {
+      log_error "Failed to start OrbStack"
+      return 1
+    }
+  fi
+
   log_success "OrbStack setup completed"
 }
 
