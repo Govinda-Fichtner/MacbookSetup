@@ -133,10 +133,10 @@ verify_antidote() {
     return 1
   fi
 
-  # Check if Antidote directory exists
+  # Create Antidote directory if it doesn't exist
   if [[ ! -d "${ZDOTDIR:-$HOME}/.antidote" ]]; then
-    log_error "Antidote directory not found"
-    return 1
+    log_info "Creating Antidote directory at ${ZDOTDIR:-$HOME}/.antidote"
+    mkdir -p "${ZDOTDIR:-$HOME}/.antidote"
   fi
 
   # Check if plugins file exists
