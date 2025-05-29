@@ -10,6 +10,17 @@ if [ -n "$BASH_VERSION" ]; then
   exec /bin/zsh "$0" "$@"
 fi
 
+# Initialize completion system early
+autoload -Uz compinit
+if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
+  compinit -i > /dev/null 2>&1
+else
+  compinit -C -i > /dev/null 2>&1
+fi
+
+# Add completions directory to fpath
+fpath=("${HOME}/.zsh/completions" "${fpath[@]}")
+
 # Initialize Antidote early
 if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
   source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
