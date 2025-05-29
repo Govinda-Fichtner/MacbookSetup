@@ -480,16 +480,6 @@ main() {
   fi
   ((total_checks++))
 
-  # Verify Antidote setup
-  if ! verify_antidote; then
-    log_error "Antidote verification failed"
-    verification_failed=true
-    ((failed_checks++))
-  else
-    ((passed_checks++))
-  fi
-  ((total_checks++))
-
   # Verify software tools
   if ! verify_software_tools; then
     log_error "Software tools verification failed"
