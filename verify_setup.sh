@@ -5,12 +5,22 @@
 # macOS Development Environment Verification Script
 # This script verifies that all tools and configurations are properly installed
 
-# Ensure we're running in zsh
+# Force zsh execution
 if [ -n "$BASH_VERSION" ]; then
-  exec /bin/zsh "$0" "$@"
+  exec zsh "$0" "$@"
+  exit 1 # Exit if exec fails
 fi
 
-# Initialize completion system early
+# Verify we're in zsh
+if [ -z "$ZSH_VERSION" ]; then
+  echo "Error: This script must be run with zsh" >&2
+  exit 1
+fi
+
+# Create completions directory if it doesn't exist
+mkdir -p "${HOME}/.zsh/completions"
+
+# Initialize completion system
 autoload -Uz compinit
 if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
   compinit -i > /dev/null 2>&1
