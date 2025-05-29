@@ -178,15 +178,16 @@ env:
       set -e
 
       # Set up completion directories first
-      mkdir -p ${HOME}/.zsh/completions
-      mkdir -p ${HOME}/.zcompcache
+      export COMPLETION_DIR="${HOME}/.zsh/completions"
+      mkdir -p "${COMPLETION_DIR}"
+      mkdir -p "${HOME}/.zcompcache"
 
       # Initialize completion system
       autoload -Uz compinit
-      compinit -d ${HOME}/.zcompcache/zcompdump
+      compinit -d "${HOME}/.zcompcache/zcompdump"
 
       # Add completions directory to fpath
-      fpath=(${HOME}/.zsh/completions $fpath)
+      fpath=("${COMPLETION_DIR}" $fpath)
 
       # Initialize Antidote early
       if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
@@ -203,9 +204,6 @@ env:
       # Force local output mode and disable GitHub Actions output
       export QUIET_MODE=false
       export GITHUB_ACTIONS=false
-
-      # Skip OrbStack verification in CI
-      export SKIP_ORBSTACK=true
 
       # Run verification in local mode
       ./verify_setup.sh 2>&1 | tee verify.log
