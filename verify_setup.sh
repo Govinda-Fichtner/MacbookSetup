@@ -78,13 +78,16 @@ check_completion() {
   local tool="$1"
   case "$tool" in
     docker)
-      command -v docker > /dev/null 2>&1 && docker help completion > /dev/null 2>&1
+      # Docker completion is handled by OrbStack
+      command -v docker > /dev/null 2>&1
       ;;
     orb)
-      command -v orb > /dev/null 2>&1 && orb completion zsh > /dev/null 2>&1
+      # Check if orb completion file exists
+      [[ -f "${COMPLETION_DIR}/_orb" ]]
       ;;
     orbctl)
-      command -v orbctl > /dev/null 2>&1 && orbctl completion zsh > /dev/null 2>&1
+      # Check if orbctl completion file exists
+      [[ -f "${COMPLETION_DIR}/_orbctl" ]]
       ;;
     kubectl)
       command -v kubectl > /dev/null 2>&1 && kubectl completion zsh > /dev/null 2>&1
@@ -99,6 +102,54 @@ check_completion() {
       return 1
       ;;
   esac
+}
+
+# Function to verify OrbStack setup
+verify_orbstack() {
+  log_info "Verifying OrbStack setup"
+
+  # Check if OrbStack is installed
+  if ! check_command orbctl; then
+    log_error "OrbStack is not installed"
+    return 1
+  fi
+
+  # Check if OrbStack is running
+  if ! orbctl status > /dev/null 2>&1; then
+    log_info "Starting OrbStack..."
+    orbctl start || {
+      log_error "Failed to start OrbStack"
+      return 1
+    }
+  fi
+
+  # Check completion files
+  local completion_files=(
+    "${COMPLETION_DIR}/_orbctl"
+    "${COMPLETION_DIR}/_orb"
+  )
+
+  for file in "${completion_files[@]}"; do
+    if [[ ! -f "$file" ]]; then
+      log_info "Generating completion file: $file"
+      case "$file" in
+        *_orbctl)
+          orbctl completion zsh > "$file" 2> /dev/null || {
+            log_error "Failed to generate orbctl completion"
+            return 1
+          }
+          ;;
+        *_orb)
+          orb completion zsh > "$file" 2> /dev/null || {
+            log_error "Failed to generate orb completion"
+            return 1
+          }
+          ;;
+      esac
+    fi
+  done
+
+  return 0
 }
 
 # Function to verify shell configuration
@@ -129,6 +180,12 @@ verify_shell_config() {
 
 # Main verification function
 main() {
+  # Redirect all output to a temporary file
+  local temp_log
+  temp_log=$(mktemp)
+  exec 3>&1                # Save stdout
+  exec 1> "$temp_log" 2>&1 # Redirect stdout and stderr to temp file
+
   log_info "Starting verification v${SCRIPT_VERSION}"
 
   local success_count=0
@@ -138,6 +195,18 @@ main() {
   # Verify shell configuration first
   verify_shell_config || {
     log_error "Shell configuration verification failed"
+    exec 1>&3 # Restore stdout
+    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+    rm -f "$temp_log"
+    return 1
+  }
+
+  # Verify OrbStack setup
+  verify_orbstack || {
+    log_error "OrbStack verification failed"
+    exec 1>&3 # Restore stdout
+    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+    rm -f "$temp_log"
     return 1
   }
 
@@ -188,10 +257,16 @@ main() {
 
   if [[ ${#failed_items[@]} -gt 0 ]]; then
     log_error "Failed items: ${failed_items[*]}"
+    exec 1>&3 # Restore stdout
+    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+    rm -f "$temp_log"
     return 1
   fi
 
   log_success "All checks passed"
+  exec 1>&3 # Restore stdout
+  grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+  rm -f "$temp_log"
   return 0
 }
 
