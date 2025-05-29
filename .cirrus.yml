@@ -12,18 +12,9 @@ env:
   NONINTERACTIVE: 1
   # Ensure proper PATH for commands
   PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
-  # For antidote plugin manager
-  ANTIDOTE_HOME: $HOME/.antidote
-  # Completion system configuration
-  COMPLETION_DIR: $HOME/.zsh/completions
-  ZCOMPCACHE: $HOME/.zcompcache
-  ZCOMPDUMP: $HOME/.zcompcache/zcompdump
   # Shell configuration
-  ZDOTDIR: $HOME
   SHELL: /bin/zsh
-  # Output configuration
-  QUIET_MODE: false
-  GITHUB_ACTIONS: false
+  ZDOTDIR: $HOME
 
 # Template for macOS instance configuration
 .macos_instance_template: &macos_instance_template
@@ -144,6 +135,12 @@ env:
 .setup_template: &setup_template
   setup_script:
     - |
+      # Set up completion system environment
+      export COMPLETION_DIR="${HOME}/.zsh/completions"
+      export ZCOMPCACHE="${HOME}/.zcompcache"
+      export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
+      export ANTIDOTE_HOME="${HOME}/.antidote"
+
       # Ensure brew is in PATH for Apple Silicon
       [[ "$(uname -m)" == "arm64" ]] && \
         eval "$(/opt/homebrew/bin/brew shellenv)"
@@ -185,6 +182,13 @@ env:
     # Switch to zsh for the entire verification process
     zsh -c '
       set -e
+
+      # Set up completion system environment
+      export COMPLETION_DIR="${HOME}/.zsh/completions"
+      export ZCOMPCACHE="${HOME}/.zcompcache"
+      export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
+      export ANTIDOTE_HOME="${HOME}/.antidote"
+      export QUIET_MODE=false
 
       # Set up completion directories first
       mkdir -p "${COMPLETION_DIR}"
