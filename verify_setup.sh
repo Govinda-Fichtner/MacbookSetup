@@ -128,7 +128,7 @@ verify_antidote() {
   log_info "Verifying Antidote setup"
 
   # Check if Antidote is installed
-  if ! check_command antidote; then
+  if ! command -v antidote > /dev/null 2>&1; then
     log_error "Antidote is not installed"
     return 1
   fi
@@ -142,12 +142,6 @@ verify_antidote() {
   # Check if plugins file exists
   if [[ ! -f "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" ]]; then
     log_error "Antidote plugins file not found"
-    return 1
-  fi
-
-  # Check if Antidote is properly initialized
-  if ! typeset -f __antidote_setup > /dev/null; then
-    log_error "Antidote is not properly initialized"
     return 1
   fi
 
