@@ -79,6 +79,92 @@ log_error() {
   print_status FAIL "ERROR" "$1"
 }
 
+# Helper function to check completion setup
+check_completion() {
+  local tool="$1"
+  case "$tool" in
+    git)
+      # Git completion is built into zsh
+      [[ -f "/usr/share/zsh/functions/Completion/Unix/_git" ]] \
+        || [[ -f "/usr/local/share/zsh/site-functions/_git" ]] \
+        || [[ -f "/opt/homebrew/share/zsh/site-functions/_git" ]] \
+        || [[ -f "${HOME}/.zsh/completions/_git" ]]
+      ;;
+    rbenv)
+      # rbenv completion is built into the tool
+      [[ -f "/usr/local/share/zsh/site-functions/_rbenv" ]] \
+        || [[ -f "/opt/homebrew/share/zsh/site-functions/_rbenv" ]] \
+        || [[ -f "${HOME}/.zsh/completions/_rbenv" ]]
+      ;;
+    pyenv)
+      # Check for pyenv completion file in standard locations
+      [[ -f "/usr/local/share/zsh/site-functions/_pyenv" ]] \
+        || [[ -f "/opt/homebrew/share/zsh/site-functions/_pyenv" ]] \
+        || [[ -f "${HOME}/.zsh/completions/_pyenv" ]]
+      ;;
+    direnv)
+      # direnv completion is built into the tool
+      command -v direnv > /dev/null 2>&1 && direnv hook zsh > /dev/null 2>&1
+      ;;
+    docker)
+      # Docker completion is handled by OrbStack
+      [[ -f "${COMPLETION_DIR}/_docker" ]] \
+        || [[ -f "/usr/local/share/zsh/site-functions/_docker" ]] \
+        || [[ -f "/opt/homebrew/share/zsh/site-functions/_docker" ]]
+      ;;
+    orb)
+      # Check if orb completion file exists
+      [[ -f "${COMPLETION_DIR}/_orb" ]]
+      ;;
+    orbctl)
+      # Check if orbctl completion file exists
+      [[ -f "${COMPLETION_DIR}/_orbctl" ]]
+      ;;
+    kubectl)
+      command -v kubectl > /dev/null 2>&1 && kubectl completion zsh > /dev/null 2>&1
+      ;;
+    helm)
+      # Generate helm completion if not exists
+      if command -v helm > /dev/null 2>&1; then
+        local helm_completion="${COMPLETION_DIR}/_helm"
+        if [[ ! -f "${helm_completion}" ]]; then
+          helm completion zsh > "${helm_completion}" 2> /dev/null || return 1
+        fi
+        [[ -f "${helm_completion}" ]]
+      else
+        return 1
+      fi
+      ;;
+    terraform)
+      # Install terraform completion if not exists
+      if command -v terraform > /dev/null 2>&1; then
+        local terraform_completion="${COMPLETION_DIR}/_terraform"
+        if [[ ! -f "${terraform_completion}" ]]; then
+          terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
+        fi
+        [[ -f "${terraform_completion}" ]]
+      else
+        return 1
+      fi
+      ;;
+    packer)
+      # Install packer completion if not exists
+      if command -v packer > /dev/null 2>&1; then
+        local packer_completion="${COMPLETION_DIR}/_packer"
+        if [[ ! -f "${packer_completion}" ]]; then
+          packer -autocomplete-install > /dev/null 2>&1 || return 1
+        fi
+        [[ -f "${packer_completion}" ]]
+      else
+        return 1
+      fi
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 # Function to verify Antidote setup
 verify_antidote() {
   log_info "Verifying Antidote setup"
