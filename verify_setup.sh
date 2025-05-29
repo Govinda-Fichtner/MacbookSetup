@@ -29,34 +29,6 @@ fi
 readonly SCRIPT_VERSION="1.0.0"
 readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 
-# Set up quiet mode based on environment
-if [[ -n "$CIRRUS_CI" ]] || [[ -n "$QUIET_MODE" ]]; then
-  QUIET_MODE=true
-  # Redirect all shell initialization output to /dev/null
-  exec 2> /dev/null
-  # Disable verbose shell features
-  setopt NO_BEEP
-  setopt NO_NOTIFY
-  # Disable plugin loading messages
-  ZSH_AUTOSUGGEST_USE_ASYNC=true
-  ZSH_AUTOSUGGEST_MANUAL_REBIND=true
-  ZSH_AUTOSUGGEST_STRATEGY=(history)
-  ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
-  ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
-  ZSH_AUTOSUGGEST_ORIGINAL_WIDGET_PREFIX=autosuggest-orig-
-  ZSH_AUTOSUGGEST_CLEAR_WIDGETS=()
-  ZSH_AUTOSUGGEST_ACCEPT_WIDGETS=()
-  ZSH_AUTOSUGGEST_EXECUTE_WIDGETS=()
-  ZSH_AUTOSUGGEST_PARTIAL_ACCEPT_WIDGETS=()
-  ZSH_AUTOSUGGEST_IGNORE_WIDGETS=()
-  ZSH_AUTOSUGGEST_COMPLETION_IGNORE=()
-  ZSH_AUTOSUGGEST_HISTORY_IGNORE=()
-  ZSH_AUTOSUGGEST_ADDITIONAL_IGNORE=()
-fi
-
-# Save stdout for logging
-exec 3>&1
-
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
