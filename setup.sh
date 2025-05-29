@@ -330,10 +330,14 @@ setup_shell_completions() {
 
   # OrbStack completions: generate orbctl and install custom orb completion
   if command -v orbctl > /dev/null 2>&1; then
-    orbctl completion zsh > "${COMPLETION_DIR}/_orbctl" 2> /dev/null || true
-  fi
-  if [[ -f "${SCRIPT_DIR}/completions/_orb" ]]; then
-    cp "${SCRIPT_DIR}/completions/_orb" "${COMPLETION_DIR}/_orb" 2> /dev/null || true
+    log_info "Setting up OrbStack completions..."
+    orbctl completion zsh > "${COMPLETION_DIR}/_orbctl" 2> /dev/null || log_warning "Failed to generate orbctl completion"
+
+    if [[ -f "${SCRIPT_DIR}/completions/_orb" ]]; then
+      cp "${SCRIPT_DIR}/completions/_orb" "${COMPLETION_DIR}/_orb" 2> /dev/null || log_warning "Failed to install custom orb completion"
+    fi
+  else
+    log_warning "OrbStack not found, skipping completion setup"
   fi
 
   # Add completion configuration to .zshrc
