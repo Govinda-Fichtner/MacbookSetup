@@ -287,10 +287,11 @@ verify_shell_config() {
   done
 
   # Verify Antidote setup
-  verify_antidote || {
+  if ! verify_antidote; then
     log_error "Antidote verification failed"
+    log_warning "Skipping completions and plugins checks due to missing Antidote"
     return 1
-  }
+  fi
 
   return 0
 }
