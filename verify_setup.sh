@@ -92,35 +92,19 @@ print_status() {
 
 # Logging functions
 log_info() {
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    echo "::info::$1" >&3
-  else
-    print_status INFO "INFO" "$1"
-  fi
+  print_status INFO "INFO" "$1"
 }
 
 log_success() {
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    echo "::success::$1" >&3
-  else
-    print_status PASS "SUCCESS" "$1"
-  fi
+  print_status PASS "SUCCESS" "$1"
 }
 
 log_warning() {
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    echo "::warning::$1" >&3
-  else
-    print_status SKIP "WARNING" "$1"
-  fi
+  print_status SKIP "WARNING" "$1"
 }
 
 log_error() {
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    echo "::error::$1" >&3
-  else
-    print_status FAIL "ERROR" "$1"
-  fi
+  print_status FAIL "ERROR" "$1"
 }
 
 # Function to verify Antidote setup
@@ -466,47 +450,23 @@ print_verification_summary() {
   local failed_checks=$3
   local percentage=$((passed_checks * 100 / total_checks))
 
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    log_info "=== Verification Summary ==="
-    log_info "Total checks: $total_checks"
-    log_success "Passed: $passed_checks"
-    log_error "Failed: $failed_checks"
-    log_info "Success rate: $percentage%"
-  else
-    echo -e "\n=== Verification Summary ==="
-    print_status INFO "Total checks" "$total_checks"
-    print_status PASS "Passed" "$passed_checks"
-    print_status FAIL "Failed" "$failed_checks"
-    print_status INFO "Success rate" "$percentage%"
-  fi
+  echo -e "\n=== Verification Summary ==="
+  print_status INFO "Total checks" "$total_checks"
+  print_status PASS "Passed" "$passed_checks"
+  print_status FAIL "Failed" "$failed_checks"
+  print_status INFO "Success rate" "$percentage%"
 
   if [[ $failed_checks -gt 0 ]]; then
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      log_error "Verification failed - see above for details"
-    else
-      print_status FAIL "Verification failed" "See above for details"
-    fi
+    print_status FAIL "Verification failed" "See above for details"
     return 1
   else
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      log_success "All checks passed"
-    else
-      print_status PASS "Verification" "All checks passed"
-    fi
+    print_status PASS "Verification" "All checks passed"
     return 0
   fi
 }
 
 # Main verification function
 main() {
-  # In CI mode, redirect all output to a temporary file
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    local temp_log
-    temp_log=$(mktemp)
-    exec 3>&1                # Save stdout
-    exec 1> "$temp_log" 2>&1 # Redirect stdout and stderr to temp file
-  fi
-
   log_info "Starting verification v${SCRIPT_VERSION}"
   local verification_failed=false
   local total_checks=0
@@ -562,12 +522,6 @@ main() {
     ((passed_checks++))
   fi
   ((total_checks++))
-
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    exec 1>&3 # Restore stdout
-    grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-    rm -f "$temp_log"
-  fi
 
   # Print verification summary
   print_verification_summary "$total_checks" "$passed_checks" "$failed_checks"
