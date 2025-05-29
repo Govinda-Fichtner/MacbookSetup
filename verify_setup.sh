@@ -71,10 +71,10 @@ check_command() {
 
 # Fix print_status to use a local variable for status
 print_status() {
-  local status=$1
+  local pstatus=$1
   local label=$2
   local msg=$3
-  case "$status" in
+  case "$pstatus" in
     PASS)
       printf "%b[✓]%b %-30s %s\n" "$GREEN" "$RESET" "$label" "$msg"
       ;;
