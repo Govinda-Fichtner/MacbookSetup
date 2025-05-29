@@ -179,6 +179,9 @@ env:
 # Template for verification
 .verify_template: &verify_template
   verify_script: |
+    whoami
+    echo $HOME
+    env | grep HOME
     # Switch to zsh for the entire verification process
     zsh -c '
       set -e
