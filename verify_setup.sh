@@ -95,7 +95,7 @@ log_info() {
   if [[ "$QUIET_MODE" == "true" ]]; then
     echo "::info::$1" >&3
   else
-    echo -e "${BLUE}INFO:${NC} $1"
+    print_status INFO "INFO" "$1"
   fi
 }
 
@@ -103,7 +103,7 @@ log_success() {
   if [[ "$QUIET_MODE" == "true" ]]; then
     echo "::success::$1" >&3
   else
-    echo -e "${GREEN}SUCCESS:${NC} $1"
+    print_status PASS "SUCCESS" "$1"
   fi
 }
 
@@ -111,7 +111,7 @@ log_warning() {
   if [[ "$QUIET_MODE" == "true" ]]; then
     echo "::warning::$1" >&3
   else
-    echo -e "${YELLOW}WARNING:${NC} $1"
+    print_status SKIP "WARNING" "$1"
   fi
 }
 
@@ -119,7 +119,7 @@ log_error() {
   if [[ "$QUIET_MODE" == "true" ]]; then
     echo "::error::$1" >&3
   else
-    echo -e "${RED}ERROR:${NC} $1"
+    print_status FAIL "ERROR" "$1"
   fi
 }
 
@@ -466,17 +466,33 @@ print_verification_summary() {
   local failed_checks=$3
   local percentage=$((passed_checks * 100 / total_checks))
 
-  log_info "=== Verification Summary ==="
-  log_info "Total checks: $total_checks"
-  log_success "Passed: $passed_checks"
-  log_error "Failed: $failed_checks"
-  log_info "Success rate: $percentage%"
+  if [[ "$QUIET_MODE" == "true" ]]; then
+    log_info "=== Verification Summary ==="
+    log_info "Total checks: $total_checks"
+    log_success "Passed: $passed_checks"
+    log_error "Failed: $failed_checks"
+    log_info "Success rate: $percentage%"
+  else
+    echo -e "\n=== Verification Summary ==="
+    print_status INFO "Total checks" "$total_checks"
+    print_status PASS "Passed" "$passed_checks"
+    print_status FAIL "Failed" "$failed_checks"
+    print_status INFO "Success rate" "$percentage%"
+  fi
 
   if [[ $failed_checks -gt 0 ]]; then
-    log_error "Verification failed - see above for details"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      log_error "Verification failed - see above for details"
+    else
+      print_status FAIL "Verification failed" "See above for details"
+    fi
     return 1
   else
-    log_success "All checks passed"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      log_success "All checks passed"
+    else
+      print_status PASS "Verification" "All checks passed"
+    fi
     return 0
   fi
 }
