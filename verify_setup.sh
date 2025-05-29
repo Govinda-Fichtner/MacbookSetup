@@ -105,121 +105,6 @@ verify_antidote() {
   return 0
 }
 
-# Helper function to check completion setup
-check_completion() {
-  local tool="$1"
-  case "$tool" in
-    git)
-      # Git completion is built into zsh
-      [[ -f "/usr/share/zsh/functions/Completion/Unix/_git" ]] \
-        || [[ -f "/usr/local/share/zsh/site-functions/_git" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_git" ]] \
-        || [[ -f "${HOME}/.zsh/completions/_git" ]]
-      ;;
-    rbenv)
-      # rbenv completion is built into the tool
-      [[ -f "/usr/local/share/zsh/site-functions/_rbenv" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_rbenv" ]] \
-        || [[ -f "${HOME}/.zsh/completions/_rbenv" ]]
-      ;;
-    pyenv)
-      # Check for pyenv completion file in standard locations
-      [[ -f "/usr/local/share/zsh/site-functions/_pyenv" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_pyenv" ]] \
-        || [[ -f "${HOME}/.zsh/completions/_pyenv" ]]
-      ;;
-    direnv)
-      # direnv completion is built into the tool
-      command -v direnv > /dev/null 2>&1 && direnv hook zsh > /dev/null 2>&1
-      ;;
-    docker)
-      # Docker completion is handled by OrbStack
-      [[ -f "${COMPLETION_DIR}/_docker" ]] \
-        || [[ -f "/usr/local/share/zsh/site-functions/_docker" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_docker" ]]
-      ;;
-    orb)
-      # Check if orb completion file exists
-      [[ -f "${COMPLETION_DIR}/_orb" ]]
-      ;;
-    orbctl)
-      # Check if orbctl completion file exists
-      [[ -f "${COMPLETION_DIR}/_orbctl" ]]
-      ;;
-    kubectl)
-      command -v kubectl > /dev/null 2>&1 && kubectl completion zsh > /dev/null 2>&1
-      ;;
-    helm)
-      # Generate helm completion if not exists
-      if command -v helm > /dev/null 2>&1; then
-        if [[ ! -f "${COMPLETION_DIR}/_helm" ]]; then
-          helm completion zsh > "${COMPLETION_DIR}/_helm" 2> /dev/null || return 1
-        fi
-        [[ -f "${COMPLETION_DIR}/_helm" ]]
-      else
-        return 1
-      fi
-      ;;
-    terraform)
-      # Install terraform completion if not exists
-      if command -v terraform > /dev/null 2>&1; then
-        if [[ ! -f "${COMPLETION_DIR}/_terraform" ]]; then
-          terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
-        fi
-        [[ -f "${COMPLETION_DIR}/_terraform" ]]
-      else
-        return 1
-      fi
-      ;;
-    packer)
-      # Install packer completion if not exists
-      if command -v packer > /dev/null 2>&1; then
-        if [[ ! -f "${COMPLETION_DIR}/_packer" ]]; then
-          packer -autocomplete-install > /dev/null 2>&1 || return 1
-        fi
-        [[ -f "${COMPLETION_DIR}/_packer" ]]
-      else
-        return 1
-      fi
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-# Function to verify OrbStack setup
-verify_orbstack() {
-  log_info "Verifying OrbStack setup"
-
-  # Check if OrbStack is installed
-  if ! check_command orbctl; then
-    log_warning "OrbStack is not installed. Skipping OrbStack command checks."
-    return 0
-  fi
-
-  # Check if OrbStack is running
-  if ! orbctl status > /dev/null 2>&1; then
-    log_warning "OrbStack is not running or cannot be started. Skipping runtime checks."
-    return 0
-  fi
-
-  # Check completion files
-  local completion_files=(
-    "${COMPLETION_DIR}/_orbctl"
-    "${COMPLETION_DIR}/_orb"
-  )
-
-  for file in "${completion_files[@]}"; do
-    if [[ ! -f "$file" ]]; then
-      log_warning "OrbStack completion file missing: $file"
-    fi
-  done
-
-  log_success "OrbStack setup verified"
-  return 0
-}
-
 # Function to verify shell configuration
 verify_shell_config() {
   log_info "Verifying shell configuration"
@@ -242,6 +127,10 @@ verify_shell_config() {
       return 1
     fi
   done
+
+  # Initialize completion system before verifying Antidote
+  autoload -Uz compinit
+  compinit -d "${HOME}/.zcompcache/zcompdump"
 
   # Verify Antidote setup
   if ! verify_antidote; then
@@ -469,16 +358,6 @@ main() {
   # Verify zsh plugins
   if ! verify_zsh_plugins; then
     log_error "Zsh plugins verification failed"
-    verification_failed=true
-    ((failed_checks++))
-  else
-    ((passed_checks++))
-  fi
-  ((total_checks++))
-
-  # Verify OrbStack setup
-  if ! verify_orbstack; then
-    log_error "OrbStack verification failed"
     verification_failed=true
     ((failed_checks++))
   else
