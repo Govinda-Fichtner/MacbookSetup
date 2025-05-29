@@ -153,7 +153,7 @@ fpath=("${HOME}/.zsh/completions" $fpath)
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 zstyle ':completion::complete:*' use-cache on
-zstyle ':completion::complete:*' cache-path "$HOME/.zcompcache"
+zstyle ':completion::complete:*' cache-path "${HOME}/.zcompcache"
 ZSHRC_EOF
 EOF
 
