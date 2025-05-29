@@ -143,24 +143,14 @@ env:
         brew install antidote
       fi
 
-      # Run the setup script
-      zsh ./ci_setup.sh
+      # Create necessary directories for completions
+      mkdir -p ${HOME}/.zsh/completions
+      mkdir -p ${HOME}/.zcompcache
 
-      # Initialize OrbStack if installed
-      if command -v orbctl > /dev/null 2>&1; then
-        echo "Initializing OrbStack..."
-        orbctl start || {
-          echo "Failed to start OrbStack"
-          exit 1
-        }
-        # Wait for OrbStack to be ready
-        sleep 5
-        # Verify OrbStack is running
-        orbctl status || {
-          echo "OrbStack failed to start properly"
-          exit 1
-        }
-      fi
+      # Run the setup script with CI-specific environment
+      export CI=true
+      export SKIP_ORBSTACK=true
+      zsh ./ci_setup.sh
 
       # Show installed package versions
       echo "=== Installed Versions ==="
