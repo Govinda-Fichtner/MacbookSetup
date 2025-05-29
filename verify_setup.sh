@@ -14,56 +14,81 @@ fi
 readonly SCRIPT_VERSION="1.0.0"
 readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 
-# Check if running in CI or quiet mode
-QUIET_MODE="${CI:-false}"
-if [[ "${MACBOOK_SETUP_QUIET:-}" == "true" ]]; then
-  QUIET_MODE="true"
-fi
-
-# In CI mode, suppress all shell initialization output
-if [[ "$QUIET_MODE" == "true" ]]; then
+# Set up quiet mode based on environment
+if [[ -n "$CIRRUS_CI" ]] || [[ -n "$QUIET_MODE" ]]; then
+  QUIET_MODE=true
   # Redirect all shell initialization output to /dev/null
   exec 2> /dev/null
-  # Disable shell features that produce output
-  setopt NO_NOTIFY
-  setopt NO_AUTO_CD
+  # Disable verbose shell features
   setopt NO_BEEP
-  # Disable plugin loading output
+  setopt NO_NOTIFY
+  # Disable plugin loading messages
   ZSH_AUTOSUGGEST_USE_ASYNC=true
+  ZSH_AUTOSUGGEST_MANUAL_REBIND=true
+  ZSH_AUTOSUGGEST_STRATEGY=(history)
+  ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
   ZSH_AUTOSUGGEST_BUFFER_MAX_SIZE=20
-  ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+  ZSH_AUTOSUGGEST_ORIGINAL_WIDGET_PREFIX=autosuggest-orig-
+  ZSH_AUTOSUGGEST_CLEAR_WIDGETS=()
+  ZSH_AUTOSUGGEST_ACCEPT_WIDGETS=()
+  ZSH_AUTOSUGGEST_EXECUTE_WIDGETS=()
+  ZSH_AUTOSUGGEST_PARTIAL_ACCEPT_WIDGETS=()
+  ZSH_AUTOSUGGEST_IGNORE_WIDGETS=()
+  ZSH_AUTOSUGGEST_COMPLETION_IGNORE=()
+  ZSH_AUTOSUGGEST_HISTORY_IGNORE=()
+  ZSH_AUTOSUGGEST_ADDITIONAL_IGNORE=()
 fi
 
-# Color definitions (disabled in quiet mode)
+# Save stdout for logging
+exec 3>&1
+
+# Define color codes (disabled in quiet mode)
 if [[ "$QUIET_MODE" == "true" ]]; then
-  readonly RED=''
-  readonly GREEN=''
-  readonly BLUE=''
-  readonly YELLOW=''
-  readonly NC=''
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BLUE=""
+  NC=""
 else
-  readonly RED='\033[0;31m'
-  readonly GREEN='\033[0;32m'
-  readonly BLUE='\033[0;34m'
-  readonly YELLOW='\033[0;33m'
-  readonly NC='\033[0m' # No Color
+  RED='\033[0;31m'
+  GREEN='\033[0;32m'
+  YELLOW='\033[1;33m'
+  BLUE='\033[0;34m'
+  NC='\033[0m'
 fi
 
-# Logging functions for CI environment
-if [[ "$QUIET_MODE" == "true" ]]; then
-  log_info() { echo "::info::$1" >&3; }
-  log_success() { echo "::success::$1" >&3; }
-  log_warning() { echo "::warning::$1" >&3; }
-  log_error() { echo "::error::$1" >&3; }
-  log_debug() { :; } # No-op in CI
-else
-  # Keep existing logging functions for local use
-  log_info() { printf "${BLUE}[INFO]${NC} %s\n" "$1" >&2; }
-  log_success() { printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" >&2; }
-  log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1" >&2; }
-  log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
-  log_debug() { printf "[DEBUG] %s\n" "$1" >&2; }
-fi
+# Logging functions
+log_info() {
+  if [[ "$QUIET_MODE" == "true" ]]; then
+    echo "::info::$1" >&3
+  else
+    echo -e "${BLUE}INFO:${NC} $1"
+  fi
+}
+
+log_success() {
+  if [[ "$QUIET_MODE" == "true" ]]; then
+    echo "::success::$1" >&3
+  else
+    echo -e "${GREEN}SUCCESS:${NC} $1"
+  fi
+}
+
+log_warning() {
+  if [[ "$QUIET_MODE" == "true" ]]; then
+    echo "::warning::$1" >&3
+  else
+    echo -e "${YELLOW}WARNING:${NC} $1"
+  fi
+}
+
+log_error() {
+  if [[ "$QUIET_MODE" == "true" ]]; then
+    echo "::error::$1" >&3
+  else
+    echo -e "${RED}ERROR:${NC} $1"
+  fi
+}
 
 # Function to print status in CI-friendly format
 print_status() {
