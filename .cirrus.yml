@@ -163,10 +163,11 @@ env:
   verify_script: |
     # Switch to zsh for the entire verification process
     zsh -c '
+      set -e
       # Ensure the shell is properly loaded
       echo "Running verification script..."
       # Source zshrc to ensure all configurations are loaded
-      source ~/.zshrc || echo "Failed to source ~/.zshrc"
+      source ~/.zshrc || { echo "Failed to source ~/.zshrc"; exit 1; }
       # Create a log file for verification
       ./verify_setup.sh 2>&1 | tee verify.log
       # Exit with the status of verify_setup.sh

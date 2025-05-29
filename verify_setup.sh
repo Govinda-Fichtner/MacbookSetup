@@ -1,21 +1,9 @@
 #!/bin/zsh
 # shellcheck shell=bash
-# shellcheck disable=SC2296,SC2034,SC2154,SC2076
+# shellcheck disable=SC2296,SC2034,SC2154,SC2076,SC2317
 
 # macOS Development Environment Verification Script
 # This script verifies that all tools and configurations are properly installed
-
-# Force zsh execution
-if [ -n "$BASH_VERSION" ]; then
-  exec zsh "$0" "$@"
-  exit 1 # Exit if exec fails
-fi
-
-# Verify we're in zsh
-if [ -z "$ZSH_VERSION" ]; then
-  echo "Error: This script must be run with zsh" >&2
-  exit 1
-fi
 
 # Create completions directory if it doesn't exist
 mkdir -p "${HOME}/.zsh/completions"
@@ -212,7 +200,7 @@ check_completion() {
       # Generate helm completion if not exists
       if command -v helm > /dev/null 2>&1; then
         if [[ ! -f "${COMPLETION_DIR}/_helm" ]]; then
-          helm completion zsh > "${COMPLETION_DIR}/_helm" 2> /dev/null
+          helm completion zsh > "${COMPLETION_DIR}/_helm" 2> /dev/null || return 1
         fi
         [[ -f "${COMPLETION_DIR}/_helm" ]]
       else
@@ -559,7 +547,12 @@ main() {
 
   # Print verification summary
   print_verification_summary "$total_checks" "$passed_checks" "$failed_checks"
-  return $?
+
+  # Ensure we exit with the correct status
+  if [[ "$verification_failed" == "true" ]]; then
+    exit 1
+  fi
+  exit 0
 }
 
 # Run main function
