@@ -14,6 +14,16 @@ env:
   PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
   # For antidote plugin manager
   ANTIDOTE_HOME: $HOME/.antidote
+  # Completion system configuration
+  COMPLETION_DIR: $HOME/.zsh/completions
+  ZCOMPCACHE: $HOME/.zcompcache
+  ZCOMPDUMP: $HOME/.zcompcache/zcompdump
+  # Shell configuration
+  ZDOTDIR: $HOME
+  SHELL: /bin/zsh
+  # Output configuration
+  QUIET_MODE: false
+  GITHUB_ACTIONS: false
 
 # Template for macOS instance configuration
 .macos_instance_template: &macos_instance_template
@@ -144,11 +154,10 @@ env:
       fi
 
       # Create necessary directories for completions
-      mkdir -p ${HOME}/.zsh/completions
-      mkdir -p ${HOME}/.zcompcache
+      mkdir -p "${COMPLETION_DIR}"
+      mkdir -p "${ZCOMPCACHE}"
 
       # Run the setup script with CI-specific environment
-      export CI=true
       zsh ./ci_setup.sh
 
       # Verify OrbStack installation without starting it
@@ -178,13 +187,12 @@ env:
       set -e
 
       # Set up completion directories first
-      export COMPLETION_DIR="${HOME}/.zsh/completions"
       mkdir -p "${COMPLETION_DIR}"
-      mkdir -p "${HOME}/.zcompcache"
+      mkdir -p "${ZCOMPCACHE}"
 
       # Initialize completion system
       autoload -Uz compinit
-      compinit -d "${HOME}/.zcompcache/zcompdump"
+      compinit -d "${ZCOMPDUMP}"
 
       # Add completions directory to fpath
       fpath=("${COMPLETION_DIR}" $fpath)
@@ -192,18 +200,14 @@ env:
       # Initialize Antidote early
       if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
         source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
-        antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
+        antidote load "${ZDOTDIR}/.zsh_plugins.txt"
       fi
 
       # Ensure the shell is properly loaded
       echo "Running verification script..."
 
       # Source zshrc to ensure all configurations are loaded
-      source ~/.zshrc || { echo "Failed to source ~/.zshrc"; exit 1; }
-
-      # Force local output mode and disable GitHub Actions output
-      export QUIET_MODE=false
-      export GITHUB_ACTIONS=false
+      source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
 
       # Run verification in local mode
       ./verify_setup.sh 2>&1 | tee verify.log
