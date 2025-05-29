@@ -167,6 +167,15 @@ install_homebrew() {
   log_success "Homebrew installed successfully."
 }
 
+setup_orbstack() {
+  log_info "Setting up OrbStack..."
+  if ! check_command orbctl; then
+    log_error "OrbStack is not installed. Please install it first."
+    exit 1
+  fi
+  log_success "OrbStack setup completed"
+}
+
 install_packages() {
   log_info "Installing packages from Brewfile..."
 
@@ -194,13 +203,8 @@ install_packages() {
     log_success "All packages from Brewfile are already installed."
   fi
 
-  # Start OrbStack if installed
-  if check_command orbctl; then
-    log_info "Starting OrbStack..."
-    orbctl start || {
-      log_warning "Failed to start OrbStack, but continuing setup"
-    }
-  fi
+  # Setup OrbStack
+  setup_orbstack || log_warning "OrbStack setup incomplete"
 
   log_success "Package installation completed."
 }
@@ -442,6 +446,16 @@ main() {
   configure_shell || exit 1
   setup_ruby_environment || log_warning "Ruby environment setup incomplete"
   setup_python_environment || log_warning "Python environment setup incomplete"
+
+  # After installing Antidote, run antidote bundle to set up plugins
+  if command -v antidote > /dev/null 2>&1; then
+    log_info "Setting up Antidote plugins..."
+    antidote bundle < "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" > "${ZDOTDIR:-$HOME}/.zsh_plugins.zsh"
+    log_success "Antidote plugins set up successfully"
+  else
+    log_error "Antidote is not installed. Please install it first."
+    exit 1
+  fi
 
   log_success "Setup completed successfully!"
   log_info "Please restart your terminal or run: source $ZSHRC_PATH"
