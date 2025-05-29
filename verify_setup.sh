@@ -282,6 +282,130 @@ verify_shell_config() {
   return 0
 }
 
+# Function to verify software tools
+verify_software_tools() {
+  log_info "Verifying software tools"
+
+  # Core tools
+  log_info "Core Tools"
+  for tool in brew git rbenv pyenv direnv starship; do
+    if check_command "$tool"; then
+      version=$("$tool" --version 2> /dev/null | head -1 || echo "")
+      print_status "$tool" "PASS" "$version"
+    else
+      print_status "$tool" "FAIL"
+      return 1
+    fi
+  done
+
+  # Container tools
+  log_info "Container Tools"
+  for tool in docker orb orbctl kubectl helm; do
+    if check_command "$tool"; then
+      version=$("$tool" version 2> /dev/null | head -1 || echo "")
+      print_status "$tool" "PASS" "$version"
+    else
+      print_status "$tool" "FAIL"
+      return 1
+    fi
+  done
+
+  # Infrastructure tools
+  log_info "Infrastructure Tools"
+  for tool in terraform packer; do
+    if check_command "$tool"; then
+      version=$("$tool" --version 2> /dev/null | head -1 || echo "")
+      print_status "$tool" "PASS" "$version"
+    else
+      print_status "$tool" "FAIL"
+      return 1
+    fi
+  done
+
+  log_success "Software tools verified"
+  return 0
+}
+
+# Function to verify shell completions
+verify_shell_completions() {
+  log_info "Verifying shell completions"
+
+  # Create completions directory if it doesn't exist
+  mkdir -p "${HOME}/.zsh/completions"
+
+  # Core completions
+  log_info "Core Completions"
+  for tool in git rbenv pyenv direnv; do
+    if check_completion "$tool"; then
+      print_status "$tool completion" "PASS"
+    else
+      print_status "$tool completion" "FAIL"
+      return 1
+    fi
+  done
+
+  # Container completions
+  log_info "Container Completions"
+  for tool in docker orb orbctl kubectl helm; do
+    if check_completion "$tool"; then
+      print_status "$tool completion" "PASS"
+    else
+      print_status "$tool completion" "FAIL"
+      return 1
+    fi
+  done
+
+  # Infrastructure completions
+  log_info "Infrastructure Completions"
+  for tool in terraform packer; do
+    if check_completion "$tool"; then
+      print_status "$tool completion" "PASS"
+    else
+      print_status "$tool completion" "FAIL"
+      return 1
+    fi
+  done
+
+  log_success "Shell completions verified"
+  return 0
+}
+
+# Function to verify zsh plugins
+verify_zsh_plugins() {
+  log_info "Verifying zsh plugins"
+
+  # Check if plugins file exists
+  if [[ ! -f "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" ]]; then
+    log_error "Zsh plugins file not found"
+    return 1
+  fi
+
+  # Verify core plugins
+  log_info "Core Plugins"
+  for plugin in zsh-completions zsh-autosuggestions zsh-syntax-highlighting; do
+    if [[ -d "${ZDOTDIR:-$HOME}/.antidote/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}" ]]; then
+      print_status "$plugin" "PASS"
+    else
+      print_status "$plugin" "FAIL"
+      return 1
+    fi
+  done
+
+  # Verify Oh My Zsh plugins
+  log_info "Oh My Zsh Plugins"
+  for plugin in git kubectl helm terraform docker docker-compose common-aliases brew fzf; do
+    if [[ -d "${ZDOTDIR:-$HOME}/.antidote/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}" ]]; then
+      print_status "$plugin" "PASS"
+    else
+      print_status "$plugin" "FAIL"
+      return 1
+    fi
+  done
+
+  log_success "Zsh plugins verified"
+  return 0
+}
+
 # Main verification function
 main() {
   # In CI mode, redirect all output to a temporary file
@@ -294,13 +418,53 @@ main() {
 
   log_info "Starting verification v${SCRIPT_VERSION}"
 
-  local success_count=0
-  local total_checks=0
-  local failed_items=()
-
   # Verify shell configuration first
   verify_shell_config || {
     log_error "Shell configuration verification failed"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      exec 1>&3 # Restore stdout
+      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+      rm -f "$temp_log"
+    fi
+    return 1
+  }
+
+  # Verify Antidote setup
+  verify_antidote || {
+    log_error "Antidote verification failed"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      exec 1>&3 # Restore stdout
+      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+      rm -f "$temp_log"
+    fi
+    return 1
+  }
+
+  # Verify software tools
+  verify_software_tools || {
+    log_error "Software tools verification failed"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      exec 1>&3 # Restore stdout
+      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+      rm -f "$temp_log"
+    fi
+    return 1
+  }
+
+  # Verify shell completions
+  verify_shell_completions || {
+    log_error "Shell completions verification failed"
+    if [[ "$QUIET_MODE" == "true" ]]; then
+      exec 1>&3 # Restore stdout
+      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
+      rm -f "$temp_log"
+    fi
+    return 1
+  }
+
+  # Verify zsh plugins
+  verify_zsh_plugins || {
+    log_error "Zsh plugins verification failed"
     if [[ "$QUIET_MODE" == "true" ]]; then
       exec 1>&3 # Restore stdout
       grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
@@ -319,61 +483,6 @@ main() {
     fi
     return 1
   }
-
-  # Verify core tools
-  log_info "Core Tools"
-  for tool in brew git rbenv pyenv direnv starship; do
-    ((total_checks++))
-    if check_command "$tool"; then
-      ((success_count++))
-      version=$("$tool" --version 2> /dev/null | head -1 || echo "")
-      print_status "$tool" "PASS" "$version"
-    else
-      failed_items+=("$tool")
-      print_status "$tool" "FAIL"
-    fi
-  done
-
-  # Verify container tools
-  log_info "Container Tools"
-  for tool in docker orb orbctl kubectl helm; do
-    ((total_checks++))
-    if check_command "$tool"; then
-      ((success_count++))
-      version=$("$tool" version 2> /dev/null | head -1 || echo "")
-      print_status "$tool" "PASS" "$version"
-    else
-      failed_items+=("$tool")
-      print_status "$tool" "FAIL"
-    fi
-  done
-
-  # Verify shell completions
-  log_info "Shell Completions"
-  for tool in docker orb orbctl kubectl helm terraform; do
-    ((total_checks++))
-    if check_completion "$tool" > /dev/null 2>&1; then
-      ((success_count++))
-      print_status "$tool completion" "PASS"
-    else
-      failed_items+=("${tool}_completion")
-      print_status "$tool completion" "FAIL"
-    fi
-  done
-
-  # Print summary
-  local percentage=$((success_count * 100 / total_checks))
-  log_info "Summary: $success_count/$total_checks checks passed ($percentage%)"
-
-  if [[ ${#failed_items[@]} -gt 0 ]]; then
-    log_error "Failed items: ${failed_items[*]}"
-    if [[ "$QUIET_MODE" == "true" ]]; then
-      exec 1>&3 # Restore stdout
-      grep -E '^(::(info|success|error|warning)|Running verification script\.\.\.)' "$temp_log" >&3
-      rm -f "$temp_log"
-    fi
-    return 1
-  fi
 
   log_success "All checks passed"
   if [[ "$QUIET_MODE" == "true" ]]; then
