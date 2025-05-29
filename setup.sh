@@ -170,6 +170,12 @@ install_homebrew() {
 }
 
 setup_orbstack() {
+  # Skip OrbStack setup if SKIP_ORBSTACK is set to true
+  if [[ "${SKIP_ORBSTACK:-false}" == "true" ]]; then
+    log_info "Skipping OrbStack setup as SKIP_ORBSTACK=true"
+    return 0
+  fi
+
   log_info "Setting up OrbStack..."
   if ! check_command orbctl; then
     log_error "OrbStack is not installed. Please install it first."

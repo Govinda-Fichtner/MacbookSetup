@@ -232,6 +232,12 @@ check_completion() {
 
 # Function to verify OrbStack setup
 verify_orbstack() {
+  # Skip OrbStack verification if SKIP_ORBSTACK is set to true
+  if [[ "${SKIP_ORBSTACK:-false}" == "true" ]]; then
+    log_info "Skipping OrbStack verification as SKIP_ORBSTACK=true"
+    return 0
+  fi
+
   log_info "Verifying OrbStack setup"
 
   # Check if OrbStack is installed
