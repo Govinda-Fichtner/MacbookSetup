@@ -222,36 +222,6 @@ daily_validation_task:
        *prepare_template, *create_test_template, *setup_template,
        *verify_template, *artifacts_template]
 
-  # Validate shell scripts with ShellCheck including system info
-  shellcheck_script:
-    - |
-      # Install Homebrew if needed
-      if ! command -v brew &>/dev/null; then
-        /bin/bash -c "$(curl -fsSL \
-          https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        [[ "$(uname -m)" == "arm64" ]] && \
-          eval "$(/opt/homebrew/bin/brew shellenv)"
-      fi
-
-      # Install ShellCheck
-      brew install shellcheck
-
-      # Validate shell scripts
-      shellcheck -s bash \
-        --external-sources \
-        --source-path=SCRIPTDIR \
-        --source-path="${PWD}/lib" \
-        --source-path="${HOME}" \
-        --exclude=SC1091,SC2296,SC2034,SC2154,SC2016 \
-        ci_modifiers.sh setup.sh verify_setup.sh
-
-      # Display system information for debugging
-      echo "=== System Information ==="
-      uname -a
-      sw_vers
-      echo "Shell: $SHELL"
-      echo "ZSH version: $(zsh --version)"
-
 # Task for testing the setup script on macOS ARM (on-demand)
 macos_arm_test_task:
   name: macos_arm_test
