@@ -176,6 +176,13 @@ install_packages() {
     return 1
   fi
 
+  # Remove Docker from Brewfile if it exists (since it comes with OrbStack)
+  if grep -q "docker" "Brewfile"; then
+    log_info "Removing Docker from Brewfile as it comes with OrbStack..."
+    sed -i.bak '/docker/d' "Brewfile"
+    rm -f "Brewfile.bak"
+  fi
+
   # Install packages
   if ! brew bundle check > /dev/null 2>&1; then
     log_info "Installing missing packages from Brewfile..."
@@ -185,6 +192,14 @@ install_packages() {
     }
   else
     log_success "All packages from Brewfile are already installed."
+  fi
+
+  # Start OrbStack if installed
+  if check_command orbctl; then
+    log_info "Starting OrbStack..."
+    orbctl start || {
+      log_warning "Failed to start OrbStack, but continuing setup"
+    }
   fi
 
   log_success "Package installation completed."
@@ -336,11 +351,14 @@ fi
 
 # Additional completion sources
 # OrbStack completion
-if command -v orb >/dev/null 2>&1; then
-    eval \"\$(orb completion zsh)\"
+if command -v orbctl >/dev/null 2>&1; then
+    # Generate and source orbctl completion
+    orbctl completion zsh > \"${COMPLETION_DIR}/_orbctl\" 2>/dev/null
+    # Generate and source orb completion
+    orb completion zsh > \"${COMPLETION_DIR}/_orb\" 2>/dev/null
 fi
 
-# Docker completion
+# Docker completion (comes with OrbStack)
 if command -v docker >/dev/null 2>&1; then
     source <(docker completion zsh)
 fi
@@ -358,11 +376,6 @@ fi
 # Helm completion
 if command -v helm >/dev/null 2>&1; then
     source <(helm completion zsh)
-fi
-
-# Docker completion (if available via Homebrew)
-if [[ -f \"\$(brew --prefix)/etc/bash_completion.d/docker\" ]]; then
-    source \"\$(brew --prefix)/etc/bash_completion.d/docker\"
 fi"
 
   if ! grep -q "Initialize completions" "$ZSHRC_PATH"; then

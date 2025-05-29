@@ -81,9 +81,10 @@ check_completion() {
       command -v docker > /dev/null 2>&1 && docker help completion > /dev/null 2>&1
       ;;
     orb)
-      # Skip orb completion check in CI as it's not critical
-      [[ "$QUIET_MODE" == "true" ]] && return 0
       command -v orb > /dev/null 2>&1 && orb completion zsh > /dev/null 2>&1
+      ;;
+    orbctl)
+      command -v orbctl > /dev/null 2>&1 && orbctl completion zsh > /dev/null 2>&1
       ;;
     kubectl)
       command -v kubectl > /dev/null 2>&1 && kubectl completion zsh > /dev/null 2>&1
@@ -156,7 +157,7 @@ main() {
 
   # Verify container tools
   log_info "Container Tools"
-  for tool in docker kubectl helm; do
+  for tool in docker orb orbctl kubectl helm; do
     ((total_checks++))
     if check_command "$tool"; then
       ((success_count++))
@@ -170,7 +171,7 @@ main() {
 
   # Verify shell completions
   log_info "Shell Completions"
-  for tool in docker kubectl helm terraform; do
+  for tool in docker orb orbctl kubectl helm terraform; do
     ((total_checks++))
     if check_completion "$tool" > /dev/null 2>&1; then
       ((success_count++))
