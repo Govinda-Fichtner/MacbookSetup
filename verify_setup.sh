@@ -107,7 +107,6 @@ verify_shell_config() {
   local essential_files=(
     "${ZDOTDIR:-$HOME}/.zshrc"
     "${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
-    "${ZDOTDIR:-$HOME}/.zsh_aliases"
   )
 
   for file in "${essential_files[@]}"; do
