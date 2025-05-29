@@ -175,6 +175,24 @@ verify_antidote() {
 check_completion() {
   local tool="$1"
   case "$tool" in
+    git)
+      # Git completion is built into zsh
+      [[ -f "/usr/share/zsh/functions/Completion/Unix/_git" ]] \
+        || [[ -f "/usr/local/share/zsh/site-functions/_git" ]] \
+        || [[ -f "${HOME}/.zsh/completions/_git" ]]
+      ;;
+    rbenv)
+      # rbenv completion is built into the tool
+      command -v rbenv > /dev/null 2>&1 && rbenv completions > /dev/null 2>&1
+      ;;
+    pyenv)
+      # pyenv completion is built into the tool
+      command -v pyenv > /dev/null 2>&1 && pyenv completions > /dev/null 2>&1
+      ;;
+    direnv)
+      # direnv completion is built into the tool
+      command -v direnv > /dev/null 2>&1 && direnv hook zsh > /dev/null 2>&1
+      ;;
     docker)
       # Docker completion is handled by OrbStack
       command -v docker > /dev/null 2>&1
@@ -191,10 +209,21 @@ check_completion() {
       command -v kubectl > /dev/null 2>&1 && kubectl completion zsh > /dev/null 2>&1
       ;;
     helm)
-      command -v helm > /dev/null 2>&1 && helm completion zsh > /dev/null 2>&1
+      # Generate helm completion if not exists
+      if command -v helm > /dev/null 2>&1; then
+        if [[ ! -f "${COMPLETION_DIR}/_helm" ]]; then
+          helm completion zsh > "${COMPLETION_DIR}/_helm" 2> /dev/null
+        fi
+        [[ -f "${COMPLETION_DIR}/_helm" ]]
+      else
+        return 1
+      fi
       ;;
     terraform)
       command -v terraform > /dev/null 2>&1
+      ;;
+    packer)
+      command -v packer > /dev/null 2>&1
       ;;
     *)
       return 1
@@ -424,6 +453,28 @@ verify_zsh_plugins() {
   return 0
 }
 
+# Function to print verification summary
+print_verification_summary() {
+  local total_checks=$1
+  local passed_checks=$2
+  local failed_checks=$3
+  local percentage=$((passed_checks * 100 / total_checks))
+
+  log_info "=== Verification Summary ==="
+  log_info "Total checks: $total_checks"
+  log_success "Passed: $passed_checks"
+  log_error "Failed: $failed_checks"
+  log_info "Success rate: $percentage%"
+
+  if [[ $failed_checks -gt 0 ]]; then
+    log_error "Verification failed - see above for details"
+    return 1
+  else
+    log_success "All checks passed"
+    return 0
+  fi
+}
+
 # Main verification function
 main() {
   # In CI mode, redirect all output to a temporary file
@@ -436,42 +487,69 @@ main() {
 
   log_info "Starting verification v${SCRIPT_VERSION}"
   local verification_failed=false
+  local total_checks=0
+  local passed_checks=0
+  local failed_checks=0
 
   # Verify shell configuration first
   if ! verify_shell_config; then
     log_error "Shell configuration verification failed"
     verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
   fi
+  ((total_checks++))
 
   # Verify Antidote setup
   if ! verify_antidote; then
     log_error "Antidote verification failed"
     verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
   fi
+  ((total_checks++))
 
   # Verify software tools
   if ! verify_software_tools; then
     log_error "Software tools verification failed"
     verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
   fi
+  ((total_checks++))
 
   # Verify shell completions
   if ! verify_shell_completions; then
     log_error "Shell completions verification failed"
     verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
   fi
+  ((total_checks++))
 
   # Verify zsh plugins
   if ! verify_zsh_plugins; then
     log_error "Zsh plugins verification failed"
     verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
   fi
+  ((total_checks++))
 
   # Verify OrbStack setup
   if ! verify_orbstack; then
     log_error "OrbStack verification failed"
     verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
   fi
+  ((total_checks++))
 
   if [[ "$QUIET_MODE" == "true" ]]; then
     exec 1>&3 # Restore stdout
@@ -479,13 +557,9 @@ main() {
     rm -f "$temp_log"
   fi
 
-  if [[ "$verification_failed" == "true" ]]; then
-    log_error "Verification failed - see above for details"
-    return 1
-  fi
-
-  log_success "All checks passed"
-  return 0
+  # Print verification summary
+  print_verification_summary "$total_checks" "$passed_checks" "$failed_checks"
+  return $?
 }
 
 # Run main function
