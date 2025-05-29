@@ -33,7 +33,14 @@ env:
       - echo $CIRRUS_OS
       - cat Brewfile || echo "No Brewfile"
     populate_script:
-      - echo "Homebrew cache will be populated on first run"
+      - |
+        # Only populate the cache, don't run verification
+        echo "Homebrew cache will be populated on first run"
+        # Ensure Homebrew is installed
+        if ! command -v brew &>/dev/null; then
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+        fi
 
 # Template for repository cloning
 .clone_template: &clone_template
