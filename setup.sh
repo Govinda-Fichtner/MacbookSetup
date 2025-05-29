@@ -185,6 +185,14 @@ setup_orbstack() {
     }
   fi
 
+  # Setup OrbStack completions
+  log_info "Setting up OrbStack completions..."
+  orbctl completion zsh > "${COMPLETION_DIR}/_orbctl" 2> /dev/null || log_warning "Failed to generate orbctl completion"
+
+  if [[ -f "${SCRIPT_DIR}/completions/_orb" ]]; then
+    cp "${SCRIPT_DIR}/completions/_orb" "${COMPLETION_DIR}/_orb" 2> /dev/null || log_warning "Failed to install custom orb completion"
+  fi
+
   log_success "OrbStack setup completed"
 }
 
@@ -213,21 +221,6 @@ install_packages() {
     }
   else
     log_success "All packages from Brewfile are already installed."
-  fi
-
-  # Setup OrbStack
-  setup_orbstack || log_warning "OrbStack setup incomplete"
-
-  # Setup OrbStack completions after installation
-  if command -v orbctl > /dev/null 2>&1; then
-    log_info "Setting up OrbStack completions..."
-    orbctl completion zsh > "${COMPLETION_DIR}/_orbctl" 2> /dev/null || log_warning "Failed to generate orbctl completion"
-
-    if [[ -f "${SCRIPT_DIR}/completions/_orb" ]]; then
-      cp "${SCRIPT_DIR}/completions/_orb" "${COMPLETION_DIR}/_orb" 2> /dev/null || log_warning "Failed to install custom orb completion"
-    fi
-  else
-    log_warning "OrbStack not found, skipping completion setup"
   fi
 
   log_success "Package installation completed."
@@ -462,6 +455,7 @@ main() {
   validate_system || exit 1
   install_homebrew || exit 1
   install_packages || exit 1
+  setup_orbstack || log_warning "OrbStack setup incomplete"
   install_hashicorp_tools || log_warning "Some HashiCorp tools may not be installed"
   configure_shell || exit 1
   setup_ruby_environment || log_warning "Ruby environment setup incomplete"
