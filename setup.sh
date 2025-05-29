@@ -176,6 +176,14 @@ setup_orbstack() {
     return 1
   fi
 
+  # Ensure OrbStack is in PATH
+  if [[ -d "/Applications/OrbStack.app" ]]; then
+    log_info "Adding OrbStack to PATH..."
+    # shellcheck disable=SC2016
+    echo 'export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"' >> "$ZSHRC_PATH"
+    export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"
+  fi
+
   # Start OrbStack if it's not running
   if ! orbctl status > /dev/null 2>&1; then
     log_info "Starting OrbStack..."
@@ -183,6 +191,22 @@ setup_orbstack() {
       log_error "Failed to start OrbStack"
       return 1
     }
+  fi
+
+  # Wait for OrbStack to be fully initialized
+  log_info "Waiting for OrbStack to initialize..."
+  local retries=30
+  while [[ $retries -gt 0 ]]; do
+    if orbctl status > /dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+    ((retries--))
+  done
+
+  if [[ $retries -eq 0 ]]; then
+    log_error "OrbStack failed to initialize"
+    return 1
   fi
 
   # Setup OrbStack completions
@@ -393,6 +417,16 @@ setup_shell_completions() {
     "if command -v helm >/dev/null 2>&1; then"
     "    source <(helm completion zsh)"
     "fi"
+    ""
+    "# Pyenv completion"
+    "if command -v pyenv >/dev/null 2>&1; then"
+    "    eval \"\$(pyenv init -)\""
+    "fi"
+    ""
+    "# Packer completion"
+    "if command -v packer >/dev/null 2>&1; then"
+    "    complete -o nospace -C packer packer"
+    "fi"
   )
 
   if ! grep -q "Initialize completions" "$ZSHRC_PATH"; then
@@ -403,11 +437,29 @@ setup_shell_completions() {
   rm -f "${HOME}/.zcompdump"*
   rm -f "${ZCOMPCACHE_DIR}/"*
 
-  # Set up fzf completion immediately for current session
+  # Set up completions immediately for current session
   if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.zsh" ]]; then
     # shellcheck disable=SC1090
     source "$(brew --prefix)/opt/fzf/shell/completion.zsh" 2> /dev/null || log_warning "Failed to source fzf completion"
   fi
+
+  # Source completions for tools that are already installed
+  for tool in docker terraform kubectl helm pyenv packer; do
+    if command -v "$tool" > /dev/null 2>&1; then
+      case "$tool" in
+        docker | kubectl | helm)
+          # shellcheck disable=SC1090
+          source <("$tool" completion zsh) 2> /dev/null || log_warning "Failed to source $tool completion"
+          ;;
+        terraform | packer)
+          complete -o nospace -C "$tool" "$tool" 2> /dev/null || log_warning "Failed to set up $tool completion"
+          ;;
+        pyenv)
+          eval "$(pyenv init -)" 2> /dev/null || log_warning "Failed to initialize pyenv"
+          ;;
+      esac
+    fi
+  done
 
   log_success "Shell completions setup completed."
 }
