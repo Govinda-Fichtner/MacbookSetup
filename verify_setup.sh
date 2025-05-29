@@ -157,15 +157,20 @@ check_completion() {
       # Git completion is built into zsh
       [[ -f "/usr/share/zsh/functions/Completion/Unix/_git" ]] \
         || [[ -f "/usr/local/share/zsh/site-functions/_git" ]] \
+        || [[ -f "/opt/homebrew/share/zsh/site-functions/_git" ]] \
         || [[ -f "${HOME}/.zsh/completions/_git" ]]
       ;;
     rbenv)
       # rbenv completion is built into the tool
-      command -v rbenv > /dev/null 2>&1 && rbenv completions > /dev/null 2>&1
+      [[ -f "/usr/local/share/zsh/site-functions/_rbenv" ]] \
+        || [[ -f "/opt/homebrew/share/zsh/site-functions/_rbenv" ]] \
+        || [[ -f "${HOME}/.zsh/completions/_rbenv" ]]
       ;;
     pyenv)
-      # pyenv completion is built into the tool
-      command -v pyenv > /dev/null 2>&1 && pyenv completions > /dev/null 2>&1
+      # Check for pyenv completion file in standard locations
+      [[ -f "/usr/local/share/zsh/site-functions/_pyenv" ]] \
+        || [[ -f "/opt/homebrew/share/zsh/site-functions/_pyenv" ]] \
+        || [[ -f "${HOME}/.zsh/completions/_pyenv" ]]
       ;;
     direnv)
       # direnv completion is built into the tool
@@ -198,10 +203,26 @@ check_completion() {
       fi
       ;;
     terraform)
-      command -v terraform > /dev/null 2>&1
+      # Install terraform completion if not exists
+      if command -v terraform > /dev/null 2>&1; then
+        if [[ ! -f "${COMPLETION_DIR}/_terraform" ]]; then
+          terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
+        fi
+        [[ -f "${COMPLETION_DIR}/_terraform" ]]
+      else
+        return 1
+      fi
       ;;
     packer)
-      command -v packer > /dev/null 2>&1
+      # Install packer completion if not exists
+      if command -v packer > /dev/null 2>&1; then
+        if [[ ! -f "${COMPLETION_DIR}/_packer" ]]; then
+          packer -autocomplete-install > /dev/null 2>&1 || return 1
+        fi
+        [[ -f "${COMPLETION_DIR}/_packer" ]]
+      else
+        return 1
+      fi
       ;;
     *)
       return 1
@@ -404,7 +425,7 @@ verify_zsh_plugins() {
   # Verify core plugins
   log_info "Core Plugins"
   for plugin in zsh-completions zsh-autosuggestions zsh-syntax-highlighting; do
-    if [[ -d "${ZDOTDIR:-$HOME}/.antidote/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}" ]]; then
+    if [[ -d "${HOME}/Library/Caches/antidote/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}" ]]; then
       print_status PASS "$plugin"
     else
       print_status FAIL "$plugin"
@@ -415,7 +436,7 @@ verify_zsh_plugins() {
   # Verify Oh My Zsh plugins
   log_info "Oh My Zsh Plugins"
   for plugin in git kubectl helm terraform docker docker-compose common-aliases brew fzf; do
-    if [[ -d "${ZDOTDIR:-$HOME}/.antidote/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}" ]]; then
+    if [[ -d "${HOME}/Library/Caches/antidote/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}" ]]; then
       print_status PASS "$plugin"
     else
       print_status FAIL "$plugin"

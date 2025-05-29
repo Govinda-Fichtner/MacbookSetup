@@ -447,15 +447,38 @@ main() {
   setup_ruby_environment || log_warning "Ruby environment setup incomplete"
   setup_python_environment || log_warning "Python environment setup incomplete"
 
-  # After installing Antidote, run antidote bundle to set up plugins
-  if command -v antidote > /dev/null 2>&1; then
-    log_info "Setting up Antidote plugins..."
-    antidote bundle < "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" > "${ZDOTDIR:-$HOME}/.zsh_plugins.zsh"
-    log_success "Antidote plugins set up successfully"
-  else
-    log_error "Antidote is not installed. Please install it first."
-    exit 1
+  # Install Antidote
+  if ! command -v antidote > /dev/null 2>&1; then
+    log_info "Installing Antidote..."
+    brew install antidote || {
+      log_error "Failed to install Antidote"
+      return 1
+    }
   fi
+
+  # Source Antidote and bundle plugins
+  if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
+    # Initialize completion system
+    autoload -Uz compinit
+    if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
+      compinit -i
+    else
+      compinit -C -i
+    fi
+
+    source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+    log_info "Loading Antidote plugins..."
+    antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" || {
+      log_error "Failed to load Antidote plugins"
+      return 1
+    }
+    log_success "Antidote plugins loaded successfully"
+  else
+    log_error "Antidote installation not found"
+    return 1
+  fi
+
+  log_success "Antidote setup completed"
 
   log_success "Setup completed successfully!"
   log_info "Please restart your terminal or run: source $ZSHRC_PATH"
