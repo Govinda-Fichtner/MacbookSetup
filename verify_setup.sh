@@ -57,20 +57,33 @@ fi
 # Save stdout for logging
 exec 3>&1
 
-# Define color codes (disabled in quiet mode)
-if [[ "$QUIET_MODE" == "true" ]]; then
-  RED=""
-  GREEN=""
-  YELLOW=""
-  BLUE=""
-  NC=""
-else
-  RED='\033[0;31m'
-  GREEN='\033[0;32m'
-  YELLOW='\033[1;33m'
-  BLUE='\033[0;34m'
-  NC='\033[0m'
-fi
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+RESET='\033[0m'
+
+# Print a status line with color and symbol
+print_status() {
+  local status=$1
+  local label=$2
+  local msg=$3
+  case "$status" in
+    PASS)
+      printf "%b[✓]%b %-30s %s\n" "$GREEN" "$RESET" "$label" "$msg"
+      ;;
+    FAIL)
+      printf "%b[✗]%b %-30s %s\n" "$RED" "$RESET" "$label" "$msg"
+      ;;
+    SKIP)
+      printf "%b[⚠]%b %-30s %s\n" "$YELLOW" "$RESET" "$label" "$msg"
+      ;;
+    INFO)
+      printf "%b[ℹ]%b %-30s %s\n" "$BLUE" "$RESET" "$label" "$msg"
+      ;;
+  esac
+}
 
 # Logging functions
 log_info() {
@@ -103,28 +116,6 @@ log_error() {
   else
     echo -e "${RED}ERROR:${NC} $1"
   fi
-}
-
-# Function to print status in CI-friendly format
-print_status() {
-  local description="$1"
-  local result="$2"
-  local version="${3:-}"
-
-  if [[ "$QUIET_MODE" == "true" ]]; then
-    case "$result" in
-      "PASS") echo "::success::✓ $description${version:+ ($version)}" >&3 ;;
-      "FAIL") echo "::error::✗ $description" >&3 ;;
-      *) echo "::info::$result $description${version:+ ($version)}" >&3 ;;
-    esac
-  else
-    printf "%-35s ... %s%s\n" "$description" "$result" "${version:+ ($version)}"
-  fi
-}
-
-# Utility functions
-check_command() {
-  command -v "$1" > /dev/null 2>&1
 }
 
 # Function to verify Antidote setup
@@ -309,9 +300,9 @@ verify_software_tools() {
   for tool in brew git rbenv pyenv direnv starship; do
     if check_command "$tool"; then
       version=$("$tool" --version 2> /dev/null | head -1 || echo "")
-      print_status "$tool" "PASS" "$version"
+      print_status PASS "$tool" "$version"
     else
-      print_status "$tool" "FAIL"
+      print_status FAIL "$tool"
       failed_tools+=("$tool")
     fi
   done
@@ -321,9 +312,9 @@ verify_software_tools() {
   for tool in docker orb orbctl kubectl helm; do
     if check_command "$tool"; then
       version=$("$tool" version 2> /dev/null | head -1 || echo "")
-      print_status "$tool" "PASS" "$version"
+      print_status PASS "$tool" "$version"
     else
-      print_status "$tool" "FAIL"
+      print_status FAIL "$tool"
       failed_tools+=("$tool")
     fi
   done
@@ -333,9 +324,9 @@ verify_software_tools() {
   for tool in terraform packer; do
     if check_command "$tool"; then
       version=$("$tool" --version 2> /dev/null | head -1 || echo "")
-      print_status "$tool" "PASS" "$version"
+      print_status PASS "$tool" "$version"
     else
-      print_status "$tool" "FAIL"
+      print_status FAIL "$tool"
       failed_tools+=("$tool")
     fi
   done
@@ -361,9 +352,9 @@ verify_shell_completions() {
   log_info "Core Completions"
   for tool in git rbenv pyenv direnv; do
     if check_completion "$tool"; then
-      print_status "$tool completion" "PASS"
+      print_status PASS "$tool completion"
     else
-      print_status "$tool completion" "FAIL"
+      print_status FAIL "$tool completion"
       failed_completions+=("$tool")
     fi
   done
@@ -372,9 +363,9 @@ verify_shell_completions() {
   log_info "Container Completions"
   for tool in docker orb orbctl kubectl helm; do
     if check_completion "$tool"; then
-      print_status "$tool completion" "PASS"
+      print_status PASS "$tool completion"
     else
-      print_status "$tool completion" "FAIL"
+      print_status FAIL "$tool completion"
       failed_completions+=("$tool")
     fi
   done
@@ -383,9 +374,9 @@ verify_shell_completions() {
   log_info "Infrastructure Completions"
   for tool in terraform packer; do
     if check_completion "$tool"; then
-      print_status "$tool completion" "PASS"
+      print_status PASS "$tool completion"
     else
-      print_status "$tool completion" "FAIL"
+      print_status FAIL "$tool completion"
       failed_completions+=("$tool")
     fi
   done
@@ -414,9 +405,9 @@ verify_zsh_plugins() {
   log_info "Core Plugins"
   for plugin in zsh-completions zsh-autosuggestions zsh-syntax-highlighting; do
     if [[ -d "${ZDOTDIR:-$HOME}/.antidote/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}" ]]; then
-      print_status "$plugin" "PASS"
+      print_status PASS "$plugin"
     else
-      print_status "$plugin" "FAIL"
+      print_status FAIL "$plugin"
       failed_plugins+=("$plugin")
     fi
   done
@@ -425,9 +416,9 @@ verify_zsh_plugins() {
   log_info "Oh My Zsh Plugins"
   for plugin in git kubectl helm terraform docker docker-compose common-aliases brew fzf; do
     if [[ -d "${ZDOTDIR:-$HOME}/.antidote/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}" ]]; then
-      print_status "$plugin" "PASS"
+      print_status PASS "$plugin"
     else
-      print_status "$plugin" "FAIL"
+      print_status FAIL "$plugin"
       failed_plugins+=("$plugin")
     fi
   done
