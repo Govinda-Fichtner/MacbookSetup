@@ -151,30 +151,11 @@ env:
       export CI=true
       zsh ./ci_setup.sh
 
-      # Initialize OrbStack for CI
+      # Verify OrbStack installation without starting it
       if command -v orbctl >/dev/null 2>&1; then
-        echo "Initializing OrbStack..."
-        # Add OrbStack to PATH
-        export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"
-
-        # Start OrbStack with retries
-        for i in {1..5}; do
-          echo "Attempt $i to start OrbStack..."
-          if orbctl start; then
-            echo "OrbStack started successfully"
-            break
-          fi
-          sleep 5
-        done
-
-        # Wait for OrbStack to be ready
-        for i in {1..30}; do
-          if orbctl status >/dev/null 2>&1; then
-            echo "OrbStack is ready"
-            break
-          fi
-          sleep 1
-        done
+        echo "Verifying OrbStack installation..."
+        echo "OrbStack version: $(orbctl version)"
+        echo "Note: OrbStack initialization is skipped in CI due to nested virtualization limitations"
       fi
 
       # Show installed package versions
@@ -208,8 +189,8 @@ env:
       # Force local output mode and disable GitHub Actions output
       export QUIET_MODE=false
       export GITHUB_ACTIONS=false
-      # Ensure OrbStack is in PATH
-      export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"
+      # Skip OrbStack verification in CI
+      export SKIP_ORBSTACK=true
       # Run verification in local mode
       ./verify_setup.sh 2>&1 | tee verify.log
       # Exit with the status of verify_setup.sh
