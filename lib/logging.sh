@@ -1,6 +1,9 @@
 #!/bin/zsh
 # shellcheck shell=bash
 
+# Prevent function definitions from being printed
+setopt NO_FUNCTION_ARGZERO
+
 # Logging configuration
 # Log levels (lower number = higher priority)
 readonly LOG_LEVEL_ERROR=0
@@ -110,7 +113,5 @@ if [[ -n "${MACBOOK_SETUP_LOG_LEVEL:-}" ]]; then
   set_log_level "$MACBOOK_SETUP_LOG_LEVEL"
 fi
 
-# Export functions and variables
+# Export log level variable for use in subshells
 export CURRENT_LOG_LEVEL
-export -f log_error log_warning log_info log_debug log_success set_log_level get_log_level_name
-export -f start_progress end_progress

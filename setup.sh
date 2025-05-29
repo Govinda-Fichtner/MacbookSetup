@@ -19,10 +19,12 @@ ZDOTDIR="${ZDOTDIR:-$HOME}"
 readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 readonly ZCOMPCACHE_DIR="${HOME}/.zcompcache"
 readonly ANTIDOTE_PLUGINS_FILE="${ZDOTDIR}/.zsh_plugins.txt"
+# shellcheck disable=SC2155
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source logging module
 # shellcheck source=lib/logging.sh
-source "lib/logging.sh"
+source "${SCRIPT_DIR}/lib/logging.sh"
 
 # Color definitions
 readonly RED='\033[0;31m'
@@ -327,63 +329,150 @@ setup_shell_completions() {
   ensure_dir "$ZCOMPCACHE_DIR"
 
   # Add completion configuration to .zshrc
-  local completion_config
-  completion_config="# Initialize completions
-# Ensure we're running in zsh
-if [ -n \"\$BASH_VERSION\" ]; then
-    exec /bin/zsh \"\$0\" \"\$@\"
-fi
-
-# Initialize completion system
-autoload -Uz compinit
-if [[ -f ~/.zcompdump && \$(find ~/.zcompdump -mtime +1) ]]; then
-    compinit -i
-else
-    compinit -C -i
-fi
-
-# Completion settings
-zstyle ':completion:*' menu select
-zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
-zstyle ':completion::complete:*' use-cache on
-zstyle ':completion::complete:*' cache-path \"\$ZCOMPCACHE_DIR\"
-
-# Source fzf completions if available
-if [[ -f \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" ]]; then
-    source \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" 2>/dev/null
-fi
-
-# Additional completion sources
-# OrbStack completion
-if command -v orbctl >/dev/null 2>&1; then
-    # Generate and source orbctl completion
-    orbctl completion zsh > \"${COMPLETION_DIR}/_orbctl\" 2>/dev/null
-    # Generate and source orb completion
-    orb completion zsh > \"${COMPLETION_DIR}/_orb\" 2>/dev/null
-fi
-
-# Docker completion (comes with OrbStack)
-if command -v docker >/dev/null 2>&1; then
-    source <(docker completion zsh)
-fi
-
-# Terraform completion
-if command -v terraform >/dev/null 2>&1; then
-    complete -o nospace -C terraform terraform
-fi
-
-# Kubectl completion
-if command -v kubectl >/dev/null 2>&1; then
-    source <(kubectl completion zsh)
-fi
-
-# Helm completion
-if command -v helm >/dev/null 2>&1; then
-    source <(helm completion zsh)
-fi"
+  # shellcheck disable=SC2124
+  local completion_config=(
+    "# Initialize completions"
+    "# Ensure we're running in zsh"
+    "if [ -n \"\$BASH_VERSION\" ]; then"
+    "    exec /bin/zsh \"\$0\" \"\$@\""
+    "fi"
+    ""
+    "# Initialize completion system"
+    "autoload -Uz compinit"
+    "if [[ -f ~/.zcompdump && \$(find ~/.zcompdump -mtime +1) ]]; then"
+    "    compinit -i"
+    "else"
+    "    compinit -C -i"
+    "fi"
+    ""
+    "# Completion settings"
+    "zstyle ':completion:*' menu select"
+    "zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'"
+    "zstyle ':completion::complete:*' use-cache on"
+    "zstyle ':completion::complete:*' cache-path \"\$ZCOMPCACHE_DIR\""
+    ""
+    "# Source fzf completions if available"
+    "if [[ -f \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" ]]; then"
+    "    source \"\$(brew --prefix)/opt/fzf/shell/completion.zsh\" 2>/dev/null"
+    "fi"
+    ""
+    "# Additional completion sources"
+    "# OrbStack completion"
+    "if command -v orbctl >/dev/null 2>&1; then"
+    "    # Generate and source orbctl completion"
+    "    orbctl completion zsh > \"${COMPLETION_DIR}/_orbctl\" 2>/dev/null"
+    ""
+    "    # Generate and source orb completion"
+    "    cat > \"${COMPLETION_DIR}/_orb\" << 'EOF'"
+    "# shellcheck disable=SC1078,SC1079,SC2027,SC1087"
+    "#compdef orb"
+    ""
+    "_orb() {"
+    "    local curcontext=\"\$curcontext\" state line"
+    "    typeset -A opt_args"
+    ""
+    "    _arguments -C \\"
+    "        '1: :->cmds' \\"
+    "        '*::arg:->args'"
+    ""
+    "    case \"\$state\" in"
+    "        cmds)"
+    "            # First level: main commands"
+    "            _values 'orb commands' \\"
+    "                'run[Run command on Linux]' \\"
+    "                'start[Start OrbStack or a machine]' \\"
+    "                'stop[Stop OrbStack or a machine]' \\"
+    "                'status[Check whether OrbStack is running]' \\"
+    "                'list[List machines]' \\"
+    "                'create[Create a new machine]' \\"
+    "                'delete[Delete a machine]' \\"
+    "                'clone[Clone a machine]' \\"
+    "                'config[Change OrbStack settings]' \\"
+    "                'default[Get or set the default machine]' \\"
+    "                'export[Export a machine to a file]' \\"
+    "                'import[Import a machine from a file]' \\"
+    "                'info[Get info about a machine]' \\"
+    "                'logs[Show logs for a machine]' \\"
+    "                'pull[Copy files from Linux]' \\"
+    "                'push[Copy files to Linux]' \\"
+    "                'rename[Rename a machine]' \\"
+    "                'reset[Delete all Linux and Docker data]' \\"
+    "                'restart[Restart a machine]' \\"
+    "                'update[Update OrbStack]' \\"
+    "                'version[Show OrbStack version]' \\"
+    "                'help[Help about any command]'"
+    "            ;;"
+    "        args)"
+    "            # Second level: subcommands"
+    "            case \${words[1]} in"
+    "                run)"
+    "                    _orbctl_run"
+    "                    ;;"
+    "                *)"
+    "                    _orbctl"
+    "                    ;;"
+    "            esac"
+    "            ;;"
+    "    esac"
+    "}"
+    ""
+    "_orbctl_run() {"
+    "    local curcontext=\"\$curcontext\" state line"
+    "    typeset -A opt_args"
+    ""
+    "    _arguments -C \\"
+    "        '-m[Specify machine]:machine:->machines' \\"
+    "        '-u[Specify user]:user:_users' \\"
+    "        '*::command:->command'"
+    ""
+    "    case \"\$state\" in"
+    "        machines)"
+    "            _orbctl_machines"
+    "            ;;"
+    "        command)"
+    "            _command_names"
+    "            ;;"
+    "    esac"
+    "}"
+    ""
+    "_orbctl_machines() {"
+    "    local machines"
+    "    machines=(\$(orbctl list --format '{{.Name}}' 2>/dev/null))"
+    "    _values 'machines' \$machines"
+    "}"
+    ""
+    "_orb \"\$@\""
+    "EOF"
+    ""
+    "    # Source the completions"
+    "    autoload -Uz compinit"
+    "    compinit"
+    "    fpath=(\"${COMPLETION_DIR}\" \$fpath)"
+    "fi"
+    ""
+    "# Docker completion (comes with OrbStack)"
+    "if command -v docker >/dev/null 2>&1; then"
+    "    source <(docker completion zsh)"
+    "fi"
+    ""
+    "# Terraform completion"
+    "if command -v terraform >/dev/null 2>&1; then"
+    "    complete -o nospace -C terraform terraform"
+    "fi"
+    ""
+    "# Kubectl completion"
+    "if command -v kubectl >/dev/null 2>&1; then"
+    "    source <(kubectl completion zsh)"
+    "fi"
+    ""
+    "# Helm completion"
+    "if command -v helm >/dev/null 2>&1; then"
+    "    source <(helm completion zsh)"
+    "fi"
+  )
 
   if ! grep -q "Initialize completions" "$ZSHRC_PATH"; then
-    echo -e "\n$completion_config" >> "$ZSHRC_PATH"
+    printf "%s\n" "${completion_config[@]}" >> "$ZSHRC_PATH"
   fi
 
   # Force regeneration of completion cache
