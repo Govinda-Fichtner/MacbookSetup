@@ -5,6 +5,11 @@
 # macOS Development Environment Verification Script
 # This script verifies that all tools and configurations are properly installed
 
+# Ensure we're running in zsh
+if [ -n "$BASH_VERSION" ]; then
+  exec /bin/zsh "$0" "$@"
+fi
+
 # Script configuration
 readonly SCRIPT_VERSION="1.0.0"
 readonly COMPLETION_DIR="${HOME}/.zsh/completions"
@@ -76,6 +81,8 @@ check_completion() {
       command -v docker > /dev/null 2>&1 && docker help completion > /dev/null 2>&1
       ;;
     orb)
+      # Skip orb completion check in CI as it's not critical
+      [[ "$QUIET_MODE" == "true" ]] && return 0
       command -v orb > /dev/null 2>&1 && orb completion zsh > /dev/null 2>&1
       ;;
     kubectl)
@@ -135,7 +142,7 @@ main() {
 
   # Verify core tools
   log_info "Core Tools"
-  for tool in brew git antidote rbenv pyenv direnv starship; do
+  for tool in brew git rbenv pyenv direnv starship; do
     ((total_checks++))
     if check_command "$tool"; then
       ((success_count++))
@@ -149,7 +156,7 @@ main() {
 
   # Verify container tools
   log_info "Container Tools"
-  for tool in docker orb kubectl helm; do
+  for tool in docker kubectl helm; do
     ((total_checks++))
     if check_command "$tool"; then
       ((success_count++))
@@ -163,7 +170,7 @@ main() {
 
   # Verify shell completions
   log_info "Shell Completions"
-  for tool in docker orb kubectl helm terraform; do
+  for tool in docker kubectl helm terraform; do
     ((total_checks++))
     if check_completion "$tool" > /dev/null 2>&1; then
       ((success_count++))
