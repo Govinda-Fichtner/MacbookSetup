@@ -162,21 +162,25 @@ env:
 .verify_template: &verify_template
   verify_script:
     - |
-      # Ensure the shell is properly loaded
-      echo "Running verification script..."
-      # Source zshrc to ensure all configurations are loaded
-      source ~/.zshrc || echo "Failed to source ~/.zshrc"
+      # Switch to zsh for the entire verification process
+      exec zsh -c '
+        # Ensure the shell is properly loaded
+        echo "Running verification script..."
 
-      # Create a log file for verification
-      zsh ./verify_setup.sh 2>&1 | tee verify.log
+        # Source zshrc to ensure all configurations are loaded
+        source ~/.zshrc || echo "Failed to source ~/.zshrc"
 
-      # Check the exit status of the verification
-      if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
-        echo "Verification failed. See verify.log for details."
-        exit 1
-      else
-        echo "Verification succeeded."
-      fi
+        # Create a log file for verification
+        ./verify_setup.sh 2>&1 | tee verify.log
+
+        # Check the exit status of the verification
+        if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
+          echo "Verification failed. See verify.log for details."
+          exit 1
+        else
+          echo "Verification succeeded."
+        fi
+      '
 
 # Template for artifact collection
 .artifacts_template: &artifacts_template
