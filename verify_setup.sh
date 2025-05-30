@@ -390,8 +390,14 @@ check_completion() {
   local completion_dir="${HOME}/.zsh/completions"
   local compfile="_$tool"
 
+  # Debug output
+  echo "Debug: Checking completion for $tool"
+  echo "Debug: Completion directory: $completion_dir"
+  echo "Debug: Completion file: $compfile"
+
   # 1. Check if completion is already in fpath
   if completion_in_fpath "$tool"; then
+    echo "Debug: Completion found in fpath"
     return 0
   fi
 
@@ -402,11 +408,13 @@ check_completion() {
       "/usr/local/share/zsh/site-functions/_git" \
       "/opt/homebrew/share/zsh/site-functions/_git"; do
       if [[ -f "$loc" ]]; then
+        echo "Debug: Copying git completion from $loc to ${completion_dir}/_git"
         cp "$loc" "${completion_dir}/_git"
         return 0
       fi
     done
     # Try to generate as last resort
+    echo "Debug: Generating git completion"
     if git completion zsh > "${completion_dir}/_git" 2> /dev/null; then
       return 0
     fi
@@ -426,6 +434,7 @@ check_completion() {
     direnv)
       # Generate direnv completion if not exists
       if [[ ! -f "${completion_dir}/_direnv" ]]; then
+        echo "Debug: Generating direnv completion"
         direnv hook zsh > "${completion_dir}/_direnv" 2> /dev/null || return 1
       fi
       [[ -f "${completion_dir}/_direnv" ]]
@@ -433,6 +442,7 @@ check_completion() {
     docker)
       # Generate docker completion if not exists
       if [[ ! -f "${completion_dir}/_docker" ]]; then
+        echo "Debug: Generating docker completion"
         docker completion zsh > "${completion_dir}/_docker" 2> /dev/null || return 1
       fi
       [[ -f "${completion_dir}/_docker" ]]
@@ -448,6 +458,7 @@ check_completion() {
     kubectl)
       # Generate kubectl completion if not exists
       if [[ ! -f "${completion_dir}/_kubectl" ]]; then
+        echo "Debug: Generating kubectl completion"
         kubectl completion zsh > "${completion_dir}/_kubectl" 2> /dev/null || return 1
       fi
       [[ -f "${completion_dir}/_kubectl" ]]
@@ -457,6 +468,7 @@ check_completion() {
       if command -v helm > /dev/null 2>&1; then
         local helm_completion="${completion_dir}/_helm"
         if [[ ! -f "${helm_completion}" ]]; then
+          echo "Debug: Generating helm completion"
           helm completion zsh > "${helm_completion}" 2> /dev/null || return 1
         fi
         [[ -f "${helm_completion}" ]]
@@ -469,6 +481,7 @@ check_completion() {
       if command -v terraform > /dev/null 2>&1; then
         local terraform_completion="${completion_dir}/_terraform"
         if [[ ! -f "${terraform_completion}" ]]; then
+          echo "Debug: Installing terraform completion"
           terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
         fi
         [[ -f "${terraform_completion}" ]]
@@ -481,6 +494,7 @@ check_completion() {
       if command -v packer > /dev/null 2>&1; then
         local packer_completion="${completion_dir}/_packer"
         if [[ ! -f "${packer_completion}" ]]; then
+          echo "Debug: Installing packer completion"
           packer -autocomplete-install > /dev/null 2>&1 || return 1
         fi
         [[ -f "${packer_completion}" ]]
