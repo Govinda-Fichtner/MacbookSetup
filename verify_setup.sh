@@ -251,77 +251,76 @@ verify_shell_completions() {
 
 # Function to verify zsh plugins
 verify_zsh_plugins() {
+  log_info "Verifying zsh plugins"
   local failed_plugins=()
   local plugin_errors=()
 
-  # Skip plugin verification in CI mode
-  if [[ "${CI:-false}" == "true" ]]; then
-    echo "Debug: Skipping plugin verification in CI mode"
-    return 0
-  fi
-
-  # Check core plugins
-  echo "INFO Core Plugins"
-  check_plugin "zsh-completions" || {
-    failed_plugins+=("zsh-completions")
-    plugin_errors+=("zsh-completions plugin not found")
-  }
-  check_plugin "zsh-autosuggestions" || {
-    failed_plugins+=("zsh-autosuggestions")
-    plugin_errors+=("zsh-autosuggestions plugin not found")
-  }
-  check_plugin "zsh-syntax-highlighting" || {
-    failed_plugins+=("zsh-syntax-highlighting")
-    plugin_errors+=("zsh-syntax-highlighting plugin not found")
-  }
-
-  # Check Oh My Zsh plugins
-  echo "INFO Oh My Zsh Plugins"
-  check_plugin "git" || {
-    failed_plugins+=("git")
-    plugin_errors+=("git plugin not found")
-  }
-  check_plugin "kubectl" || {
-    failed_plugins+=("kubectl")
-    plugin_errors+=("kubectl plugin not found")
-  }
-  check_plugin "helm" || {
-    failed_plugins+=("helm")
-    plugin_errors+=("helm plugin not found")
-  }
-  check_plugin "terraform" || {
-    failed_plugins+=("terraform")
-    plugin_errors+=("terraform plugin not found")
-  }
-  check_plugin "docker" || {
-    failed_plugins+=("docker")
-    plugin_errors+=("docker plugin not found")
-  }
-  check_plugin "docker-compose" || {
-    failed_plugins+=("docker-compose")
-    plugin_errors+=("docker-compose plugin not found")
-  }
-  check_plugin "common-aliases" || {
-    failed_plugins+=("common-aliases")
-    plugin_errors+=("common-aliases plugin not found")
-  }
-  check_plugin "brew" || {
-    failed_plugins+=("brew")
-    plugin_errors+=("brew plugin not found")
-  }
-  check_plugin "fzf" || {
-    failed_plugins+=("fzf")
-    plugin_errors+=("fzf plugin not found")
-  }
-
-  # Report results
-  if [[ ${#failed_plugins[@]} -gt 0 ]]; then
-    echo "ERROR Failed plugins: ${failed_plugins[*]}"
-    echo "ERROR Zsh plugins verification failed"
+  # Check if plugins file exists
+  if [[ ! -f "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" ]]; then
+    log_error "Zsh plugins file not found"
     return 1
   fi
 
-  echo "SUCCESS Zsh plugins verified"
+  # Initialize completion system before checking plugins
+  autoload -Uz compinit
+  compinit -d "${HOME}/.zcompcache/zcompdump"
+
+  # Define possible Antidote cache locations
+  local antidote_cache_locations=(
+    "/Users/gfichtner/Library/Caches/antidote"
+    "/Users/admin/Library/Caches/antidote"
+  )
+
+  # Verify core plugins
+  log_info "Core Plugins"
+  for plugin in zsh-completions zsh-autosuggestions zsh-syntax-highlighting; do
+    local found=false
+    for cache_dir in "${antidote_cache_locations[@]}"; do
+      if [[ "$plugin" == "zsh-syntax-highlighting" ]]; then
+        if [[ -f "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}/zsh-syntax-highlighting.zsh" ]]; then
+          print_status PASS "$plugin"
+          found=true
+          break
+        fi
+      else
+        if [[ -d "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}/src" ]]; then
+          print_status PASS "$plugin"
+          found=true
+          break
+        fi
+      fi
+    done
+    if [[ "$found" == "false" ]]; then
+      print_status FAIL "$plugin"
+      failed_plugins+=("$plugin")
+    fi
+  done
+
+  # Verify Oh My Zsh plugins
+  log_info "Oh My Zsh Plugins"
+  for plugin in git kubectl helm terraform docker docker-compose common-aliases brew fzf; do
+    local found=false
+    for cache_dir in "${antidote_cache_locations[@]}"; do
+      if [[ -d "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}" ]]; then
+        print_status PASS "$plugin"
+        found=true
+        break
+      fi
+    done
+    if [[ "$found" == "false" ]]; then
+      print_status FAIL "$plugin"
+      failed_plugins+=("$plugin")
+    fi
+  done
+
+  # Report results
+  if [[ ${#failed_plugins[@]} -gt 0 ]]; then
+    log_error "Failed plugins: ${failed_plugins[*]}"
+    log_error "Zsh plugins verification failed"
+    return 1
+  fi
+
+  log_success "Zsh plugins verified"
   return 0
 }
 
