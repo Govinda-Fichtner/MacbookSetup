@@ -1,0 +1,134 @@
+version: 2.1
+
+# Define reusable commands
+commands:
+  install_homebrew:
+    description: "Install Homebrew if not present"
+    steps:
+      - run:
+          name: Install Homebrew
+          command: |
+            if ! command -v brew &>/dev/null; then
+              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+              [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+            fi
+
+  prepare_environment:
+    description: "Prepare the CI environment"
+    steps:
+      - run:
+          name: Install required tools
+          command: |
+            brew install shellcheck
+            chmod +x ci_modifiers.sh
+            zsh ./ci_modifiers.sh
+            chmod +x ci_setup.sh
+            chmod +x verify_setup.sh
+
+  create_plugins_file:
+    description: "Create .zsh_plugins.txt if it doesn't exist"
+    steps:
+      - run:
+          name: Create plugins file
+          command: |
+            if [[ ! -f ~/.zsh_plugins.txt ]]; then
+              mkdir -p ~/.antidote
+              echo "# Core functionality" > ~/.zsh_plugins.txt
+              echo "zsh-users/zsh-completions" >> ~/.zsh_plugins.txt
+              echo "zsh-users/zsh-autosuggestions" >> ~/.zsh_plugins.txt
+              echo "zsh-users/zsh-syntax-highlighting" >> ~/.zsh_plugins.txt
+              echo "" >> ~/.zsh_plugins.txt
+              echo "# Git integration" >> ~/.zsh_plugins.txt
+              echo "ohmyzsh/ohmyzsh path:plugins/git" >> ~/.zsh_plugins.txt
+              echo "" >> ~/.zsh_plugins.txt
+              echo "# Kubernetes tools" >> ~/.zsh_plugins.txt
+              echo "ohmyzsh/ohmyzsh path:plugins/kubectl" >> ~/.zsh_plugins.txt
+            fi
+
+  run_setup:
+    description: "Run the setup script"
+    steps:
+      - run:
+          name: Run setup script
+          command: |
+            export COMPLETION_DIR="${HOME}/.zsh/completions"
+            export ZCOMPCACHE="${HOME}/.zcompcache"
+            export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
+            export ANTIDOTE_HOME="${HOME}/.antidote"
+            mkdir -p "${COMPLETION_DIR}"
+            mkdir -p "${ZCOMPCACHE}"
+            zsh ./ci_setup.sh
+
+  run_verification:
+    description: "Run the verification script"
+    steps:
+      - run:
+          name: Run verification script
+          command: |
+            export HOME="/Users/admin"
+            export COMPLETION_DIR="${HOME}/.zsh/completions"
+            export ZCOMPCACHE="${HOME}/.zcompcache"
+            export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
+            export ANTIDOTE_HOME="${HOME}/.antidote"
+            export ZDOTDIR="${HOME}"
+            zsh -c '
+              set -e
+              export HOME="/Users/admin"
+              export COMPLETION_DIR="${HOME}/.zsh/completions"
+              export ZCOMPCACHE="${HOME}/.zcompcache"
+              export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
+              export ANTIDOTE_HOME="${HOME}/.antidote"
+              export ZDOTDIR="${HOME}"
+              export QUIET_MODE=false
+              mkdir -p "${COMPLETION_DIR}"
+              mkdir -p "${ZCOMPCACHE}"
+              autoload -Uz compinit
+              compinit -d "${ZCOMPDUMP}"
+              fpath=("${COMPLETION_DIR}" $fpath)
+              if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
+                source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+                antidote load "${ZDOTDIR}/.zsh_plugins.txt"
+              fi
+              source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
+              ./verify_setup.sh
+              exit_status=$?
+              exit $exit_status
+            '
+
+# Define the main workflow
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - macos_test
+
+# Define the macOS test job
+jobs:
+  macos_test:
+    macos:
+      xcode: "14.3.0"  # Specify the Xcode version
+    environment:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
+      HOMEBREW_NO_ENV_HINTS: 1
+      CI: true
+      NONINTERACTIVE: 1
+      PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
+      SHELL: /bin/zsh
+      ZDOTDIR: $HOME
+    steps:
+      - checkout
+      - install_homebrew
+      - prepare_environment
+      - create_plugins_file
+      - run_setup
+      - run_verification
+      - store_artifacts:
+          path: ~/.zshrc
+          destination: zshrc
+      - store_artifacts:
+          path: ~/.zsh_plugins.txt
+          destination: zsh_plugins
+      - store_artifacts:
+          path: verify.log
+          destination: verify_log
