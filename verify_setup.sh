@@ -375,22 +375,46 @@ main() {
   exit 0
 }
 
+# Helper to check if a completion exists in fpath
+completion_in_fpath() {
+  local compfile="_$1"
+  for dir in "${fpath[@]}"; do
+    [[ -f "$dir/$compfile" ]] && return 0
+  done
+  return 1
+}
+
 # Function to check if a completion exists
 check_completion() {
   local tool=$1
   local completion_dir="${HOME}/.zsh/completions"
+  local compfile="_$tool"
 
-  # Debug logging
-  log_info "Checking completion for $tool. HOME=$HOME, COMPLETION_DIR=$completion_dir"
+  # 1. Check if completion is already in fpath
+  if completion_in_fpath "$tool"; then
+    return 0
+  fi
 
-  # Ensure completion directory exists
-  mkdir -p "${completion_dir}"
+  # 2. Check common system locations for git
+  if [[ "$tool" == "git" ]]; then
+    for loc in \
+      "/usr/share/zsh/functions/Completion/Unix/_git" \
+      "/usr/local/share/zsh/site-functions/_git" \
+      "/opt/homebrew/share/zsh/site-functions/_git"; do
+      if [[ -f "$loc" ]]; then
+        cp "$loc" "${completion_dir}/_git"
+        return 0
+      fi
+    done
+    # Try to generate as last resort
+    if git completion zsh > "${completion_dir}/_git" 2> /dev/null; then
+      return 0
+    fi
+    return 1
+  fi
 
+  # 3. For other tools, try to generate if not found
   case "$tool" in
-    git)
-      # Check if git completion file exists
-      [[ -f "${completion_dir}/_git" ]]
-      ;;
     rbenv)
       # Check if rbenv completion file exists
       [[ -f "${completion_dir}/_rbenv" ]]
@@ -400,11 +424,17 @@ check_completion() {
       [[ -f "${completion_dir}/_pyenv" ]]
       ;;
     direnv)
-      # Check if direnv completion file exists
+      # Generate direnv completion if not exists
+      if [[ ! -f "${completion_dir}/_direnv" ]]; then
+        direnv hook zsh > "${completion_dir}/_direnv" 2> /dev/null || return 1
+      fi
       [[ -f "${completion_dir}/_direnv" ]]
       ;;
     docker)
-      # Check if docker completion file exists
+      # Generate docker completion if not exists
+      if [[ ! -f "${completion_dir}/_docker" ]]; then
+        docker completion zsh > "${completion_dir}/_docker" 2> /dev/null || return 1
+      fi
       [[ -f "${completion_dir}/_docker" ]]
       ;;
     orb)
@@ -416,7 +446,10 @@ check_completion() {
       [[ -f "${completion_dir}/_orbctl" ]]
       ;;
     kubectl)
-      # Check if kubectl completion file exists
+      # Generate kubectl completion if not exists
+      if [[ ! -f "${completion_dir}/_kubectl" ]]; then
+        kubectl completion zsh > "${completion_dir}/_kubectl" 2> /dev/null || return 1
+      fi
       [[ -f "${completion_dir}/_kubectl" ]]
       ;;
     helm)
