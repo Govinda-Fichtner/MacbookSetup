@@ -79,89 +79,6 @@ log_error() {
   print_status FAIL "ERROR" "$1"
 }
 
-# Function to check if a completion exists
-check_completion() {
-  local tool=$1
-  local completion_dir="${HOME}/.zsh/completions"
-
-  # Ensure completion directory exists
-  mkdir -p "${completion_dir}"
-
-  case "$tool" in
-    git)
-      # Check if git completion file exists
-      [[ -f "${completion_dir}/_git" ]]
-      ;;
-    rbenv)
-      # Check if rbenv completion file exists
-      [[ -f "${completion_dir}/_rbenv" ]]
-      ;;
-    pyenv)
-      # Check if pyenv completion file exists
-      [[ -f "${completion_dir}/_pyenv" ]]
-      ;;
-    direnv)
-      # Check if direnv completion file exists
-      [[ -f "${completion_dir}/_direnv" ]]
-      ;;
-    docker)
-      # Check if docker completion file exists
-      [[ -f "${completion_dir}/_docker" ]]
-      ;;
-    orb)
-      # Check if orb completion file exists
-      [[ -f "${completion_dir}/_orb" ]]
-      ;;
-    orbctl)
-      # Check if orbctl completion file exists
-      [[ -f "${completion_dir}/_orbctl" ]]
-      ;;
-    kubectl)
-      # Check if kubectl completion file exists
-      [[ -f "${completion_dir}/_kubectl" ]]
-      ;;
-    helm)
-      # Generate helm completion if not exists
-      if command -v helm > /dev/null 2>&1; then
-        local helm_completion="${completion_dir}/_helm"
-        if [[ ! -f "${helm_completion}" ]]; then
-          helm completion zsh > "${helm_completion}" 2> /dev/null || return 1
-        fi
-        [[ -f "${helm_completion}" ]]
-      else
-        return 1
-      fi
-      ;;
-    terraform)
-      # Install terraform completion if not exists
-      if command -v terraform > /dev/null 2>&1; then
-        local terraform_completion="${completion_dir}/_terraform"
-        if [[ ! -f "${terraform_completion}" ]]; then
-          terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
-        fi
-        [[ -f "${terraform_completion}" ]]
-      else
-        return 1
-      fi
-      ;;
-    packer)
-      # Install packer completion if not exists
-      if command -v packer > /dev/null 2>&1; then
-        local packer_completion="${completion_dir}/_packer"
-        if [[ ! -f "${packer_completion}" ]]; then
-          packer -autocomplete-install > /dev/null 2>&1 || return 1
-        fi
-        [[ -f "${packer_completion}" ]]
-      else
-        return 1
-      fi
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
 # Function to verify Antidote setup
 verify_antidote() {
   log_info "Verifying Antidote setup"
@@ -456,6 +373,92 @@ main() {
     exit 1
   fi
   exit 0
+}
+
+# Function to check if a completion exists
+check_completion() {
+  local tool=$1
+  local completion_dir="${HOME}/.zsh/completions"
+
+  # Debug logging
+  log_info "Checking completion for $tool. HOME=$HOME, COMPLETION_DIR=$completion_dir"
+
+  # Ensure completion directory exists
+  mkdir -p "${completion_dir}"
+
+  case "$tool" in
+    git)
+      # Check if git completion file exists
+      [[ -f "${completion_dir}/_git" ]]
+      ;;
+    rbenv)
+      # Check if rbenv completion file exists
+      [[ -f "${completion_dir}/_rbenv" ]]
+      ;;
+    pyenv)
+      # Check if pyenv completion file exists
+      [[ -f "${completion_dir}/_pyenv" ]]
+      ;;
+    direnv)
+      # Check if direnv completion file exists
+      [[ -f "${completion_dir}/_direnv" ]]
+      ;;
+    docker)
+      # Check if docker completion file exists
+      [[ -f "${completion_dir}/_docker" ]]
+      ;;
+    orb)
+      # Check if orb completion file exists
+      [[ -f "${completion_dir}/_orb" ]]
+      ;;
+    orbctl)
+      # Check if orbctl completion file exists
+      [[ -f "${completion_dir}/_orbctl" ]]
+      ;;
+    kubectl)
+      # Check if kubectl completion file exists
+      [[ -f "${completion_dir}/_kubectl" ]]
+      ;;
+    helm)
+      # Generate helm completion if not exists
+      if command -v helm > /dev/null 2>&1; then
+        local helm_completion="${completion_dir}/_helm"
+        if [[ ! -f "${helm_completion}" ]]; then
+          helm completion zsh > "${helm_completion}" 2> /dev/null || return 1
+        fi
+        [[ -f "${helm_completion}" ]]
+      else
+        return 1
+      fi
+      ;;
+    terraform)
+      # Install terraform completion if not exists
+      if command -v terraform > /dev/null 2>&1; then
+        local terraform_completion="${completion_dir}/_terraform"
+        if [[ ! -f "${terraform_completion}" ]]; then
+          terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
+        fi
+        [[ -f "${terraform_completion}" ]]
+      else
+        return 1
+      fi
+      ;;
+    packer)
+      # Install packer completion if not exists
+      if command -v packer > /dev/null 2>&1; then
+        local packer_completion="${completion_dir}/_packer"
+        if [[ ! -f "${packer_completion}" ]]; then
+          packer -autocomplete-install > /dev/null 2>&1 || return 1
+        fi
+        [[ -f "${packer_completion}" ]]
+      else
+        return 1
+      fi
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 # Run main function
