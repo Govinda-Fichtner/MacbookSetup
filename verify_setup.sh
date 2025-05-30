@@ -79,54 +79,51 @@ log_error() {
   print_status FAIL "ERROR" "$1"
 }
 
-# Helper function to check completion setup
+# Function to check if a completion exists
 check_completion() {
-  local tool="$1"
+  local tool=$1
+  local completion_dir="${HOME}/.zsh/completions"
+
+  # Ensure completion directory exists
+  mkdir -p "${completion_dir}"
+
   case "$tool" in
     git)
-      # Git completion is built into zsh
-      [[ -f "/usr/share/zsh/functions/Completion/Unix/_git" ]] \
-        || [[ -f "/usr/local/share/zsh/site-functions/_git" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_git" ]] \
-        || [[ -f "${HOME}/.zsh/completions/_git" ]]
+      # Check if git completion file exists
+      [[ -f "${completion_dir}/_git" ]]
       ;;
     rbenv)
-      # rbenv completion is built into the tool
-      [[ -f "/usr/local/share/zsh/site-functions/_rbenv" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_rbenv" ]] \
-        || [[ -f "${HOME}/.zsh/completions/_rbenv" ]]
+      # Check if rbenv completion file exists
+      [[ -f "${completion_dir}/_rbenv" ]]
       ;;
     pyenv)
-      # Check for pyenv completion file in standard locations
-      [[ -f "/usr/local/share/zsh/site-functions/_pyenv" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_pyenv" ]] \
-        || [[ -f "${HOME}/.zsh/completions/_pyenv" ]]
+      # Check if pyenv completion file exists
+      [[ -f "${completion_dir}/_pyenv" ]]
       ;;
     direnv)
-      # direnv completion is built into the tool
-      command -v direnv > /dev/null 2>&1 && direnv hook zsh > /dev/null 2>&1
+      # Check if direnv completion file exists
+      [[ -f "${completion_dir}/_direnv" ]]
       ;;
     docker)
-      # Docker completion is handled by OrbStack
-      [[ -f "${COMPLETION_DIR}/_docker" ]] \
-        || [[ -f "/usr/local/share/zsh/site-functions/_docker" ]] \
-        || [[ -f "/opt/homebrew/share/zsh/site-functions/_docker" ]]
+      # Check if docker completion file exists
+      [[ -f "${completion_dir}/_docker" ]]
       ;;
     orb)
       # Check if orb completion file exists
-      [[ -f "${COMPLETION_DIR}/_orb" ]]
+      [[ -f "${completion_dir}/_orb" ]]
       ;;
     orbctl)
       # Check if orbctl completion file exists
-      [[ -f "${COMPLETION_DIR}/_orbctl" ]]
+      [[ -f "${completion_dir}/_orbctl" ]]
       ;;
     kubectl)
-      command -v kubectl > /dev/null 2>&1 && kubectl completion zsh > /dev/null 2>&1
+      # Check if kubectl completion file exists
+      [[ -f "${completion_dir}/_kubectl" ]]
       ;;
     helm)
       # Generate helm completion if not exists
       if command -v helm > /dev/null 2>&1; then
-        local helm_completion="${COMPLETION_DIR}/_helm"
+        local helm_completion="${completion_dir}/_helm"
         if [[ ! -f "${helm_completion}" ]]; then
           helm completion zsh > "${helm_completion}" 2> /dev/null || return 1
         fi
@@ -138,7 +135,7 @@ check_completion() {
     terraform)
       # Install terraform completion if not exists
       if command -v terraform > /dev/null 2>&1; then
-        local terraform_completion="${COMPLETION_DIR}/_terraform"
+        local terraform_completion="${completion_dir}/_terraform"
         if [[ ! -f "${terraform_completion}" ]]; then
           terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
         fi
@@ -150,7 +147,7 @@ check_completion() {
     packer)
       # Install packer completion if not exists
       if command -v packer > /dev/null 2>&1; then
-        local packer_completion="${COMPLETION_DIR}/_packer"
+        local packer_completion="${completion_dir}/_packer"
         if [[ ! -f "${packer_completion}" ]]; then
           packer -autocomplete-install > /dev/null 2>&1 || return 1
         fi
