@@ -127,7 +127,6 @@ env:
         echo "" >> ~/.zsh_plugins.txt
         echo "# Kubernetes tools" >> ~/.zsh_plugins.txt
         echo "ohmyzsh/ohmyzsh path:plugins/kubectl" >> ~/.zsh_plugins.txt
-        echo "ohmyzsh/ohmyzsh path:plugins/helm" >> ~/.zsh_plugins.txt
         echo "Created default .zsh_plugins.txt for antidote"
       fi
 
