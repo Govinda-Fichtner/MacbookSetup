@@ -188,6 +188,8 @@ env:
     echo "Debug: COMPLETION_DIR=$COMPLETION_DIR"
     echo "Debug: Current directory: $(pwd)"
     echo "Debug: Directory contents: $(ls -la)"
+    echo "Debug: HOME directory exists: $(test -d "$HOME" && echo "yes" || echo "no")"
+    echo "Debug: HOME directory permissions: $(ls -ld "$HOME")"
 
     # Switch to zsh for the entire verification process
     zsh -c '
@@ -206,13 +208,16 @@ env:
       echo "Debug: Inside zsh - COMPLETION_DIR=$COMPLETION_DIR"
       echo "Debug: Inside zsh - Current directory: $(pwd)"
       echo "Debug: Inside zsh - Directory contents: $(ls -la)"
+      echo "Debug: Inside zsh - HOME directory exists: $(test -d "$HOME" && echo "yes" || echo "no")"
+      echo "Debug: Inside zsh - HOME directory permissions: $(ls -ld "$HOME")"
 
       # Set up completion directories first
+      echo "Debug: Creating completion directories..."
       mkdir -p "${COMPLETION_DIR}"
       mkdir -p "${ZCOMPCACHE}"
-
-      # Debug output after creating directories
-      echo "Debug: After mkdir - COMPLETION_DIR contents: $(ls -la ${COMPLETION_DIR})"
+      echo "Debug: After mkdir - COMPLETION_DIR exists: $(test -d "${COMPLETION_DIR}" && echo "yes" || echo "no")"
+      echo "Debug: After mkdir - COMPLETION_DIR permissions: $(ls -ld "${COMPLETION_DIR}")"
+      echo "Debug: After mkdir - COMPLETION_DIR contents: $(ls -la "${COMPLETION_DIR}")"
 
       # Initialize completion system
       autoload -Uz compinit
@@ -220,6 +225,7 @@ env:
 
       # Add completions directory to fpath
       fpath=("${COMPLETION_DIR}" $fpath)
+      echo "Debug: fpath contents: ${fpath[@]}"
 
       # Initialize Antidote early
       if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
