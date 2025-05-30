@@ -181,6 +181,10 @@ env:
     # Ensure HOME is set correctly for CI environment
     export HOME="/Users/admin"
     export COMPLETION_DIR="${HOME}/.zsh/completions"
+    export ZCOMPCACHE="${HOME}/.zcompcache"
+    export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
+    export ANTIDOTE_HOME="${HOME}/.antidote"
+    export ZDOTDIR="${HOME}"
 
     # Debug output
     echo "Debug: HOME=$HOME"
@@ -202,6 +206,7 @@ env:
       export ZCOMPCACHE="${HOME}/.zcompcache"
       export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
       export ANTIDOTE_HOME="${HOME}/.antidote"
+      export ZDOTDIR="${HOME}"
       export QUIET_MODE=false
 
       # Debug output
