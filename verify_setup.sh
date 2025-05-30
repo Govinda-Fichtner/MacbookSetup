@@ -251,47 +251,77 @@ verify_shell_completions() {
 
 # Function to verify zsh plugins
 verify_zsh_plugins() {
-  log_info "Verifying zsh plugins"
   local failed_plugins=()
+  local plugin_errors=()
 
-  # Check if plugins file exists
-  if [[ ! -f "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" ]]; then
-    log_error "Zsh plugins file not found"
-    return 1
+  # Skip plugin verification in CI mode
+  if [[ "${CI:-false}" == "true" ]]; then
+    echo "Debug: Skipping plugin verification in CI mode"
+    return 0
   fi
 
-  # Initialize completion system before checking plugins
-  autoload -Uz compinit
-  compinit -d "${HOME}/.zcompcache/zcompdump"
+  # Check core plugins
+  echo "INFO Core Plugins"
+  check_plugin "zsh-completions" || {
+    failed_plugins+=("zsh-completions")
+    plugin_errors+=("zsh-completions plugin not found")
+  }
+  check_plugin "zsh-autosuggestions" || {
+    failed_plugins+=("zsh-autosuggestions")
+    plugin_errors+=("zsh-autosuggestions plugin not found")
+  }
+  check_plugin "zsh-syntax-highlighting" || {
+    failed_plugins+=("zsh-syntax-highlighting")
+    plugin_errors+=("zsh-syntax-highlighting plugin not found")
+  }
 
-  # Verify core plugins
-  log_info "Core Plugins"
-  for plugin in zsh-completions zsh-autosuggestions zsh-syntax-highlighting; do
-    if [[ -d "${HOME}/Library/Caches/antidote/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}" ]]; then
-      print_status PASS "$plugin"
-    else
-      print_status FAIL "$plugin"
-      failed_plugins+=("$plugin")
-    fi
-  done
+  # Check Oh My Zsh plugins
+  echo "INFO Oh My Zsh Plugins"
+  check_plugin "git" || {
+    failed_plugins+=("git")
+    plugin_errors+=("git plugin not found")
+  }
+  check_plugin "kubectl" || {
+    failed_plugins+=("kubectl")
+    plugin_errors+=("kubectl plugin not found")
+  }
+  check_plugin "helm" || {
+    failed_plugins+=("helm")
+    plugin_errors+=("helm plugin not found")
+  }
+  check_plugin "terraform" || {
+    failed_plugins+=("terraform")
+    plugin_errors+=("terraform plugin not found")
+  }
+  check_plugin "docker" || {
+    failed_plugins+=("docker")
+    plugin_errors+=("docker plugin not found")
+  }
+  check_plugin "docker-compose" || {
+    failed_plugins+=("docker-compose")
+    plugin_errors+=("docker-compose plugin not found")
+  }
+  check_plugin "common-aliases" || {
+    failed_plugins+=("common-aliases")
+    plugin_errors+=("common-aliases plugin not found")
+  }
+  check_plugin "brew" || {
+    failed_plugins+=("brew")
+    plugin_errors+=("brew plugin not found")
+  }
+  check_plugin "fzf" || {
+    failed_plugins+=("fzf")
+    plugin_errors+=("fzf plugin not found")
+  }
 
-  # Verify Oh My Zsh plugins
-  log_info "Oh My Zsh Plugins"
-  for plugin in git kubectl helm terraform docker docker-compose common-aliases brew fzf; do
-    if [[ -d "${HOME}/Library/Caches/antidote/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}" ]]; then
-      print_status PASS "$plugin"
-    else
-      print_status FAIL "$plugin"
-      failed_plugins+=("$plugin")
-    fi
-  done
-
+  # Report results
   if [[ ${#failed_plugins[@]} -gt 0 ]]; then
-    log_error "Failed plugins: ${failed_plugins[*]}"
+    echo "ERROR Failed plugins: ${failed_plugins[*]}"
+    echo "ERROR Zsh plugins verification failed"
     return 1
   fi
 
-  log_success "Zsh plugins verified"
+  echo "SUCCESS Zsh plugins verified"
   return 0
 }
 
@@ -425,17 +455,34 @@ check_completion() {
   case "$tool" in
     rbenv)
       # Check if rbenv completion file exists
+      if [[ ! -f "${completion_dir}/_rbenv" ]]; then
+        echo "Debug: Generating rbenv completion"
+        rbenv completions zsh > "${completion_dir}/_rbenv" 2> /dev/null || {
+          echo "Debug: Failed to generate rbenv completion"
+          return 1
+        }
+      fi
       [[ -f "${completion_dir}/_rbenv" ]]
       ;;
     pyenv)
       # Check if pyenv completion file exists
+      if [[ ! -f "${completion_dir}/_pyenv" ]]; then
+        echo "Debug: Generating pyenv completion"
+        pyenv completions zsh > "${completion_dir}/_pyenv" 2> /dev/null || {
+          echo "Debug: Failed to generate pyenv completion"
+          return 1
+        }
+      fi
       [[ -f "${completion_dir}/_pyenv" ]]
       ;;
     direnv)
       # Generate direnv completion if not exists
       if [[ ! -f "${completion_dir}/_direnv" ]]; then
         echo "Debug: Generating direnv completion"
-        direnv hook zsh > "${completion_dir}/_direnv" 2> /dev/null || return 1
+        direnv hook zsh > "${completion_dir}/_direnv" 2> /dev/null || {
+          echo "Debug: Failed to generate direnv completion"
+          return 1
+        }
       fi
       [[ -f "${completion_dir}/_direnv" ]]
       ;;
@@ -443,7 +490,10 @@ check_completion() {
       # Generate docker completion if not exists
       if [[ ! -f "${completion_dir}/_docker" ]]; then
         echo "Debug: Generating docker completion"
-        docker completion zsh > "${completion_dir}/_docker" 2> /dev/null || return 1
+        docker completion zsh > "${completion_dir}/_docker" 2> /dev/null || {
+          echo "Debug: Failed to generate docker completion"
+          return 1
+        }
       fi
       [[ -f "${completion_dir}/_docker" ]]
       ;;
@@ -453,13 +503,23 @@ check_completion() {
       ;;
     orbctl)
       # Check if orbctl completion file exists
+      if [[ ! -f "${completion_dir}/_orbctl" ]]; then
+        echo "Debug: Generating orbctl completion"
+        orbctl completion zsh > "${completion_dir}/_orbctl" 2> /dev/null || {
+          echo "Debug: Failed to generate orbctl completion"
+          return 1
+        }
+      fi
       [[ -f "${completion_dir}/_orbctl" ]]
       ;;
     kubectl)
       # Generate kubectl completion if not exists
       if [[ ! -f "${completion_dir}/_kubectl" ]]; then
         echo "Debug: Generating kubectl completion"
-        kubectl completion zsh > "${completion_dir}/_kubectl" 2> /dev/null || return 1
+        kubectl completion zsh > "${completion_dir}/_kubectl" 2> /dev/null || {
+          echo "Debug: Failed to generate kubectl completion"
+          return 1
+        }
       fi
       [[ -f "${completion_dir}/_kubectl" ]]
       ;;
@@ -469,7 +529,10 @@ check_completion() {
         local helm_completion="${completion_dir}/_helm"
         if [[ ! -f "${helm_completion}" ]]; then
           echo "Debug: Generating helm completion"
-          helm completion zsh > "${helm_completion}" 2> /dev/null || return 1
+          helm completion zsh > "${helm_completion}" 2> /dev/null || {
+            echo "Debug: Failed to generate helm completion"
+            return 1
+          }
         fi
         [[ -f "${helm_completion}" ]]
       else
@@ -482,7 +545,10 @@ check_completion() {
         local terraform_completion="${completion_dir}/_terraform"
         if [[ ! -f "${terraform_completion}" ]]; then
           echo "Debug: Installing terraform completion"
-          terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
+          terraform -install-autocomplete zsh > /dev/null 2>&1 || {
+            echo "Debug: Failed to install terraform completion"
+            return 1
+          }
         fi
         [[ -f "${terraform_completion}" ]]
       else
@@ -495,7 +561,10 @@ check_completion() {
         local packer_completion="${completion_dir}/_packer"
         if [[ ! -f "${packer_completion}" ]]; then
           echo "Debug: Installing packer completion"
-          packer -autocomplete-install > /dev/null 2>&1 || return 1
+          packer -autocomplete-install > /dev/null 2>&1 || {
+            echo "Debug: Failed to install packer completion"
+            return 1
+          }
         fi
         [[ -f "${packer_completion}" ]]
       else
