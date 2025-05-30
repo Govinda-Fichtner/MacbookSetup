@@ -181,12 +181,14 @@ env:
   verify_script: |
     # Ensure HOME is set correctly for CI environment
     export HOME="/Users/admin"
+    export COMPLETION_DIR="${HOME}/.zsh/completions"
 
     # Switch to zsh for the entire verification process
     zsh -c '
       set -e
 
       # Set up completion system environment
+      export HOME="/Users/admin"
       export COMPLETION_DIR="${HOME}/.zsh/completions"
       export ZCOMPCACHE="${HOME}/.zcompcache"
       export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
