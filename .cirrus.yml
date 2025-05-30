@@ -192,8 +192,10 @@ env:
     echo "Debug: HOME directory permissions: $(ls -ld "$HOME")"
 
     # Switch to zsh for the entire verification process
+    echo "Debug: About to start nested zsh shell"
     zsh -c '
       set -e
+      set -x  # Enable command tracing
 
       # Set up completion system environment
       export HOME="/Users/admin"
@@ -220,32 +222,42 @@ env:
       echo "Debug: After mkdir - COMPLETION_DIR contents: $(ls -la "${COMPLETION_DIR}")"
 
       # Initialize completion system
+      echo "Debug: Initializing completion system..."
       autoload -Uz compinit
       compinit -d "${ZCOMPDUMP}"
 
       # Add completions directory to fpath
+      echo "Debug: Setting up fpath..."
       fpath=("${COMPLETION_DIR}" $fpath)
       echo "Debug: fpath contents: ${fpath[@]}"
 
       # Initialize Antidote early
+      echo "Debug: Checking for Antidote..."
       if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
+        echo "Debug: Loading Antidote..."
         source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
         antidote load "${ZDOTDIR}/.zsh_plugins.txt"
+      else
+        echo "Debug: Antidote not found at $(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
       fi
 
       # Ensure the shell is properly loaded
-      echo "Running verification script..."
+      echo "Debug: Running verification script..."
 
       # Source zshrc to ensure all configurations are loaded
+      echo "Debug: Sourcing zshrc..."
       source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
 
       # Run verification in local mode
+      echo "Debug: Executing verify_setup.sh..."
       ./verify_setup.sh
       exit_status=$?
 
       # Exit with the status of verify_setup.sh
+      echo "Debug: verify_setup.sh exited with status $exit_status"
       exit $exit_status
     '
+    echo "Debug: Nested zsh shell completed with status $?"
 
 # Template for artifact collection
 .artifacts_template: &artifacts_template
