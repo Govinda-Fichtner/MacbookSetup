@@ -179,9 +179,9 @@ env:
 # Template for verification
 .verify_template: &verify_template
   verify_script: |
-    whoami
-    echo $HOME
-    env | grep HOME
+    # Ensure HOME is set correctly for CI environment
+    export HOME="/Users/admin"
+
     # Switch to zsh for the entire verification process
     zsh -c '
       set -e
