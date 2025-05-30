@@ -218,11 +218,9 @@ env:
       # Source zshrc to ensure all configurations are loaded
       source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
 
-      # Run verification in local mode and capture output
-      {
-        ./verify_setup.sh
-        exit_status=$?
-      } 2>&1 | tee "${PWD}/verify.log"
+      # Run verification in local mode
+      ./verify_setup.sh
+      exit_status=$?
 
       # Exit with the status of verify_setup.sh
       exit $exit_status
