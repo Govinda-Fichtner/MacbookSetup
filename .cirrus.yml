@@ -183,6 +183,12 @@ env:
     export HOME="/Users/admin"
     export COMPLETION_DIR="${HOME}/.zsh/completions"
 
+    # Debug output
+    echo "Debug: HOME=$HOME"
+    echo "Debug: COMPLETION_DIR=$COMPLETION_DIR"
+    echo "Debug: Current directory: $(pwd)"
+    echo "Debug: Directory contents: $(ls -la)"
+
     # Switch to zsh for the entire verification process
     zsh -c '
       set -e
@@ -195,9 +201,18 @@ env:
       export ANTIDOTE_HOME="${HOME}/.antidote"
       export QUIET_MODE=false
 
+      # Debug output
+      echo "Debug: Inside zsh - HOME=$HOME"
+      echo "Debug: Inside zsh - COMPLETION_DIR=$COMPLETION_DIR"
+      echo "Debug: Inside zsh - Current directory: $(pwd)"
+      echo "Debug: Inside zsh - Directory contents: $(ls -la)"
+
       # Set up completion directories first
       mkdir -p "${COMPLETION_DIR}"
       mkdir -p "${ZCOMPCACHE}"
+
+      # Debug output after creating directories
+      echo "Debug: After mkdir - COMPLETION_DIR contents: $(ls -la ${COMPLETION_DIR})"
 
       # Initialize completion system
       autoload -Uz compinit
