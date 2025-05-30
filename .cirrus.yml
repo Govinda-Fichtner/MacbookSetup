@@ -186,21 +186,9 @@ env:
     export ANTIDOTE_HOME="${HOME}/.antidote"
     export ZDOTDIR="${HOME}"
 
-    # Debug output
-    echo "Debug: HOME=$HOME"
-    echo "Debug: COMPLETION_DIR=$COMPLETION_DIR"
-    echo "Debug: Current directory: $(pwd)"
-    echo "Debug: Directory contents: $(ls -la)"
-    echo "Debug: HOME directory exists: $(test -d "$HOME" && echo "yes" || echo "no")"
-    echo "Debug: HOME directory permissions: $(ls -ld "$HOME")"
-
     # Switch to zsh for the entire verification process
-    echo "Debug: About to start nested zsh shell"
     zsh -c '
       set -e
-      set -x  # Enable command tracing
-
-      # Set up completion system environment
       export HOME="/Users/admin"
       export COMPLETION_DIR="${HOME}/.zsh/completions"
       export ZCOMPCACHE="${HOME}/.zcompcache"
@@ -208,60 +196,20 @@ env:
       export ANTIDOTE_HOME="${HOME}/.antidote"
       export ZDOTDIR="${HOME}"
       export QUIET_MODE=false
-
-      # Debug output
-      echo "Debug: Inside zsh - HOME=$HOME"
-      echo "Debug: Inside zsh - COMPLETION_DIR=$COMPLETION_DIR"
-      echo "Debug: Inside zsh - Current directory: $(pwd)"
-      echo "Debug: Inside zsh - Directory contents: $(ls -la)"
-      echo "Debug: Inside zsh - HOME directory exists: $(test -d "$HOME" && echo "yes" || echo "no")"
-      echo "Debug: Inside zsh - HOME directory permissions: $(ls -ld "$HOME")"
-
-      # Set up completion directories first
-      echo "Debug: Creating completion directories..."
       mkdir -p "${COMPLETION_DIR}"
       mkdir -p "${ZCOMPCACHE}"
-      echo "Debug: After mkdir - COMPLETION_DIR exists: $(test -d "${COMPLETION_DIR}" && echo "yes" || echo "no")"
-      echo "Debug: After mkdir - COMPLETION_DIR permissions: $(ls -ld "${COMPLETION_DIR}")"
-      echo "Debug: After mkdir - COMPLETION_DIR contents: $(ls -la "${COMPLETION_DIR}")"
-
-      # Initialize completion system
-      echo "Debug: Initializing completion system..."
       autoload -Uz compinit
       compinit -d "${ZCOMPDUMP}"
-
-      # Add completions directory to fpath
-      echo "Debug: Setting up fpath..."
       fpath=("${COMPLETION_DIR}" $fpath)
-      echo "Debug: fpath contents: ${fpath[@]}"
-
-      # Initialize Antidote early
-      echo "Debug: Checking for Antidote..."
       if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
-        echo "Debug: Loading Antidote..."
         source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
         antidote load "${ZDOTDIR}/.zsh_plugins.txt"
-      else
-        echo "Debug: Antidote not found at $(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
       fi
-
-      # Ensure the shell is properly loaded
-      echo "Debug: Running verification script..."
-
-      # Source zshrc to ensure all configurations are loaded
-      echo "Debug: Sourcing zshrc..."
       source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
-
-      # Run verification in local mode
-      echo "Debug: Executing verify_setup.sh..."
       ./verify_setup.sh
       exit_status=$?
-
-      # Exit with the status of verify_setup.sh
-      echo "Debug: verify_setup.sh exited with status $exit_status"
       exit $exit_status
     '
-    echo "Debug: Nested zsh shell completed with status $?"
 
 # Template for artifact collection
 .artifacts_template: &artifacts_template
