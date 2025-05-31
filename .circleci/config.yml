@@ -9,10 +9,31 @@ commands:
           name: Install Homebrew
           shell: /bin/zsh
           command: |
-            if ! command -v brew &>/dev/null; then
+            # Check if brew is already available
+            if command -v brew &>/dev/null; then
+                echo "Homebrew is already installed"
+                which brew
+                brew --version
+            else
+                echo "Installing Homebrew..."
                 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-                [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
             fi
+            
+            # Ensure Homebrew is in PATH for subsequent steps
+            if [[ "$(uname -m)" == "arm64" ]]; then
+                echo 'export PATH="/opt/homebrew/bin:$PATH"' >> $BASH_ENV
+                export PATH="/opt/homebrew/bin:$PATH"
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+            else
+                echo 'export PATH="/usr/local/bin:$PATH"' >> $BASH_ENV  
+                export PATH="/usr/local/bin:$PATH"
+                eval "$(/usr/local/bin/brew shellenv)"
+            fi
+            
+            # Verify brew is working
+            echo "Verifying Homebrew installation..."
+            which brew
+            brew --version
 
   ensure_homebrew_bundle:
     description: "Ensure homebrew-bundle is installed"
@@ -21,6 +42,9 @@ commands:
           name: Install homebrew-bundle if needed
           shell: /bin/zsh
           command: |
+            # Source the environment to get brew in PATH
+            source $BASH_ENV
+            
             chmod +x .circleci/install_bundle.sh
             ./.circleci/install_bundle.sh
 
@@ -31,6 +55,9 @@ commands:
           name: Install required tools and setup environment
           shell: /bin/zsh
           command: |
+            # Source the environment to get brew in PATH
+            source $BASH_ENV
+            
             # Install required tools
             brew install shellcheck
             
@@ -77,6 +104,9 @@ commands:
           name: Run setup script
           shell: /bin/zsh
           command: |
+            # Source the environment to get brew in PATH
+            source $BASH_ENV
+            
             export COMPLETION_DIR="${HOME}/.zsh/completions"
             export ZCOMPCACHE="${HOME}/.zcompcache"
             export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
@@ -98,6 +128,9 @@ commands:
           name: Run verification script
           shell: /bin/zsh
           command: |
+            # Source the environment to get brew in PATH
+            source $BASH_ENV
+            
             # Set up environment variables in zsh context
             export COMPLETION_DIR="${HOME}/.zsh/completions"
             export ZCOMPCACHE="${HOME}/.zcompcache"
