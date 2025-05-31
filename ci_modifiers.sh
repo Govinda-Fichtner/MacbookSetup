@@ -27,7 +27,6 @@ add_ci_env_vars() {
   # Add CI environment variables after set -e line
   sed '/^set -e/a\
 # CI-specific environment variables\
-export CI=true\
 export NONINTERACTIVE=1\
 export HOMEBREW_NO_AUTO_UPDATE=1\
 export HOMEBREW_NO_INSTALL_CLEANUP=1\
