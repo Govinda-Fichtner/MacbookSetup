@@ -42,18 +42,18 @@ commands:
             # Create .zsh_plugins.txt in the correct location
             if [[ ! -f "${ZDOTDIR}/.zsh_plugins.txt" ]]; then
                 echo "Creating .zsh_plugins.txt in ${ZDOTDIR}"
-                cat > "${ZDOTDIR}/.zsh_plugins.txt" << 'EOF'
-# Core functionality
-zsh-users/zsh-completions
-zsh-users/zsh-autosuggestions
-zsh-users/zsh-syntax-highlighting
+                cat > "${ZDOTDIR}/.zsh_plugins.txt" << 'PLUGINS_EOF'
+            # Core functionality
+            zsh-users/zsh-completions
+            zsh-users/zsh-autosuggestions
+            zsh-users/zsh-syntax-highlighting
 
-# Git integration
-ohmyzsh/ohmyzsh path:plugins/git
+            # Git integration
+            ohmyzsh/ohmyzsh path:plugins/git
 
-# Kubernetes tools
-ohmyzsh/ohmyzsh path:plugins/kubectl
-EOF
+            # Kubernetes tools
+            ohmyzsh/ohmyzsh path:plugins/kubectl
+            PLUGINS_EOF
                 echo "Created .zsh_plugins.txt successfully"
             fi
             
