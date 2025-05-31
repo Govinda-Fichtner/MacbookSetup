@@ -2,6 +2,10 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2296,SC2034,SC2154,SC2076,SC2317
 
+# Script configuration
+readonly SCRIPT_VERSION="1.0.0"
+readonly COMPLETION_DIR="${HOME}/.zsh/completions"
+
 # macOS Development Environment Verification Script
 # This script verifies that all tools and configurations are properly installed
 
@@ -24,10 +28,6 @@ if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
   source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
   antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
 fi
-
-# Script configuration
-readonly SCRIPT_VERSION="1.0.0"
-readonly COMPLETION_DIR="${HOME}/.zsh/completions"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -349,64 +349,6 @@ print_verification_summary() {
   fi
 }
 
-# Main verification function
-main() {
-  log_info "Starting verification v${SCRIPT_VERSION}"
-  local verification_failed=false
-  local total_checks=0
-  local passed_checks=0
-  local failed_checks=0
-
-  # Verify shell configuration first
-  if ! verify_shell_config; then
-    log_error "Shell configuration verification failed"
-    verification_failed=true
-    ((failed_checks++))
-  else
-    ((passed_checks++))
-  fi
-  ((total_checks++))
-
-  # Verify software tools
-  if ! verify_software_tools; then
-    log_error "Software tools verification failed"
-    verification_failed=true
-    ((failed_checks++))
-  else
-    ((passed_checks++))
-  fi
-  ((total_checks++))
-
-  # Verify shell completions
-  if ! verify_shell_completions; then
-    log_error "Shell completions verification failed"
-    verification_failed=true
-    ((failed_checks++))
-  else
-    ((passed_checks++))
-  fi
-  ((total_checks++))
-
-  # Verify zsh plugins
-  if ! verify_zsh_plugins; then
-    log_error "Zsh plugins verification failed"
-    verification_failed=true
-    ((failed_checks++))
-  else
-    ((passed_checks++))
-  fi
-  ((total_checks++))
-
-  # Print verification summary
-  print_verification_summary "$total_checks" "$passed_checks" "$failed_checks"
-
-  # Ensure we exit with the correct status
-  if [[ "$verification_failed" == "true" ]]; then
-    exit 1
-  fi
-  exit 0
-}
-
 # Helper to check if a completion exists in fpath
 completion_in_fpath() {
   local compfile="_$1"
@@ -472,6 +414,64 @@ check_completion() {
   esac
 
   return 1
+}
+
+# Main verification function
+main() {
+  log_info "Starting verification v${SCRIPT_VERSION}"
+  local verification_failed=false
+  local total_checks=0
+  local passed_checks=0
+  local failed_checks=0
+
+  # Verify shell configuration first
+  if ! verify_shell_config; then
+    log_error "Shell configuration verification failed"
+    verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
+  fi
+  ((total_checks++))
+
+  # Verify software tools
+  if ! verify_software_tools; then
+    log_error "Software tools verification failed"
+    verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
+  fi
+  ((total_checks++))
+
+  # Verify shell completions
+  if ! verify_shell_completions; then
+    log_error "Shell completions verification failed"
+    verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
+  fi
+  ((total_checks++))
+
+  # Verify zsh plugins
+  if ! verify_zsh_plugins; then
+    log_error "Zsh plugins verification failed"
+    verification_failed=true
+    ((failed_checks++))
+  else
+    ((passed_checks++))
+  fi
+  ((total_checks++))
+
+  # Print verification summary
+  print_verification_summary "$total_checks" "$passed_checks" "$failed_checks"
+
+  # Ensure we exit with the correct status
+  if [[ "$verification_failed" == "true" ]]; then
+    exit 1
+  fi
+  exit 0
 }
 
 # Run main function

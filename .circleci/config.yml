@@ -65,35 +65,23 @@ commands:
       - run:
           name: Run verification script
           command: |
-            export HOME="/Users/admin"
             export COMPLETION_DIR="${HOME}/.zsh/completions"
             export ZCOMPCACHE="${HOME}/.zcompcache"
             export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
             export ANTIDOTE_HOME="${HOME}/.antidote"
             export ZDOTDIR="${HOME}"
-            zsh -c '
-              set -e
-              export HOME="/Users/admin"
-              export COMPLETION_DIR="${HOME}/.zsh/completions"
-              export ZCOMPCACHE="${HOME}/.zcompcache"
-              export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
-              export ANTIDOTE_HOME="${HOME}/.antidote"
-              export ZDOTDIR="${HOME}"
-              export QUIET_MODE=false
-              mkdir -p "${COMPLETION_DIR}"
-              mkdir -p "${ZCOMPCACHE}"
-              autoload -Uz compinit
-              compinit -d "${ZCOMPDUMP}"
-              fpath=("${COMPLETION_DIR}" $fpath)
-              if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
-                source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
-                antidote load "${ZDOTDIR}/.zsh_plugins.txt"
-              fi
-              source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
-              ./verify_setup.sh
-              exit_status=$?
-              exit $exit_status
-            '
+            mkdir -p "${COMPLETION_DIR}"
+            mkdir -p "${ZCOMPCACHE}"
+            autoload -Uz compinit
+            compinit -d "${ZCOMPDUMP}"
+            fpath=("${COMPLETION_DIR}" $fpath)
+            if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
+              source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+              antidote load "${ZDOTDIR}/.zsh_plugins.txt"
+            fi
+            source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
+            # Redirect output to both console and log file in CI
+            ./verify_setup.sh 2>&1 | tee verify.log
 
 # Define the main workflow
 workflows:
@@ -132,3 +120,6 @@ jobs:
       - store_artifacts:
           path: verify.log
           destination: verify_log
+      - store_artifacts:
+          path: /tmp/circleci-build.log
+          destination: build_log
