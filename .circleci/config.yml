@@ -19,15 +19,8 @@ commands:
                 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
             fi
             
-            # Set up Homebrew environment using full path initially
-            if [[ -x "/opt/homebrew/bin/brew" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            elif [[ -x "/usr/local/bin/brew" ]]; then
-                eval "$(/usr/local/bin/brew shellenv)"
-            else
-                echo "Error: Could not find brew executable"
-                exit 1
-            fi
+            # Set up Homebrew environment (CircleCI uses Apple Silicon)
+            eval "$(/opt/homebrew/bin/brew shellenv)"
             
             # Verify brew is working
             echo "Verifying Homebrew installation..."
@@ -41,12 +34,8 @@ commands:
           name: Install homebrew-bundle if needed
           shell: /bin/zsh
           command: |
-            # Set up Homebrew environment using full path initially
-            if [[ -x "/opt/homebrew/bin/brew" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            elif [[ -x "/usr/local/bin/brew" ]]; then
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            # Set up Homebrew environment
+            eval "$(/opt/homebrew/bin/brew shellenv)"
             
             # Function to check if brew bundle works
             check_bundle() {
@@ -108,11 +97,7 @@ commands:
           shell: /bin/zsh
           command: |
             # Set up Homebrew environment
-            if [[ -x "/opt/homebrew/bin/brew" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            elif [[ -x "/usr/local/bin/brew" ]]; then
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            eval "$(/opt/homebrew/bin/brew shellenv)"
             
             # Install required tools
             brew install shellcheck
@@ -161,11 +146,7 @@ commands:
           shell: /bin/zsh
           command: |
             # Set up Homebrew environment
-            if [[ -x "/opt/homebrew/bin/brew" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            elif [[ -x "/usr/local/bin/brew" ]]; then
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            eval "$(/opt/homebrew/bin/brew shellenv)"
             
             export COMPLETION_DIR="${HOME}/.zsh/completions"
             export ZCOMPCACHE="${HOME}/.zcompcache"
@@ -189,11 +170,7 @@ commands:
           shell: /bin/zsh
           command: |
             # Set up Homebrew environment
-            if [[ -x "/opt/homebrew/bin/brew" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            elif [[ -x "/usr/local/bin/brew" ]]; then
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            eval "$(/opt/homebrew/bin/brew shellenv)"
             
             # Set up environment variables in zsh context
             export COMPLETION_DIR="${HOME}/.zsh/completions"
