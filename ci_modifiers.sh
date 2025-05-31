@@ -63,6 +63,38 @@ modify_interactive_prompts() {
   log_success "Modified interactive prompts for CI environment"
 }
 
+# Function to add homebrew-bundle check at the beginning of install_packages function
+add_homebrew_bundle_check() {
+  local temp_file
+  temp_file=$(mktemp)
+
+  log_debug "Adding homebrew-bundle check to install_packages function"
+
+  # Add homebrew-bundle check right after the "install_packages()" function definition
+  sed '/^install_packages() {$/a\
+  # Ensure homebrew-bundle is available in CI\
+  if [[ "$CI" == "true" ]] && ! brew bundle --help > /dev/null 2>&1; then\
+    log_info "Installing homebrew-bundle for CI..."\
+    brew tap homebrew/bundle || {\
+      log_error "Failed to tap homebrew/bundle"\
+      return 1\
+    }\
+    if ! brew bundle --help > /dev/null 2>&1; then\
+      log_error "homebrew-bundle installation failed"\
+      return 1\
+    fi\
+    log_success "homebrew-bundle installed successfully"\
+  fi\
+' "$CI_SETUP_SCRIPT" > "$temp_file"
+
+  mv "$temp_file" "$CI_SETUP_SCRIPT" || {
+    log_error "Failed to add homebrew-bundle check"
+    return 1
+  }
+
+  log_success "Added homebrew-bundle check to install_packages function"
+}
+
 # Function to add CI-specific modifications
 add_ci_modifications() {
   local temp_file
@@ -89,7 +121,7 @@ if [ -n "$BASH_VERSION" ]; then
 fi
 
 # Initialize OrbStack and Docker for CI
-if command -v orb >/dev/null 2>&1; then
+if command -v orb > /dev/null 2>&1; then
     # Add OrbStack bin to PATH
     eval "$(orb shell-setup zsh 2>/dev/null)" >/dev/null 2>&1
 
@@ -106,7 +138,7 @@ if command -v orb >/dev/null 2>&1; then
 fi
 
 # Ensure Docker is available and running
-if command -v docker >/dev/null 2>&1; then
+if command -v docker > /dev/null 2>&1; then
     # Wait for Docker to be ready
     for i in {1..30}; do
         if docker info >/dev/null 2>&1; then
@@ -120,19 +152,19 @@ fi
 mkdir -p "${HOME}/.zsh/completions"
 
 # Generate completions silently
-if command -v docker >/dev/null 2>&1; then
+if command -v docker > /dev/null 2>&1; then
     docker completion zsh > "${HOME}/.zsh/completions/_docker" 2>/dev/null
 fi
 
-if command -v orb >/dev/null 2>&1; then
+if command -v orb > /dev/null 2>&1; then
     orb completion zsh > "${HOME}/.zsh/completions/_orb" 2>/dev/null
 fi
 
-if command -v kubectl >/dev/null 2>&1; then
+if command -v kubectl > /dev/null 2>&1; then
     kubectl completion zsh > "${HOME}/.zsh/completions/_kubectl" 2>/dev/null
 fi
 
-if command -v helm >/dev/null 2>&1; then
+if command -v helm > /dev/null 2>&1; then
     helm completion zsh > "${HOME}/.zsh/completions/_helm" 2>/dev/null
 fi
 
@@ -182,6 +214,7 @@ main() {
   # Apply modifications
   add_ci_env_vars || exit 1
   modify_interactive_prompts || exit 1
+  add_homebrew_bundle_check || exit 1
   add_ci_modifications || exit 1
 
   log_success "CI modifications completed successfully"
