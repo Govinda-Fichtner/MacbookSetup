@@ -364,56 +364,43 @@ check_completion() {
   local completion_dir="${HOME}/.zsh/completions"
   local compfile="_$tool"
 
-  # Debug output
-  echo "Debug: Checking completion for $tool"
-  echo "Debug: Completion directory: $completion_dir"
-  echo "Debug: Completion file: $compfile"
-
   # 1. Check if completion is already in fpath
   if completion_in_fpath "$tool"; then
-    echo "Debug: Completion found in fpath"
     return 0
   fi
 
-  # 2. Check if completion exists in completion directory
+  # 2. Check if completion exists in completion directory (should be generated during setup)
   if [[ -f "${completion_dir}/${compfile}" ]]; then
-    echo "Debug: Completion found in completion directory"
     return 0
   fi
 
-  # 3. Try to generate completion if not found
+  # 3. For tools that use built-in completion systems, check if they're properly configured
   case "$tool" in
-    pyenv)
-      if command -v pyenv > /dev/null 2>&1; then
-        echo "Debug: Generating pyenv completion"
-        pyenv completions zsh > "${completion_dir}/${compfile}" 2> /dev/null || return 1
-        return 0
-      fi
+    git)
+      # Git completion is usually provided by system or homebrew
+      for loc in \
+        "/usr/share/zsh/functions/Completion/Unix/_git" \
+        "/usr/local/share/zsh/site-functions/_git" \
+        "/opt/homebrew/share/zsh/site-functions/_git"; do
+        if [[ -f "$loc" ]]; then
+          return 0
+        fi
+      done
+      return 1
       ;;
-    docker)
-      if command -v docker > /dev/null 2>&1; then
-        echo "Debug: Generating docker completion"
-        docker completion zsh > "${completion_dir}/${compfile}" 2> /dev/null || return 1
-        return 0
-      fi
+    rbenv | pyenv | direnv)
+      # These tools should have completion files generated during setup
+      return 1
       ;;
-    terraform)
-      if command -v terraform > /dev/null 2>&1; then
-        echo "Debug: Installing terraform completion"
-        terraform -install-autocomplete zsh > /dev/null 2>&1 || return 1
-        return 0
-      fi
+    terraform | packer)
+      # HashiCorp tools use built-in completion system, check if command exists
+      command -v "$tool" > /dev/null 2>&1
       ;;
-    packer)
-      if command -v packer > /dev/null 2>&1; then
-        echo "Debug: Installing packer completion"
-        packer -autocomplete-install > /dev/null 2>&1 || return 1
-        return 0
-      fi
+    *)
+      # For other tools, completion file should exist
+      return 1
       ;;
   esac
-
-  return 1
 }
 
 # Main verification function

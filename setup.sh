@@ -215,13 +215,7 @@ setup_orbstack() {
     return 1
   fi
 
-  # Setup OrbStack completions
-  log_info "Setting up OrbStack completions..."
-  orbctl completion zsh > "${COMPLETION_DIR}/_orbctl" 2> /dev/null || log_warning "Failed to generate orbctl completion"
-
-  if [[ -f "${SCRIPT_DIR}/completions/_orb" ]]; then
-    cp "${SCRIPT_DIR}/completions/_orb" "${COMPLETION_DIR}/_orb" 2> /dev/null || log_warning "Failed to install custom orb completion"
-  fi
+  # OrbStack completions will be generated later in generate_completion_files()
 
   log_success "OrbStack setup completed"
 }
@@ -375,12 +369,85 @@ antidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt"
   log_success "Antidote setup completed."
 }
 
+generate_completion_files() {
+  log_info "Generating completion files..."
+
+  # Generate static completion files for tools that support it
+  local tools_with_completion=(
+    "docker:docker completion zsh"
+    "kubectl:kubectl completion zsh"
+    "helm:helm completion zsh"
+    "orb:orb completion zsh"
+    "orbctl:orbctl completion zsh"
+  )
+
+  for tool_config in "${tools_with_completion[@]}"; do
+    local tool="${tool_config%%:*}"
+    local completion_cmd="${tool_config#*:}"
+    local completion_file="${COMPLETION_DIR}/_${tool}"
+
+    if command -v "$tool" > /dev/null 2>&1; then
+      log_info "Generating completion for $tool..."
+      if timeout 10 eval "$completion_cmd" > "$completion_file" 2> /dev/null; then
+        log_success "Generated completion file: $completion_file"
+      else
+        log_warning "Failed to generate completion for $tool (timeout or error)"
+        rm -f "$completion_file"
+      fi
+    else
+      log_warning "$tool not found, skipping completion generation"
+    fi
+  done
+
+  # Generate completions for development environment tools
+  local dev_tools=(
+    "rbenv:rbenv completions zsh"
+    "pyenv:pyenv completions zsh"
+    "direnv:direnv hook zsh"
+  )
+
+  for tool_config in "${dev_tools[@]}"; do
+    local tool="${tool_config%%:*}"
+    local completion_cmd="${tool_config#*:}"
+    local completion_file="${COMPLETION_DIR}/_${tool}"
+
+    if command -v "$tool" > /dev/null 2>&1; then
+      log_info "Generating completion for $tool..."
+      if timeout 10 eval "$completion_cmd" > "$completion_file" 2> /dev/null; then
+        log_success "Generated completion file: $completion_file"
+      else
+        log_warning "Failed to generate completion for $tool"
+        rm -f "$completion_file"
+      fi
+    else
+      log_warning "$tool not found, skipping completion generation"
+    fi
+  done
+
+  # Set up HashiCorp tool completions (they use a different mechanism)
+  for tool in terraform packer; do
+    if command -v "$tool" > /dev/null 2>&1; then
+      log_info "Setting up completion for $tool..."
+      if timeout 10 "$tool" -install-autocomplete zsh > /dev/null 2>&1; then
+        log_success "Installed completion for $tool"
+      else
+        log_warning "Failed to install completion for $tool"
+      fi
+    fi
+  done
+
+  log_success "Completion file generation completed."
+}
+
 setup_shell_completions() {
   log_info "Setting up shell completions..."
 
   # Ensure completion directories exist
   ensure_dir "$COMPLETION_DIR"
   ensure_dir "$ZCOMPCACHE_DIR"
+
+  # Generate completion files first
+  generate_completion_files
 
   # Add completion configuration to .zshrc
   # shellcheck disable=SC2124
@@ -413,34 +480,18 @@ setup_shell_completions() {
     "# Additional completion sources"
     "fpath=(\"${COMPLETION_DIR}\" \"\${fpath[@]}\")"
     ""
-    "# Docker completion (comes with OrbStack)"
-    "if command -v docker >/dev/null 2>&1; then"
-    "    source <(docker completion zsh)"
-    "fi"
-    ""
-    "# Terraform completion"
+    "# HashiCorp tool completions (use built-in completion system)"
     "if command -v terraform >/dev/null 2>&1; then"
     "    complete -o nospace -C terraform terraform"
     "fi"
     ""
-    "# Kubectl completion"
-    "if command -v kubectl >/dev/null 2>&1; then"
-    "    source <(kubectl completion zsh)"
-    "fi"
-    ""
-    "# Helm completion"
-    "if command -v helm >/dev/null 2>&1; then"
-    "    source <(helm completion zsh)"
-    "fi"
-    ""
-    "# Pyenv completion"
-    "if command -v pyenv >/dev/null 2>&1; then"
-    "    eval \"\$(pyenv init -)\""
-    "fi"
-    ""
-    "# Packer completion"
     "if command -v packer >/dev/null 2>&1; then"
     "    complete -o nospace -C packer packer"
+    "fi"
+    ""
+    "# Pyenv initialization"
+    "if command -v pyenv >/dev/null 2>&1; then"
+    "    eval \"\$(pyenv init -)\""
     "fi"
   )
 
@@ -458,23 +509,21 @@ setup_shell_completions() {
     source "$(brew --prefix)/opt/fzf/shell/completion.zsh" 2> /dev/null || log_warning "Failed to source fzf completion"
   fi
 
-  # Source completions for tools that are already installed
-  for tool in docker terraform kubectl helm pyenv packer; do
+  # Initialize completion system for current session
+  autoload -Uz compinit
+  compinit -C -i
+
+  # Set up HashiCorp completions for current session
+  for tool in terraform packer; do
     if command -v "$tool" > /dev/null 2>&1; then
-      case "$tool" in
-        docker | kubectl | helm)
-          # shellcheck disable=SC1090
-          source <("$tool" completion zsh) 2> /dev/null || log_warning "Failed to source $tool completion"
-          ;;
-        terraform | packer)
-          complete -o nospace -C "$tool" "$tool" 2> /dev/null || log_warning "Failed to set up $tool completion"
-          ;;
-        pyenv)
-          eval "$(pyenv init -)" 2> /dev/null || log_warning "Failed to initialize pyenv"
-          ;;
-      esac
+      complete -o nospace -C "$tool" "$tool" 2> /dev/null || log_warning "Failed to set up $tool completion for current session"
     fi
   done
+
+  # Initialize pyenv for current session
+  if command -v pyenv > /dev/null 2>&1; then
+    eval "$(pyenv init -)" 2> /dev/null || log_warning "Failed to initialize pyenv for current session"
+  fi
 
   log_success "Shell completions setup completed."
 }
