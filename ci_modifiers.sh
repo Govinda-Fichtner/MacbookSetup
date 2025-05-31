@@ -100,14 +100,15 @@ add_homebrew_bundle_check() {
   # Force brew bundle install in CI environment for reliability\
   if [[ "$CI" == "true" ]]; then\
     log_info "CI environment detected - forcing brew bundle install for reliability"\
-    echo "==== CI: brew bundle install ====" >> "$bundle_log"\
-    brew bundle install 2>&1 | tee -a "$bundle_log"\
+    local ci_bundle_log="/tmp/ci_brew_bundle.log"\
+    echo "==== CI: brew bundle install ====" >> "$ci_bundle_log"\
+    brew bundle install 2>&1 | tee -a "$ci_bundle_log"\
     local ci_install_status=${PIPESTATUS[0]}\
     if [[ $ci_install_status -ne 0 ]]; then\
-      log_error "CI brew bundle install failed (exit code $ci_install_status). See $bundle_log for details."\
+      log_error "CI brew bundle install failed (exit code $ci_install_status). See $ci_bundle_log for details."\
       return 1\
     fi\
-    log_success "CI brew bundle install completed successfully"\
+    log_success "CI brew bundle install completed successfully (log: $ci_bundle_log)"\
   fi\
 ' "$CI_SETUP_SCRIPT" > "$temp_file"
 
