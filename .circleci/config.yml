@@ -160,6 +160,13 @@ commands:
             
             mkdir -p "${COMPLETION_DIR}"
             mkdir -p "${ZCOMPCACHE}"
+            
+            # Update Homebrew before running setup to avoid signature mismatch errors
+            echo "Updating Homebrew formulae to avoid signature mismatch errors..."
+            brew update || {
+                echo "Warning: brew update failed, but continuing with setup..."
+            }
+            
             zsh ./ci_setup.sh
 
   run_verification:
