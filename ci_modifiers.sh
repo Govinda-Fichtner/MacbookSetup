@@ -183,6 +183,36 @@ generate_ci_completion_files() {
     # Enhanced completion generation for CI with proper PATH handling
     export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+    # macOS/CI-compatible timeout function
+    run_with_timeout() {
+        local timeout_duration=$1
+        shift
+        local cmd="$*"
+
+        # Try to use gtimeout if available (from brew install coreutils)
+        if command -v gtimeout > /dev/null 2>&1; then
+            gtimeout "$timeout_duration" bash -c "$cmd"
+        # Try regular timeout on Linux systems
+        elif command -v timeout > /dev/null 2>&1; then
+            timeout "$timeout_duration" bash -c "$cmd"
+        # Fallback to using background process with timeout
+        else
+            (
+                eval "$cmd" &
+                local pid=$!
+                (
+                    sleep "$timeout_duration"
+                    kill "$pid" 2>/dev/null
+                ) &
+                local timeout_pid=$!
+                wait "$pid" 2>/dev/null
+                local exit_code=$?
+                kill "$timeout_pid" 2>/dev/null
+                exit "$exit_code"
+            )
+        fi
+    }
+
     # Generate completions for container tools
 for tool_pair in "docker:docker completion zsh" "kubectl:kubectl completion zsh" "helm:helm completion zsh" "orb:orb completion zsh" "orbctl:orbctl completion zsh"; do
     tool="${tool_pair%%:*}"
@@ -193,7 +223,7 @@ for tool_pair in "docker:docker completion zsh" "kubectl:kubectl completion zsh"
         # For orb/orbctl, try completion generation even if OrbStack isn't fully running
         if [[ "$tool" == "orb" || "$tool" == "orbctl" ]]; then
             # Try completion generation with extended timeout for orb tools
-            if timeout 30 bash -c "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
+            if run_with_timeout 30 "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
                 echo "[CI] Generated completion for $tool"
             else
                 # Fallback: try to verify the completion subcommand exists
@@ -211,7 +241,7 @@ for tool_pair in "docker:docker completion zsh" "kubectl:kubectl completion zsh"
             fi
         else
             # Standard completion generation for other tools
-            if timeout 15 bash -c "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
+            if run_with_timeout 15 "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
                 echo "[CI] Generated completion for $tool"
             else
                 echo "[CI] Failed to generate completion for $tool - timeout or empty output"
@@ -230,7 +260,7 @@ for tool_pair in "rbenv:rbenv completions zsh" "pyenv:pyenv completions zsh" "di
     completion_file="${HOME}/.zsh/completions/_${tool}"
 
     if command -v "$tool" > /dev/null 2>&1; then
-        if timeout 15 bash -c "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
+        if run_with_timeout 15 "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
             echo "[CI] Generated completion for $tool"
         else
             echo "[CI] Failed to generate completion for $tool - timeout or empty output"
@@ -245,7 +275,7 @@ done
 for tool in terraform packer; do
     if command -v "$tool" > /dev/null 2>&1; then
         echo "[CI] Setting up autocomplete for $tool..."
-        timeout 15 "$tool" -install-autocomplete zsh >/dev/null 2>&1 || true
+        run_with_timeout 15 "$tool -install-autocomplete zsh" >/dev/null 2>&1 || true
     fi
 done
 

@@ -372,6 +372,33 @@ antidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt"
 generate_completion_files() {
   log_info "Generating completion files..."
 
+  # macOS-compatible timeout function
+  run_with_timeout() {
+    local timeout_duration=$1
+    shift
+    local cmd="$*"
+
+    # Try to use gtimeout if available (from brew install coreutils)
+    if command -v gtimeout > /dev/null 2>&1; then
+      gtimeout "$timeout_duration" bash -c "$cmd"
+    # Fallback to using background process with timeout
+    else
+      (
+        eval "$cmd" &
+        local pid=$!
+        (
+          sleep "$timeout_duration"
+          kill "$pid" 2> /dev/null
+        ) &
+        local timeout_pid=$!
+        wait "$pid" 2> /dev/null
+        local exit_code=$?
+        kill "$timeout_pid" 2> /dev/null
+        exit "$exit_code"
+      )
+    fi
+  }
+
   # Generate static completion files for tools that support it
   local tools_with_completion=(
     "docker:docker completion zsh"
@@ -388,7 +415,7 @@ generate_completion_files() {
 
     if command -v "$tool" > /dev/null 2>&1; then
       log_info "Generating completion for $tool..."
-      if timeout 10 eval "$completion_cmd" > "$completion_file" 2> /dev/null; then
+      if run_with_timeout 10 "$completion_cmd" > "$completion_file" 2> /dev/null; then
         log_success "Generated completion file: $completion_file"
       else
         log_warning "Failed to generate completion for $tool (timeout or error)"
@@ -413,7 +440,7 @@ generate_completion_files() {
 
     if command -v "$tool" > /dev/null 2>&1; then
       log_info "Generating completion for $tool..."
-      if timeout 10 eval "$completion_cmd" > "$completion_file" 2> /dev/null; then
+      if run_with_timeout 10 "$completion_cmd" > "$completion_file" 2> /dev/null; then
         log_success "Generated completion file: $completion_file"
       else
         log_warning "Failed to generate completion for $tool"
@@ -428,7 +455,7 @@ generate_completion_files() {
   for tool in terraform packer; do
     if command -v "$tool" > /dev/null 2>&1; then
       log_info "Setting up completion for $tool..."
-      if timeout 10 "$tool" -install-autocomplete zsh > /dev/null 2>&1; then
+      if run_with_timeout 10 "$tool -install-autocomplete zsh" > /dev/null 2>&1; then
         log_success "Installed completion for $tool"
       else
         log_warning "Failed to install completion for $tool"

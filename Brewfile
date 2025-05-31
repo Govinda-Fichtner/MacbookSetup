@@ -43,6 +43,7 @@ cask "font-jetbrains-mono-nerd-font"    # Clean, crisp font with Nerd Font icons
 # Development Tools
 brew "zsh"
 brew "antidote"      # Plugin manager for zsh
+brew "coreutils"     # GNU core utilities (provides gtimeout for macOS)
 
 # CI/CD Tools
 brew "cirruslabs/cli/cirrus"  # Cirrus CI CLI for local validation and monitoring
