@@ -199,6 +199,9 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 zstyle ':completion::complete:*' use-cache on
 zstyle ':completion::complete:*' cache-path "${HOME}/.zcompcache"
 ZSHRC_EOF
+
+# Call the main setup function at the end
+main "\$@"
 EOF
 
   log_success "Added CI-specific configurations"
@@ -227,6 +230,10 @@ main() {
   add_ci_env_vars || exit 1
   modify_interactive_prompts || exit 1
   add_homebrew_bundle_check || exit 1
+
+  # Remove the original main call before adding CI modifications
+  sed -i '' '/^main "\$@"$/d' "$CI_SETUP_SCRIPT" || log_warning "Could not remove original main call"
+
   add_ci_modifications || exit 1
 
   log_success "CI modifications completed successfully"
