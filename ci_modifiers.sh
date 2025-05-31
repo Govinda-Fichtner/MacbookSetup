@@ -176,22 +176,52 @@ fi
 # Set up completions directory
 mkdir -p "${HOME}/.zsh/completions"
 
-# Generate completions silently
-if command -v docker > /dev/null 2>&1; then
-    docker completion zsh > "${HOME}/.zsh/completions/_docker" 2>/dev/null
-fi
+# Enhanced completion generation for CI with proper PATH handling
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-if command -v orb > /dev/null 2>&1; then
-    orb completion zsh > "${HOME}/.zsh/completions/_orb" 2>/dev/null
-fi
+# Generate completions for container tools
+for tool_pair in "docker:docker completion zsh" "kubectl:kubectl completion zsh" "helm:helm completion zsh" "orb:orb completion zsh" "orbctl:orbctl completion zsh"; do
+    tool="${tool_pair%%:*}"
+    cmd="${tool_pair#*:}"
+    completion_file="${HOME}/.zsh/completions/_${tool}"
 
-if command -v kubectl > /dev/null 2>&1; then
-    kubectl completion zsh > "${HOME}/.zsh/completions/_kubectl" 2>/dev/null
-fi
+    if command -v "$tool" > /dev/null 2>&1; then
+        if timeout 15 bash -c "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
+            echo "[CI] Generated completion for $tool"
+        else
+            echo "[CI] Failed to generate completion for $tool - timeout or empty output"
+            rm -f "$completion_file"
+        fi
+    else
+        echo "[CI] Tool $tool not found, skipping completion"
+    fi
+done
 
-if command -v helm > /dev/null 2>&1; then
-    helm completion zsh > "${HOME}/.zsh/completions/_helm" 2>/dev/null
-fi
+# Generate completions for development tools
+for tool_pair in "rbenv:rbenv completions zsh" "pyenv:pyenv completions zsh" "direnv:direnv hook zsh"; do
+    tool="${tool_pair%%:*}"
+    cmd="${tool_pair#*:}"
+    completion_file="${HOME}/.zsh/completions/_${tool}"
+
+    if command -v "$tool" > /dev/null 2>&1; then
+        if timeout 15 bash -c "$cmd" > "$completion_file" 2>/dev/null && [[ -s "$completion_file" ]]; then
+            echo "[CI] Generated completion for $tool"
+        else
+            echo "[CI] Failed to generate completion for $tool - timeout or empty output"
+            rm -f "$completion_file"
+        fi
+    else
+        echo "[CI] Tool $tool not found, skipping completion"
+    fi
+done
+
+# HashiCorp tools use different completion mechanism
+for tool in terraform packer; do
+    if command -v "$tool" > /dev/null 2>&1; then
+        echo "[CI] Setting up autocomplete for $tool..."
+        timeout 15 "$tool" -install-autocomplete zsh >/dev/null 2>&1 || true
+    fi
+done
 
 # Add completion configuration to .zshrc
 cat >> "${ZDOTDIR:-$HOME}/.zshrc" << 'ZSHRC_EOF'
@@ -244,6 +274,9 @@ main() {
   add_ci_env_vars || exit 1
   modify_interactive_prompts || exit 1
   add_homebrew_bundle_check || exit 1
+
+  # Skip original completion generation in CI since we have enhanced CI completion
+  sed -i '' '/generate_completion_files/s/^/# CI: Skipping - /' "$CI_SETUP_SCRIPT" || log_warning "Could not modify completion generation call"
 
   # Remove the original main call before adding CI modifications
   sed -i '' '/^main "\$@"$/d' "$CI_SETUP_SCRIPT" || log_warning "Could not remove original main call"
