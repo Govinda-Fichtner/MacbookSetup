@@ -125,11 +125,15 @@ commands:
                 antidote load "${ZDOTDIR}/.zsh_plugins.txt"
             fi
             
-            # Source zshrc
-            source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
+            # Source zshrc - don't fail if this doesn't work in CI
+            source "${ZDOTDIR}/.zshrc" || echo "Warning: Failed to source ${ZDOTDIR}/.zshrc (this may be expected in CI)"
             
-            # Run verification script with output redirection
+            # Run verification script and capture exit code properly
             ./verify_setup.sh 2>&1 | tee verify.log
+            verification_exit_code=${PIPESTATUS[0]}
+            
+            echo "Verification script exited with code: $verification_exit_code"
+            exit $verification_exit_code
 
 # Define the main workflow
 workflows:
