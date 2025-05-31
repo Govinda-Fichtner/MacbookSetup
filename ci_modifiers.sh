@@ -73,17 +73,29 @@ add_homebrew_bundle_check() {
   # Add homebrew-bundle check right after the "install_packages()" function definition
   sed '/^install_packages() {$/a\
   # Ensure homebrew-bundle is available in CI\
-  if [[ "$CI" == "true" ]] && ! brew bundle --help > /dev/null 2>&1; then\
-    log_info "Installing homebrew-bundle for CI..."\
-    brew tap homebrew/bundle || {\
-      log_error "Failed to tap homebrew/bundle"\
-      return 1\
-    }\
+  if [[ "$CI" == "true" ]]; then\
+    log_info "Verifying homebrew-bundle availability in CI..."\
     if ! brew bundle --help > /dev/null 2>&1; then\
-      log_error "homebrew-bundle installation failed"\
-      return 1\
+      log_info "Installing homebrew-bundle for CI..."\
+      # Update Homebrew first\
+      brew update 2>/dev/null || true\
+      # Try installing bundle support\
+      if ! brew install homebrew/bundle/brew-bundle 2>/dev/null; then\
+        # Fallback to tap method for older versions\
+        brew tap homebrew/bundle 2>/dev/null || {\
+          log_error "Failed to install homebrew-bundle"\
+          return 1\
+        }\
+      fi\
+      # Final verification\
+      if ! brew bundle --help > /dev/null 2>&1; then\
+        log_error "homebrew-bundle installation failed"\
+        return 1\
+      fi\
+      log_success "homebrew-bundle installed successfully"\
+    else\
+      log_success "homebrew-bundle is already available"\
     fi\
-    log_success "homebrew-bundle installed successfully"\
   fi\
 ' "$CI_SETUP_SCRIPT" > "$temp_file"
 
