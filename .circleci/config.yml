@@ -42,7 +42,7 @@ commands:
             # Create .zsh_plugins.txt in the correct location
             if [[ ! -f "${ZDOTDIR}/.zsh_plugins.txt" ]]; then
                 echo "Creating .zsh_plugins.txt in ${ZDOTDIR}"
-                cat > "${ZDOTDIR}/.zsh_plugins.txt" << 'PLUGINS_EOF'
+                cat > "${ZDOTDIR}/.zsh_plugins.txt" \<< 'PLUGINS_EOF'
             # Core functionality
             zsh-users/zsh-completions
             zsh-users/zsh-autosuggestions
