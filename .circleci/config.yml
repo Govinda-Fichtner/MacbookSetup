@@ -128,12 +128,8 @@ commands:
             # Source zshrc - don't fail if this doesn't work in CI
             source "${ZDOTDIR}/.zshrc" || echo "Warning: Failed to source ${ZDOTDIR}/.zshrc (this may be expected in CI)"
             
-            # Run verification script and capture exit code properly
-            ./verify_setup.sh 2>&1 | tee verify.log
-            verification_exit_code=${PIPESTATUS[0]}
-            
-            echo "Verification script exited with code: $verification_exit_code"
-            exit $verification_exit_code
+            # Run verification script directly - let it handle its own output and exit code
+            ./verify_setup.sh
 
 # Define the main workflow
 workflows:
@@ -169,9 +165,6 @@ jobs:
       - store_artifacts:
           path: ~/.zsh_plugins.txt
           destination: zsh_plugins
-      - store_artifacts:
-          path: verify.log
-          destination: verify_log
       - store_artifacts:
           path: /tmp/circleci-build.log
           destination: build_log
