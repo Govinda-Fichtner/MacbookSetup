@@ -7,7 +7,6 @@ tap "cirruslabs/cli"  # Added for Cirrus CI tooling
 
 # Formulae (Command-line packages)
 brew "git"
-brew "zinit"
 brew "rbenv"
 brew "pyenv"
 brew "direnv"
@@ -44,7 +43,6 @@ cask "font-jetbrains-mono-nerd-font"    # Clean, crisp font with Nerd Font icons
 # Development Tools
 brew "zsh"
 brew "antidote"      # Plugin manager for zsh
-brew "docker"
 
 # CI/CD Tools
 brew "cirruslabs/cli/cirrus"  # Cirrus CI CLI for local validation and monitoring
