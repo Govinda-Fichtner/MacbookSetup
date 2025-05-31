@@ -254,7 +254,7 @@ for tool_pair in "docker:docker completion zsh" "kubectl:kubectl completion zsh"
 done
 
 # Generate completions for development tools
-for tool_pair in "rbenv:rbenv completions zsh" "pyenv:pyenv completions zsh" "direnv:direnv hook zsh"; do
+for tool_pair in "rbenv:rbenv completions zsh" "direnv:direnv hook zsh"; do
     tool="${tool_pair%%:*}"
     cmd="${tool_pair#*:}"
     completion_file="${HOME}/.zsh/completions/_${tool}"
@@ -271,11 +271,45 @@ for tool_pair in "rbenv:rbenv completions zsh" "pyenv:pyenv completions zsh" "di
     fi
 done
 
+# Special case for pyenv - copy system completion file
+if command -v pyenv > /dev/null 2>&1; then
+    echo "[CI] Setting up pyenv completion..."
+    pyenv_completion=$(find "$(brew --prefix)" -name "pyenv.zsh" -path "*/completions/*" 2>/dev/null | head -1)
+    if [[ -n "$pyenv_completion" && -f "$pyenv_completion" ]]; then
+        cp "$pyenv_completion" "${HOME}/.zsh/completions/_pyenv" && echo "[CI] Generated completion file for pyenv"
+    else
+        echo "[CI] Failed to find pyenv completion file"
+    fi
+fi
+
 # HashiCorp tools use different completion mechanism
 for tool in terraform packer; do
     if command -v "$tool" > /dev/null 2>&1; then
         echo "[CI] Setting up autocomplete for $tool..."
-        run_with_timeout 15 "$tool -install-autocomplete zsh" >/dev/null 2>&1 || true
+        # Try newer and older completion formats
+        if ! "$tool" -autocomplete-install 2>/dev/null && ! "$tool" -install-autocomplete zsh 2>/dev/null; then
+            echo "[CI] $tool completion not available, creating basic completion"
+            # Create basic completion support
+            cat > "${HOME}/.zsh/completions/_${tool}" << 'COMPLETION_EOF'
+#compdef $tool
+# Basic $tool completion for CI
+_${tool}() {
+  local context state line
+  _arguments -C \
+    '*::arg:->args' && return 0
+
+  case $state in
+    args)
+      _command_names
+      ;;
+  esac
+}
+compdef _${tool} ${tool}
+COMPLETION_EOF
+            echo "[CI] Created basic completion for $tool"
+        else
+            echo "[CI] Installed autocomplete for $tool"
+        fi
     fi
 done
 

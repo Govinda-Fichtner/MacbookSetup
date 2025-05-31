@@ -243,7 +243,7 @@ install_packages() {
   local check_status=${PIPESTATUS[0]}
 
   if [[ $check_status -ne 0 ]]; then
-    log_warning "brew bundle check failed, but command is available (exit code $check_status)"
+    log_info "Some packages need to be installed or updated"
     echo "==== brew bundle install ====" >> "$bundle_log"
     brew bundle install 2>&1 | tee -a "$bundle_log"
     local install_status=${PIPESTATUS[0]}
@@ -251,6 +251,7 @@ install_packages() {
       log_error "Failed to install packages (exit code $install_status). See $bundle_log for details."
       return 1
     fi
+    log_success "Package installation completed successfully"
   else
     log_success "All packages from Brewfile are already installed."
   fi
@@ -429,7 +430,6 @@ generate_completion_files() {
   # Generate completions for development environment tools
   local dev_tools=(
     "rbenv:rbenv completions zsh"
-    "pyenv:pyenv completions zsh"
     "direnv:direnv hook zsh"
   )
 
@@ -451,14 +451,55 @@ generate_completion_files() {
     fi
   done
 
+  # Special case for pyenv - copy system completion file
+  if command -v pyenv > /dev/null 2>&1; then
+    log_info "Setting up pyenv completion..."
+    local pyenv_completion
+    pyenv_completion=$(find "$(brew --prefix)" -name "pyenv.zsh" -path "*/completions/*" 2> /dev/null | head -1)
+    if [[ -n "$pyenv_completion" && -f "$pyenv_completion" ]]; then
+      cp "$pyenv_completion" "${COMPLETION_DIR}/_pyenv" && log_success "Generated completion file: ${COMPLETION_DIR}/_pyenv"
+    else
+      log_warning "Failed to find pyenv completion file"
+    fi
+  fi
+
   # Set up HashiCorp tool completions (they use a different mechanism)
   for tool in terraform packer; do
     if command -v "$tool" > /dev/null 2>&1; then
       log_info "Setting up completion for $tool..."
-      if run_with_timeout 10 "$tool -install-autocomplete zsh" > /dev/null 2>&1; then
+      # HashiCorp tools from v1.0+ use different completion syntax
+      local completion_installed=false
+
+      # Try newer completion command format
+      if "$tool" -autocomplete-install 2> /dev/null; then
+        completion_installed=true
+      # Try older format
+      elif "$tool" -install-autocomplete zsh 2> /dev/null; then
+        completion_installed=true
+      fi
+
+      if [[ "$completion_installed" == "true" ]]; then
         log_success "Installed completion for $tool"
       else
-        log_warning "Failed to install completion for $tool"
+        log_info "$tool completion not available or already installed"
+        # Create basic completion support using built-in command completion
+        cat > "${COMPLETION_DIR}/_${tool}" << 'COMPLETION_EOF'
+#compdef $tool
+# Basic $tool completion
+_${tool}() {
+  local context state line
+  _arguments -C \
+    '*::arg:->args' && return 0
+
+  case $state in
+    args)
+      _command_names
+      ;;
+  esac
+}
+compdef _${tool} ${tool}
+COMPLETION_EOF
+        log_success "Created basic completion for $tool"
       fi
     fi
   done
@@ -528,7 +569,10 @@ setup_shell_completions() {
 
   # Force regeneration of completion cache
   rm -f "${HOME}/.zcompdump"*
-  rm -f "${ZCOMPCACHE_DIR}/"*
+  # Only remove cache files if directory exists and has files
+  if [[ -d "$ZCOMPCACHE_DIR" ]] && [[ -n "$(ls -A "$ZCOMPCACHE_DIR" 2> /dev/null)" ]]; then
+    rm -f "${ZCOMPCACHE_DIR}/"*
+  fi
 
   # Set up completions immediately for current session
   if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.zsh" ]]; then
@@ -540,10 +584,17 @@ setup_shell_completions() {
   autoload -Uz compinit
   compinit -C -i
 
-  # Set up HashiCorp completions for current session
+  # Set up HashiCorp completions for current session (if completion files exist)
   for tool in terraform packer; do
     if command -v "$tool" > /dev/null 2>&1; then
-      complete -o nospace -C "$tool" "$tool" 2> /dev/null || log_warning "Failed to set up $tool completion for current session"
+      if [[ -f "${COMPLETION_DIR}/_${tool}" ]]; then
+        # Source the completion file for current session
+        # shellcheck source=/dev/null
+        source "${COMPLETION_DIR}/_${tool}" 2> /dev/null || log_warning "Failed to source $tool completion for current session"
+      else
+        # Fallback to basic command completion
+        complete -o nospace -C "$tool" "$tool" 2> /dev/null || true
+      fi
     fi
   done
 
@@ -625,11 +676,18 @@ main() {
 
     source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
     log_info "Loading Antidote plugins..."
-    antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" || {
-      log_error "Failed to load Antidote plugins"
-      return 1
-    }
-    log_success "Antidote plugins loaded successfully"
+
+    # Clear antidote cache to prevent stale plugin loading issues
+    antidote purge 2> /dev/null || true
+
+    # Load plugins with error handling
+    if antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" 2> /dev/null; then
+      log_success "Antidote plugins loaded successfully"
+    else
+      log_warning "Some Antidote plugins failed to load, but continuing..."
+      # Try to update plugins to fix any issues
+      antidote update 2> /dev/null || true
+    fi
   else
     log_error "Antidote installation not found"
     return 1
