@@ -7,6 +7,7 @@ commands:
     steps:
       - run:
           name: Install Homebrew
+          shell: /bin/zsh
           command: |
             if ! command -v brew &>/dev/null; then
                 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -18,6 +19,7 @@ commands:
     steps:
       - run:
           name: Install homebrew-bundle if needed
+          shell: /bin/zsh
           command: |
             chmod +x .circleci/install_bundle.sh
             ./.circleci/install_bundle.sh
@@ -27,6 +29,7 @@ commands:
     steps:
       - run:
           name: Install required tools and setup environment
+          shell: /bin/zsh
           command: |
             # Install required tools
             brew install shellcheck
@@ -72,6 +75,7 @@ commands:
     steps:
       - run:
           name: Run setup script
+          shell: /bin/zsh
           command: |
             export COMPLETION_DIR="${HOME}/.zsh/completions"
             export ZCOMPCACHE="${HOME}/.zcompcache"
