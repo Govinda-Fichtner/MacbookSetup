@@ -435,9 +435,16 @@ check_completion() {
       return 1
       ;;
     orb | orbctl)
-      # Indirect verification: check if orb tools exist and can show version
-      if command -v "$tool" > /dev/null 2>&1 && "$tool" --version > /dev/null 2>&1; then
-        return 0 # orb tool is working, completion would likely work
+      # Indirect verification: check if orb tools exist and have completion subcommand
+      if command -v "$tool" > /dev/null 2>&1; then
+        # Try to verify completion subcommand exists (more reliable than --version for orb)
+        if "$tool" completion --help > /dev/null 2>&1 || [[ "$("$tool" --help 2> /dev/null)" == *"completion"* ]]; then
+          return 0 # orb tool has completion support, completion would likely work
+        fi
+        # Fallback: if the tool exists and shows help, assume completion works
+        if "$tool" --help > /dev/null 2>&1; then
+          return 0 # orb tool is working, completion would likely work
+        fi
       fi
       return 1
       ;;
