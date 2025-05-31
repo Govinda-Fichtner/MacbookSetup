@@ -242,18 +242,26 @@ install_packages() {
     rm -f "Brewfile.bak"
   fi
 
-  # Install packages
-  if ! brew bundle check > /dev/null 2>&1; then
-    log_info "Installing missing packages from Brewfile..."
-    brew bundle install || {
-      log_error "Failed to install packages"
+  # Log file for bundle output
+  local bundle_log="/tmp/brew_bundle.log"
+  echo "==== brew bundle check ====" > "$bundle_log"
+  brew bundle check 2>&1 | tee -a "$bundle_log"
+  local check_status=${PIPESTATUS[0]}
+
+  if [[ $check_status -ne 0 ]]; then
+    log_warning "brew bundle check failed, but command is available (exit code $check_status)"
+    echo "==== brew bundle install ====" >> "$bundle_log"
+    brew bundle install 2>&1 | tee -a "$bundle_log"
+    local install_status=${PIPESTATUS[0]}
+    if [[ $install_status -ne 0 ]]; then
+      log_error "Failed to install packages (exit code $install_status). See $bundle_log for details."
       return 1
-    }
+    fi
   else
     log_success "All packages from Brewfile are already installed."
   fi
 
-  log_success "Package installation completed."
+  log_success "Package installation completed. Log: $bundle_log"
 }
 
 # Language environment setup
@@ -338,6 +346,7 @@ ohmyzsh/ohmyzsh path:plugins/git
 
 # Kubernetes plugins
 ohmyzsh/ohmyzsh path:plugins/kubectl
+
 ohmyzsh/ohmyzsh path:plugins/helm
 
 # Development tools completions
