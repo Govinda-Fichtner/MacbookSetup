@@ -463,46 +463,27 @@ generate_completion_files() {
     fi
   fi
 
-  # Set up HashiCorp tool completions (they use a different mechanism)
-  for tool in terraform packer; do
-    if command -v "$tool" > /dev/null 2>&1; then
-      log_info "Setting up completion for $tool..."
-      # HashiCorp tools from v1.0+ use different completion syntax
-      local completion_installed=false
+  # Set up HashiCorp tool completions (they use different mechanisms)
 
-      # Try newer completion command format
-      if "$tool" -autocomplete-install 2> /dev/null; then
-        completion_installed=true
-      # Try older format
-      elif "$tool" -install-autocomplete zsh 2> /dev/null; then
-        completion_installed=true
-      fi
-
-      if [[ "$completion_installed" == "true" ]]; then
-        log_success "Installed completion for $tool"
-      else
-        log_info "$tool completion not available or already installed"
-        # Create basic completion support using built-in command completion
-        cat > "${COMPLETION_DIR}/_${tool}" << 'COMPLETION_EOF'
-#compdef $tool
-# Basic $tool completion
-_${tool}() {
-  local context state line
-  _arguments -C \
-    '*::arg:->args' && return 0
-
-  case $state in
-    args)
-      _command_names
-      ;;
-  esac
-}
-compdef _${tool} ${tool}
-COMPLETION_EOF
-        log_success "Created basic completion for $tool"
-      fi
+  # Terraform has built-in autocomplete support
+  if command -v terraform > /dev/null 2>&1; then
+    log_info "Setting up completion for terraform..."
+    if terraform -install-autocomplete 2> /dev/null; then
+      log_success "Installed terraform autocomplete"
+    else
+      log_info "Terraform autocomplete already installed or failed to install"
     fi
-  done
+  fi
+
+  # Packer also has built-in autocomplete support
+  if command -v packer > /dev/null 2>&1; then
+    log_info "Setting up completion for packer..."
+    if packer -autocomplete-install 2> /dev/null; then
+      log_success "Installed packer autocomplete"
+    else
+      log_info "Packer autocomplete already installed or failed to install"
+    fi
+  fi
 
   log_success "Completion file generation completed."
 }
@@ -584,19 +565,19 @@ setup_shell_completions() {
   autoload -Uz compinit
   compinit -C -i
 
-  # Set up HashiCorp completions for current session (if completion files exist)
-  for tool in terraform packer; do
-    if command -v "$tool" > /dev/null 2>&1; then
-      if [[ -f "${COMPLETION_DIR}/_${tool}" ]]; then
-        # Source the completion file for current session
-        # shellcheck source=/dev/null
-        source "${COMPLETION_DIR}/_${tool}" 2> /dev/null || log_warning "Failed to source $tool completion for current session"
-      else
-        # Fallback to basic command completion
-        complete -o nospace -C "$tool" "$tool" 2> /dev/null || true
-      fi
-    fi
-  done
+  # Set up HashiCorp completions for current session
+
+  # Terraform uses its own completion system
+  if command -v terraform > /dev/null 2>&1; then
+    # Terraform handles its own completion via the installed autocomplete
+    complete -o nospace -C terraform terraform 2> /dev/null || true
+  fi
+
+  # Packer also uses its own completion system
+  if command -v packer > /dev/null 2>&1; then
+    # Packer handles its own completion via the installed autocomplete
+    complete -o nospace -C packer packer 2> /dev/null || true
+  fi
 
   # Initialize pyenv for current session
   if command -v pyenv > /dev/null 2>&1; then

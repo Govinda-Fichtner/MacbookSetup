@@ -282,36 +282,27 @@ if command -v pyenv > /dev/null 2>&1; then
     fi
 fi
 
-# HashiCorp tools use different completion mechanism
-for tool in terraform packer; do
-    if command -v "$tool" > /dev/null 2>&1; then
-        echo "[CI] Setting up autocomplete for $tool..."
-        # Try newer and older completion formats
-        if ! "$tool" -autocomplete-install 2>/dev/null && ! "$tool" -install-autocomplete zsh 2>/dev/null; then
-            echo "[CI] $tool completion not available, creating basic completion"
-            # Create basic completion support
-            cat > "${HOME}/.zsh/completions/_${tool}" << 'COMPLETION_EOF'
-#compdef $tool
-# Basic $tool completion for CI
-_${tool}() {
-  local context state line
-  _arguments -C \
-    '*::arg:->args' && return 0
+# HashiCorp tools use different completion mechanisms
 
-  case $state in
-    args)
-      _command_names
-      ;;
-  esac
-}
-compdef _${tool} ${tool}
-COMPLETION_EOF
-            echo "[CI] Created basic completion for $tool"
-        else
-            echo "[CI] Installed autocomplete for $tool"
-        fi
+# Terraform has built-in autocomplete support
+if command -v terraform > /dev/null 2>&1; then
+    echo "[CI] Setting up autocomplete for terraform..."
+    if terraform -install-autocomplete 2>/dev/null; then
+        echo "[CI] Installed terraform autocomplete"
+    else
+        echo "[CI] Terraform autocomplete already installed or failed to install"
     fi
-done
+fi
+
+# Packer also has built-in autocomplete support
+if command -v packer > /dev/null 2>&1; then
+    echo "[CI] Setting up autocomplete for packer..."
+    if packer -autocomplete-install 2>/dev/null; then
+        echo "[CI] Installed packer autocomplete"
+    else
+        echo "[CI] Packer autocomplete already installed or failed to install"
+    fi
+fi
 
     # Add completion configuration to .zshrc
     cat >> "${ZDOTDIR:-$HOME}/.zshrc" << 'ZSHRC_EOF'
