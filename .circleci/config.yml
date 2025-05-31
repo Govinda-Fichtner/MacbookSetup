@@ -19,12 +19,8 @@ commands:
                 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
             fi
             
-            # Set up Homebrew environment for the current session
-            if [[ "$(uname -m)" == "arm64" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            else
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            # Set up Homebrew environment - let brew figure out the architecture
+            eval "$(brew shellenv)"
             
             # Verify brew is working
             echo "Verifying Homebrew installation..."
@@ -39,11 +35,7 @@ commands:
           shell: /bin/zsh
           command: |
             # Set up Homebrew environment
-            if [[ "$(uname -m)" == "arm64" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            else
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            eval "$(brew shellenv)"
             
             chmod +x .circleci/install_bundle.sh
             ./.circleci/install_bundle.sh
@@ -56,11 +48,7 @@ commands:
           shell: /bin/zsh
           command: |
             # Set up Homebrew environment
-            if [[ "$(uname -m)" == "arm64" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            else
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            eval "$(brew shellenv)"
             
             # Install required tools
             brew install shellcheck
@@ -109,11 +97,7 @@ commands:
           shell: /bin/zsh
           command: |
             # Set up Homebrew environment
-            if [[ "$(uname -m)" == "arm64" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            else
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            eval "$(brew shellenv)"
             
             export COMPLETION_DIR="${HOME}/.zsh/completions"
             export ZCOMPCACHE="${HOME}/.zcompcache"
@@ -137,11 +121,7 @@ commands:
           shell: /bin/zsh
           command: |
             # Set up Homebrew environment
-            if [[ "$(uname -m)" == "arm64" ]]; then
-                eval "$(/opt/homebrew/bin/brew shellenv)"
-            else
-                eval "$(/usr/local/bin/brew shellenv)"
-            fi
+            eval "$(brew shellenv)"
             
             # Set up environment variables in zsh context
             export COMPLETION_DIR="${HOME}/.zsh/completions"
