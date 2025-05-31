@@ -26,33 +26,46 @@ commands:
     description: "Prepare the CI environment"
     steps:
       - run:
-          name: Install required tools
+          name: Install required tools and setup environment
           command: |
+            # Install required tools
             brew install shellcheck
+            
+            # Set up environment variables consistently
+            export ZDOTDIR="${HOME}"
+            export ANTIDOTE_HOME="${HOME}/.antidote"
+            
+            # Create necessary directories first
+            mkdir -p "${ZDOTDIR}"
+            mkdir -p "${ANTIDOTE_HOME}"
+            
+            # Create .zsh_plugins.txt in the correct location
+            if [[ ! -f "${ZDOTDIR}/.zsh_plugins.txt" ]]; then
+                echo "Creating .zsh_plugins.txt in ${ZDOTDIR}"
+                cat > "${ZDOTDIR}/.zsh_plugins.txt" << 'EOF'
+# Core functionality
+zsh-users/zsh-completions
+zsh-users/zsh-autosuggestions
+zsh-users/zsh-syntax-highlighting
+
+# Git integration
+ohmyzsh/ohmyzsh path:plugins/git
+
+# Kubernetes tools
+ohmyzsh/ohmyzsh path:plugins/kubectl
+EOF
+                echo "Created .zsh_plugins.txt successfully"
+            fi
+            
+            # Verify the file exists and show its location
+            echo "Checking for .zsh_plugins.txt..."
+            ls -la "${ZDOTDIR}/.zsh_plugins.txt" || echo "File not found!"
+            
+            # Generate and modify CI setup script
             chmod +x ci_modifiers.sh
             zsh ./ci_modifiers.sh
             chmod +x ci_setup.sh
             chmod +x verify_setup.sh
-
-  create_plugins_file:
-    description: "Create .zsh_plugins.txt if it doesn't exist"
-    steps:
-      - run:
-          name: Create plugins file
-          command: |
-            if [[ ! -f ~/.zsh_plugins.txt ]]; then
-                mkdir -p ~/.antidote
-                echo "# Core functionality" > ~/.zsh_plugins.txt
-                echo "zsh-users/zsh-completions" >> ~/.zsh_plugins.txt
-                echo "zsh-users/zsh-autosuggestions" >> ~/.zsh_plugins.txt
-                echo "zsh-users/zsh-syntax-highlighting" >> ~/.zsh_plugins.txt
-                echo "" >> ~/.zsh_plugins.txt
-                echo "# Git integration" >> ~/.zsh_plugins.txt
-                echo "ohmyzsh/ohmyzsh path:plugins/git" >> ~/.zsh_plugins.txt
-                echo "" >> ~/.zsh_plugins.txt
-                echo "# Kubernetes tools" >> ~/.zsh_plugins.txt
-                echo "ohmyzsh/ohmyzsh path:plugins/kubectl" >> ~/.zsh_plugins.txt
-            fi
 
   run_setup:
     description: "Run the setup script"
@@ -64,6 +77,12 @@ commands:
             export ZCOMPCACHE="${HOME}/.zcompcache"
             export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
             export ANTIDOTE_HOME="${HOME}/.antidote"
+            export ZDOTDIR="${HOME}"
+            
+            # Verify plugins file exists before setup
+            echo "Before setup - checking for plugins file:"
+            ls -la "${ZDOTDIR}/.zsh_plugins.txt" || echo "Plugins file missing before setup!"
+            
             mkdir -p "${COMPLETION_DIR}"
             mkdir -p "${ZCOMPCACHE}"
             zsh ./ci_setup.sh
@@ -79,6 +98,12 @@ commands:
             export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
             export ANTIDOTE_HOME="${HOME}/.antidote"
             export ZDOTDIR="${HOME}"
+            
+            # Verify plugins file exists before verification
+            echo "Before verification - checking for plugins file:"
+            ls -la "${ZDOTDIR}/.zsh_plugins.txt" || echo "Plugins file missing before verification!"
+            cat "${ZDOTDIR}/.zsh_plugins.txt" || echo "Cannot read plugins file!"
+            
             mkdir -p "${COMPLETION_DIR}"
             mkdir -p "${ZCOMPCACHE}"
             autoload -Uz compinit
@@ -118,7 +143,6 @@ jobs:
       - install_homebrew
       - ensure_homebrew_bundle
       - prepare_environment
-      - create_plugins_file
       - run_setup
       - run_verification
       - store_artifacts:
