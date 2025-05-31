@@ -97,6 +97,19 @@ add_homebrew_bundle_check() {
       log_success "homebrew-bundle is already available"\
     fi\
   fi\
+\
+  # Force brew bundle install in CI environment for reliability\
+  if [[ "$CI" == "true" ]]; then\
+    log_info "CI environment detected - forcing brew bundle install for reliability"\
+    echo "==== CI: brew bundle install ====" >> "$bundle_log"\
+    brew bundle install 2>&1 | tee -a "$bundle_log"\
+    local ci_install_status=${PIPESTATUS[0]}\
+    if [[ $ci_install_status -ne 0 ]]; then\
+      log_error "CI brew bundle install failed (exit code $ci_install_status). See $bundle_log for details."\
+      return 1\
+    fi\
+    log_success "CI brew bundle install completed successfully"\
+  fi\
 ' "$CI_SETUP_SCRIPT" > "$temp_file"
 
   mv "$temp_file" "$CI_SETUP_SCRIPT" || {
@@ -200,9 +213,10 @@ zstyle ':completion::complete:*' use-cache on
 zstyle ':completion::complete:*' cache-path "${HOME}/.zcompcache"
 ZSHRC_EOF
 
-# Call the main setup function at the end
-main "\$@"
 EOF
+
+  # Call the main setup function at the end
+  echo 'main "$@"' >> "$CI_SETUP_SCRIPT"
 
   log_success "Added CI-specific configurations"
 }
