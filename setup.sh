@@ -915,45 +915,41 @@ configure_terminal_fonts() {
     printf "│   └── %b[WARNING]%b Warp not installed\n" "$YELLOW" "$NC"
   fi
 
-  # Check iTerm2 terminal configuration
-  printf "└── %b[CHECKING]%b iTerm2 terminal\n" "$BLUE" "$NC"
+  # Configure iTerm2 terminal
+  printf "└── %b[CONFIGURING]%b iTerm2 terminal fonts\n" "$BLUE" "$NC"
   if [[ -d "/Applications/iTerm.app" ]]; then
     local iterm_prefs
     iterm_prefs="/Users/$(whoami)/Library/Preferences/com.googlecode.iterm2.plist"
 
     if [[ -f "$iterm_prefs" ]]; then
-      # Try to extract font information more reliably
+      # Get current font using PlistBuddy
       local current_font
-      current_font=$(defaults read com.googlecode.iterm2 2> /dev/null | grep -A1 '"Normal Font"' | tail -1 | sed 's/[[:space:]]*= "//; s/";$//' || echo "unknown")
+      current_font=$(/usr/libexec/PlistBuddy -c "Print :\"New Bookmarks\":0:\"Normal Font\"" "$iterm_prefs" 2> /dev/null || echo "unknown")
 
-      if [[ "$current_font" != "unknown" && -n "$current_font" ]]; then
-        printf "    ├── %b[INFO]%b Current font: %s\n" "$BLUE" "$NC" "$current_font"
+      printf "    ├── %b[INFO]%b Current font: %s\n" "$BLUE" "$NC" "$current_font"
 
-        # Check if it's a Nerd Font and appropriate size
-        if [[ "$current_font" == *"Nerd Font"* ]]; then
-          printf "    ├── %b[SUCCESS]%b Using Nerd Font - Starship compatible\n" "$GREEN" "$NC"
-        else
-          printf "    ├── %b[RECOMMENDATION]%b Switch to Nerd Font for Starship icons\n" "$YELLOW" "$NC"
-        fi
+      # Set optimal font for Starship using PlistBuddy
+      local target_font="$recommended_font 14"
+      if [[ "$current_font" != "$target_font" ]]; then
+        printf "    ├── %b[SETTING]%b Font to: %s\n" "$BLUE" "$NC" "$target_font"
+        /usr/libexec/PlistBuddy -c "Set :\"New Bookmarks\":0:\"Normal Font\" \"$target_font\"" "$iterm_prefs" 2> /dev/null \
+          && printf "    ├── %b[SUCCESS]%b iTerm2 font updated (restart required)\n" "$GREEN" "$NC" \
+          || printf "    ├── %b[WARNING]%b Failed to update iTerm2 font\n" "$YELLOW" "$NC"
       else
-        printf "    ├── %b[INFO]%b Font configuration not detected\n" "$BLUE" "$NC"
+        printf "    ├── %b[SUCCESS]%b Font already configured correctly\n" "$GREEN" "$NC"
       fi
-
-      printf "    └── %b[INFO]%b Configure font manually: Preferences → Profiles → Text\n" "$BLUE" "$NC"
-      printf "        └── Recommended: %s, 14pt\n" "$recommended_font"
     else
-      printf "    ├── %b[INFO]%b iTerm2 not yet configured\n" "$BLUE" "$NC"
-      printf "    └── %b[INFO]%b Configure font: Preferences → Profiles → Text → Font\n" "$BLUE" "$NC"
-      printf "        └── Recommended: %s, 14pt\n" "$recommended_font"
+      printf "    ├── %b[INFO]%b iTerm2 preferences not found\n" "$BLUE" "$NC"
+      printf "    └── %b[RECOMMENDATION]%b Launch iTerm2 once to create preferences, then re-run setup\n" "$YELLOW" "$NC"
     fi
   else
-    printf "    └── %b[WARNING]%b iTerm2 not installed\n" "$YELLOW" "$NC"
+    printf "    └── %b[INFO]%b iTerm2 not installed\n" "$BLUE" "$NC"
   fi
 
   printf "\n%b[CONFIGURATION SUMMARY]%b\n" "$BLUE" "$NC"
   printf "• Warp: Automatically configured (restart required)\n"
-  printf "• iTerm2: Manual configuration needed (see instructions above)\n"
-  printf "• Recommended font: %s, 14pt\n" "$recommended_font"
+  printf "• iTerm2: Automatically configured (restart required)\n"
+  printf "• Font: %s, 14pt for optimal Starship display\n" "$recommended_font"
 }
 
 configure_shell() {

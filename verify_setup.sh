@@ -715,8 +715,9 @@ verify_terminal_fonts() {
     iterm_prefs="/Users/$(whoami)/Library/Preferences/com.googlecode.iterm2.plist"
 
     if [[ -f "$iterm_prefs" ]]; then
+      # Use PlistBuddy to get current font
       local current_font
-      current_font=$(defaults read com.googlecode.iterm2 2> /dev/null | grep -A1 '"Normal Font"' | tail -1 | sed 's/[[:space:]]*= "//; s/";$//' || echo "unknown")
+      current_font=$(/usr/libexec/PlistBuddy -c "Print :\"New Bookmarks\":0:\"Normal Font\"" "$iterm_prefs" 2> /dev/null || echo "unknown")
 
       if [[ "$current_font" != "unknown" && -n "$current_font" ]]; then
         printf "    ├── %b[INFO]%b Current font: %s\n" "$BLUE" "$RESET" "$current_font"
