@@ -879,37 +879,41 @@ configure_terminal_fonts() {
   # Configure Warp terminal automatically
   printf "├── %b[CONFIGURING]%b Warp terminal\n" "$BLUE" "$NC"
   if [[ -d "/Applications/Warp.app" ]]; then
-    local current_warp_font_name
-    local current_warp_font_size
-    current_warp_font_name=$(defaults read dev.warp.Warp-Stable FontName 2> /dev/null || echo "unknown")
-    current_warp_font_size=$(defaults read dev.warp.Warp-Stable FontSize 2> /dev/null || echo "unknown")
+    local warp_prefs
+    warp_prefs="/Users/$(whoami)/Library/Preferences/dev.warp.Warp-Stable.plist"
 
-    local needs_font_update=false
-    local needs_size_update=false
+    if [[ -f "$warp_prefs" ]]; then
+      # Get current font settings using PlistBuddy
+      local current_font_name
+      local current_font_size
+      current_font_name=$(/usr/libexec/PlistBuddy -c "Print :FontName" "$warp_prefs" 2> /dev/null || echo "unknown")
+      current_font_size=$(/usr/libexec/PlistBuddy -c "Print :FontSize" "$warp_prefs" 2> /dev/null || echo "unknown")
 
-    # Check if we need to update the font
-    if [[ "$current_warp_font_name" != "FiraCode Nerd Font Mono" && "$current_warp_font_name" != "Fira Code" ]]; then
-      needs_font_update=true
-    fi
+      printf "│   ├── %b[INFO]%b Current: %s %spt\n" "$BLUE" "$NC" "$current_font_name" "$current_font_size"
 
-    # Check if we need to update the size (target 14pt)
-    if [[ "$current_warp_font_size" != "14.0" ]]; then
-      needs_size_update=true
-    fi
+      local needs_update=false
 
-    if [[ "$needs_font_update" == "true" || "$needs_size_update" == "true" ]]; then
-      printf "│   ├── %b[UPDATING]%b Current: %s %spt\n" "$BLUE" "$NC" "$current_warp_font_name" "$current_warp_font_size"
+      # Check if we need to update the font or size
+      if [[ "$current_font_name" != "FiraCode Nerd Font Mono" ]] || [[ "$current_font_size" != "14.0" ]]; then
+        needs_update=true
+      fi
 
-      # Set optimal font for Starship
-      if defaults write dev.warp.Warp-Stable FontName -string "FiraCode Nerd Font Mono" 2> /dev/null \
-        && defaults write dev.warp.Warp-Stable FontSize -string "14.0" 2> /dev/null; then
-        printf "│   ├── %b[SUCCESS]%b Font updated to FiraCode Nerd Font Mono 14pt\n" "$GREEN" "$NC"
-        printf "│   └── %b[INFO]%b Restart Warp to see changes\n" "$BLUE" "$NC"
+      if [[ "$needs_update" == "true" ]]; then
+        printf "│   ├── %b[SETTING]%b Font to: FiraCode Nerd Font Mono 14pt\n" "$BLUE" "$NC"
+
+        # Set optimal font and size for Starship using PlistBuddy
+        if /usr/libexec/PlistBuddy -c "Set :FontName \"FiraCode Nerd Font Mono\"" "$warp_prefs" 2> /dev/null \
+          && /usr/libexec/PlistBuddy -c "Set :FontSize \"14.0\"" "$warp_prefs" 2> /dev/null; then
+          printf "│   ├── %b[SUCCESS]%b Warp font updated (restart required)\n" "$GREEN" "$NC"
+        else
+          printf "│   ├── %b[WARNING]%b Failed to update Warp font\n" "$YELLOW" "$NC"
+        fi
       else
-        printf "│   └── %b[WARNING]%b Failed to update font settings\n" "$YELLOW" "$NC"
+        printf "│   ├── %b[SUCCESS]%b Font already configured correctly\n" "$GREEN" "$NC"
       fi
     else
-      printf "│   └── %b[SUCCESS]%b Already configured: %s %spt\n" "$GREEN" "$NC" "$current_warp_font_name" "$current_warp_font_size"
+      printf "│   ├── %b[INFO]%b Warp preferences not found\n" "$BLUE" "$NC"
+      printf "│   └── %b[RECOMMENDATION]%b Launch Warp once to create preferences, then re-run setup\n" "$YELLOW" "$NC"
     fi
   else
     printf "│   └── %b[WARNING]%b Warp not installed\n" "$YELLOW" "$NC"

@@ -678,31 +678,39 @@ verify_terminal_fonts() {
   # Check Warp terminal configuration
   printf "├── %b[CHECKING]%b Warp terminal fonts\n" "$BLUE" "$RESET"
   if [[ -d "/Applications/Warp.app" ]]; then
-    local warp_font_name
-    local warp_font_size
-    warp_font_name=$(defaults read dev.warp.Warp-Stable FontName 2> /dev/null || echo "unknown")
-    warp_font_size=$(defaults read dev.warp.Warp-Stable FontSize 2> /dev/null || echo "unknown")
+    local warp_prefs
+    warp_prefs="/Users/$(whoami)/Library/Preferences/dev.warp.Warp-Stable.plist"
 
-    if [[ "$warp_font_name" != "unknown" && "$warp_font_size" != "unknown" ]]; then
-      printf "│   ├── %b[INFO]%b Current: %s %spt\n" "$BLUE" "$RESET" "$warp_font_name" "$warp_font_size"
+    if [[ -f "$warp_prefs" ]]; then
+      # Get current font settings using PlistBuddy
+      local warp_font_name
+      local warp_font_size
+      warp_font_name=$(/usr/libexec/PlistBuddy -c "Print :FontName" "$warp_prefs" 2> /dev/null || echo "unknown")
+      warp_font_size=$(/usr/libexec/PlistBuddy -c "Print :FontSize" "$warp_prefs" 2> /dev/null || echo "unknown")
 
-      # Check if using Nerd Font
-      if [[ "$warp_font_name" == *"Nerd Font"* || "$warp_font_name" == "Fira Code" ]]; then
-        printf "│   ├── %b[SUCCESS]%b Using Starship-compatible font\n" "$GREEN" "$RESET"
+      if [[ "$warp_font_name" != "unknown" && "$warp_font_size" != "unknown" ]]; then
+        printf "│   ├── %b[INFO]%b Current: %s %spt\n" "$BLUE" "$RESET" "$warp_font_name" "$warp_font_size"
+
+        # Check if using Nerd Font
+        if [[ "$warp_font_name" == *"Nerd Font"* || "$warp_font_name" == "Fira Code" ]]; then
+          printf "│   ├── %b[SUCCESS]%b Using Starship-compatible font\n" "$GREEN" "$RESET"
+        else
+          printf "│   ├── %b[WARNING]%b Not using Nerd Font - icons may not display\n" "$YELLOW" "$RESET"
+          font_issues=true
+        fi
+
+        # Check font size
+        if (($(echo "$warp_font_size >= 14" | bc -l 2> /dev/null || echo "0"))); then
+          printf "│   └── %b[SUCCESS]%b Font size adequate for Starship\n" "$GREEN" "$RESET"
+        else
+          printf "│   └── %b[WARNING]%b Font size may be too small for optimal Starship display\n" "$YELLOW" "$RESET"
+          font_issues=true
+        fi
       else
-        printf "│   ├── %b[WARNING]%b Not using Nerd Font - icons may not display\n" "$YELLOW" "$RESET"
-        font_issues=true
-      fi
-
-      # Check font size
-      if (($(echo "$warp_font_size >= 14" | bc -l 2> /dev/null || echo "0"))); then
-        printf "│   └── %b[SUCCESS]%b Font size adequate for Starship\n" "$GREEN" "$RESET"
-      else
-        printf "│   └── %b[WARNING]%b Font size may be too small for optimal Starship display\n" "$YELLOW" "$RESET"
-        font_issues=true
+        printf "│   └── %b[INFO]%b Font configuration not detected\n" "$BLUE" "$RESET"
       fi
     else
-      printf "│   └── %b[INFO]%b Font configuration not detected\n" "$BLUE" "$RESET"
+      printf "│   └── %b[INFO]%b Warp preferences not found\n" "$BLUE" "$RESET"
     fi
   else
     printf "│   └── %b[INFO]%b Warp not installed\n" "$BLUE" "$RESET"
