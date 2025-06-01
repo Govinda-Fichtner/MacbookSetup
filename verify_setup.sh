@@ -428,10 +428,21 @@ check_completion() {
       return 1
       ;;
     docker)
-      # Indirect verification: check if docker exists (even if daemon isn't running)
+      # Enhanced Docker verification for CI environments
+      # First check if docker CLI exists and works
       if command -v docker > /dev/null 2>&1 && docker --version > /dev/null 2>&1; then
         return 0 # docker cli is working, completion would likely work
       fi
+
+      # Fallback: check if we have a standalone Docker completion file
+      # This handles CI environments where OrbStack initialization may fail
+      if [[ -f "${completion_dir}/${compfile}" && -s "${completion_dir}/${compfile}" ]]; then
+        # Verify it's a proper completion file (not empty)
+        if grep -q "compdef.*docker" "${completion_dir}/${compfile}" && grep -q "_docker" "${completion_dir}/${compfile}"; then
+          return 0 # Valid standalone Docker completion exists
+        fi
+      fi
+
       return 1
       ;;
     orb | orbctl)
