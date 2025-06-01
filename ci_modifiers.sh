@@ -567,22 +567,6 @@ DOCKER_COMPLETION_EOF
             fi
             echo "[CI] === END DOCKER COMPLETION GUARANTEED CREATION ==="
             continue
-        fi
-
-                # For orb/orbctl, try completion generation even if OrbStack isn't fully running
-        elif [[ "$tool" == "orb" || "$tool" == "orbctl" ]]; then
-            fi
-
-            # Final check and cleanup
-            if [[ "$docker_completion_created" == "false" ]]; then
-                echo "[CI] All Docker completion methods failed - Docker not available"
-                rm -f "$completion_file"
-            else
-                echo "[CI] Docker completion successfully created using fallback method"
-            fi
-            continue
-
-
         # For orb/orbctl, try completion generation even if OrbStack isn't fully running
         elif [[ "$tool" == "orb" || "$tool" == "orbctl" ]]; then
             # Try completion generation with extended timeout for orb tools
