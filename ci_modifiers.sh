@@ -398,6 +398,26 @@ for tool_pair in "docker:docker completion zsh" "kubectl:kubectl completion zsh"
         if [[ "$tool" == "docker" ]]; then
             echo "[CI] Processing Docker completion with fallback test results..."
             echo "[CI] Docker Init Status: ${DOCKER_INIT_STATUS:-UNKNOWN}"
+            echo "[CI] Docker Daemon Status: ${DOCKER_DAEMON_STATUS:-UNKNOWN}"
+            echo "[CI] Docker Completion Status: ${DOCKER_COMPLETION_STATUS:-UNKNOWN}"
+
+            # If variables aren't set, this indicates the initialization test didn't run
+            if [[ "${DOCKER_INIT_STATUS:-UNKNOWN}" == "UNKNOWN" ]]; then
+                echo "[CI] WARNING: Docker initialization test appears not to have run - variables not set"
+                echo "[CI] Falling back to basic Docker availability check..."
+                if command -v docker > /dev/null 2>&1 && docker --version > /dev/null 2>&1; then
+                    echo "[CI] Docker CLI available - creating minimal completion file"
+                    echo "#compdef docker" > "$completion_file"
+                    echo "# docker completion - fallback for uninitialized test" >> "$completion_file"
+                    echo "_docker() { _command_names }" >> "$completion_file"
+                    echo "compdef _docker docker" >> "$completion_file"
+                    echo "[CI] Created fallback Docker completion file"
+                else
+                    echo "[CI] Docker not available - skipping completion"
+                    rm -f "$completion_file"
+                fi
+                continue
+            fi
 
             case "${DOCKER_INIT_STATUS:-UNKNOWN}" in
                 "FULLY_FUNCTIONAL")
