@@ -421,12 +421,17 @@ setup_ruby_environment() {
   latest_ruby=$(rbenv install -l | grep -v - | grep -v dev | tail -1 | tr -d '[:space:]')
 
   if ! rbenv versions | grep -q "$latest_ruby"; then
-    log_info "Installing Ruby $latest_ruby..."
+    printf "│   ├── %b[INSTALLING]%b Ruby %s (this may take several minutes)\n" "$BLUE" "$NC" "$latest_ruby"
+    # Suppress verbose output by redirecting to log file
+    local ruby_log="/tmp/ruby_install.log"
     RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl) --with-readline-dir=$(brew --prefix readline)" \
-      rbenv install "$latest_ruby" || {
-      log_error "Failed to install Ruby $latest_ruby"
+      rbenv install "$latest_ruby" > "$ruby_log" 2>&1 || {
+      printf "│   └── %b[ERROR]%b Failed to install Ruby %s (see %s)\n" "$RED" "$NC" "$latest_ruby" "$ruby_log"
       return 1
     }
+    printf "│   ├── %b[SUCCESS]%b Ruby %s installed\n" "$GREEN" "$NC" "$latest_ruby"
+  else
+    printf "│   ├── %b[SUCCESS]%b Ruby %s already installed\n" "$GREEN" "$NC" "$latest_ruby"
   fi
 
   # Set global Ruby version
@@ -451,13 +456,18 @@ setup_python_environment() {
   latest_python=$(pyenv install --list | grep -v - | grep -v a | grep -v b | grep -v rc | grep "^  [0-9]" | tail -1 | tr -d '[:space:]')
 
   if ! pyenv versions | grep -q "$latest_python"; then
-    log_info "Installing Python $latest_python..."
+    printf "    ├── %b[INSTALLING]%b Python %s (this may take several minutes)\n" "$BLUE" "$NC" "$latest_python"
+    # Suppress verbose output by redirecting to log file
+    local python_log="/tmp/python_install.log"
     CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix sqlite3)/include" \
     LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix sqlite3)/lib" \
-      pyenv install "$latest_python" || {
-      log_error "Failed to install Python $latest_python"
+      pyenv install "$latest_python" > "$python_log" 2>&1 || {
+      printf "    └── %b[ERROR]%b Failed to install Python %s (see %s)\n" "$RED" "$NC" "$latest_python" "$python_log"
       return 1
     }
+    printf "    ├── %b[SUCCESS]%b Python %s installed\n" "$GREEN" "$NC" "$latest_python"
+  else
+    printf "    ├── %b[SUCCESS]%b Python %s already installed\n" "$GREEN" "$NC" "$latest_python"
   fi
 
   # Set global Python version
@@ -467,7 +477,12 @@ setup_python_environment() {
 
 # Shell configuration
 setup_antidote() {
-  log_info "Setting up antidote plugin manager..."
+  # This function is now called from configure_shell, so suppress its own logging
+
+  # Ensure the directory exists
+  local plugins_dir
+  plugins_dir=$(dirname "$ANTIDOTE_PLUGINS_FILE")
+  ensure_dir "$plugins_dir" > /dev/null 2>&1
 
   # Create plugins file
   if [[ ! -f "$ANTIDOTE_PLUGINS_FILE" ]]; then
@@ -511,8 +526,6 @@ antidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt"
   if ! grep -q "Initialize antidote" "$ZSHRC_PATH"; then
     echo -e "\n$antidote_config" >> "$ZSHRC_PATH"
   fi
-
-  log_success "Antidote setup completed."
 }
 
 generate_completion_files() {
@@ -719,11 +732,11 @@ setup_shell_completions() {
     printf "%s\n" "${completion_config[@]}" >> "$ZSHRC_PATH"
   fi
 
-  # Force regeneration of completion cache
-  rm -f "${HOME}/.zcompdump"*
+  # Force regeneration of completion cache (suppress error if no files exist)
+  rm -f "${HOME}/.zcompdump"* 2> /dev/null || true
   # Only remove cache files if directory exists and has files
   if [[ -d "$ZCOMPCACHE_DIR" ]] && [[ -n "$(ls -A "$ZCOMPCACHE_DIR" 2> /dev/null)" ]]; then
-    rm -f "${ZCOMPCACHE_DIR}/"*
+    rm -f "${ZCOMPCACHE_DIR}/"* 2> /dev/null || true
   fi
 
   # Set up completions immediately for current session
@@ -771,7 +784,11 @@ configure_shell() {
 
   # Setup Antidote plugin manager
   printf "│   ├── %b[SETTING UP]%b Antidote plugin manager\n" "$BLUE" "$NC"
-  setup_antidote > /dev/null 2>&1
+  if setup_antidote > /dev/null 2>&1; then
+    printf "│   │   ├── %b[SUCCESS]%b Plugin configuration created\n" "$GREEN" "$NC"
+  else
+    printf "│   │   ├── %b[WARNING]%b Plugin setup had issues but continuing\n" "$YELLOW" "$NC"
+  fi
 
   # Install Antidote if needed
   if ! command -v antidote > /dev/null 2>&1; then
@@ -816,7 +833,11 @@ configure_shell() {
 
   # Setup shell completions
   printf "│   ├── %b[SETTING UP]%b Shell completions\n" "$BLUE" "$NC"
-  setup_shell_completions > /dev/null 2>&1
+  if setup_shell_completions > /dev/null 2>&1; then
+    printf "│   │   └── %b[SUCCESS]%b Completion system configured\n" "$GREEN" "$NC"
+  else
+    printf "│   │   └── %b[WARNING]%b Completion setup had issues but continuing\n" "$YELLOW" "$NC"
+  fi
 
   # Add tool-specific configurations
   printf "│   └── %b[CONFIGURING]%b Tool integrations\n" "$BLUE" "$NC"
