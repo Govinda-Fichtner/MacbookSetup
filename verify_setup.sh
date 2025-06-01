@@ -61,9 +61,13 @@ extract_version() {
       # "git version 2.49.0" -> "2.49.0"
       echo "$version_string" | sed -n 's/.*version \([0-9][0-9.]*\).*/\1/p'
       ;;
-    rbenv | pyenv | nvm | starship)
+    rbenv | pyenv | starship)
       # "rbenv 1.3.2" -> "1.3.2"
       echo "$version_string" | sed -n 's/.* \([0-9][0-9.]*\).*/\1/p'
+      ;;
+    nvm)
+      # "0.40.3" -> "0.40.3" (nvm outputs just the version number)
+      echo "$version_string" | sed -n 's/^\([0-9][0-9.]*\).*/\1/p'
       ;;
     direnv)
       # "2.36.0" -> "2.36.0" (direnv outputs just the version number)
@@ -228,7 +232,18 @@ verify_software_tools() {
       connector="└──"
     fi
 
-    if check_command "$tool"; then
+    if [[ "$tool" == "nvm" ]]; then
+      # Special handling for nvm which needs to be sourced
+      if [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]]; then
+        version_raw=$(source "$(brew --prefix)/opt/nvm/nvm.sh" && nvm --version 2> /dev/null | head -1 || echo "")
+        version=$(extract_version "$version_raw" "$tool")
+        [[ -n "$version" ]] && version="v$version"
+        printf "%s%s %b[SUCCESS]%b %s %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$tool" "$version"
+      else
+        printf "%s%s %b[ERROR]%b %s\n" "$prefix" "$connector" "$RED" "$RESET" "$tool"
+        failed_tools+=("$tool")
+      fi
+    elif check_command "$tool"; then
       version_raw=$("$tool" --version 2> /dev/null | head -1 || echo "")
       version=$(extract_version "$version_raw" "$tool")
       [[ -n "$version" ]] && version="v$version"
@@ -559,8 +574,11 @@ check_completion() {
       ;;
     nvm)
       # Indirect verification: check if nvm is properly initialized and available
-      if [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]] && [[ -s "$(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm" ]]; then
-        return 0 # nvm and completion files exist
+      if [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]]; then
+        # Also check if nvm command works when sourced
+        if (source "$(brew --prefix)/opt/nvm/nvm.sh" && nvm --version > /dev/null 2>&1); then
+          return 0 # nvm is working
+        fi
       fi
       return 1
       ;;

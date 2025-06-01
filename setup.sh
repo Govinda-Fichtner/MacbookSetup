@@ -548,20 +548,26 @@ setup_python_environment() {
 setup_node_environment() {
   printf "└── %bNode.js Environment%b\n" "$BLUE" "$NC"
 
-  if ! check_command nvm; then
-    log_error "nvm not found. Please ensure it's installed."
+  # Initialize nvm for this script
+  export NVM_DIR="$HOME/.nvm"
+  if [[ ! -s "$(brew --prefix)/opt/nvm/nvm.sh" ]]; then
+    printf "    └── %b[ERROR]%b nvm not found. Please ensure it's installed.\n" "$RED" "$NC"
     return 1
   fi
 
-  # Initialize nvm for this script
-  export NVM_DIR="$HOME/.nvm"
-  [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]] && source "$(brew --prefix)/opt/nvm/nvm.sh"
+  source "$(brew --prefix)/opt/nvm/nvm.sh"
 
   # Install latest LTS Node.js version
   local latest_node
   latest_node=$(nvm ls-remote --lts | tail -1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
 
-  if ! nvm list | grep -q "$latest_node"; then
+  if [[ -z "$latest_node" ]]; then
+    printf "    └── %b[ERROR]%b Failed to determine latest LTS Node.js version\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Check if this version is already installed via nvm (not system)
+  if ! nvm list | grep -E "^[[:space:]]*$latest_node" > /dev/null 2>&1; then
     # Start Node installation in background
     local node_log="/tmp/node_install.log"
     (
@@ -586,9 +592,20 @@ setup_node_environment() {
     printf "    ├── %b[SUCCESS]%b Node.js %s already installed\n" "$GREEN" "$NC" "$latest_node"
   fi
 
-  # Set default Node version and update npm
-  nvm alias default "$latest_node"
-  nvm use default
+  # Set default Node version and use it
+  if nvm alias default "$latest_node" > /dev/null 2>&1 && nvm use default > /dev/null 2>&1; then
+    printf "    ├── %b[SUCCESS]%b Node.js %s set as default\n" "$GREEN" "$NC" "$latest_node"
+  else
+    printf "    ├── %b[WARNING]%b Failed to set Node.js %s as default\n" "$YELLOW" "$NC" "$latest_node"
+  fi
+
+  # Update npm to latest version
+  if npm install -g npm@latest > /dev/null 2>&1; then
+    printf "    ├── %b[SUCCESS]%b npm updated to latest version\n" "$GREEN" "$NC"
+  else
+    printf "    ├── %b[WARNING]%b Failed to update npm\n" "$YELLOW" "$NC"
+  fi
+
   printf "    └── %b[SUCCESS]%b Node.js environment ready\n" "$GREEN" "$NC"
 }
 
