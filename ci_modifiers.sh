@@ -4,6 +4,7 @@
 #
 # CI Modifier Script
 # This script modifies setup.sh to create a CI-compatible version
+# Build 48+ - Guaranteed Docker completion creation
 
 # Enable strict error handling
 set -euo pipefail
