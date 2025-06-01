@@ -545,6 +545,53 @@ setup_python_environment() {
   printf "    └── %b[SUCCESS]%b Python environment ready\n" "$GREEN" "$NC"
 }
 
+setup_node_environment() {
+  printf "└── %bNode.js Environment%b\n" "$BLUE" "$NC"
+
+  if ! check_command nvm; then
+    log_error "nvm not found. Please ensure it's installed."
+    return 1
+  fi
+
+  # Initialize nvm for this script
+  export NVM_DIR="$HOME/.nvm"
+  [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]] && source "$(brew --prefix)/opt/nvm/nvm.sh"
+
+  # Install latest LTS Node.js version
+  local latest_node
+  latest_node=$(nvm ls-remote --lts | tail -1 | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+
+  if ! nvm list | grep -q "$latest_node"; then
+    # Start Node installation in background
+    local node_log="/tmp/node_install.log"
+    (
+      nvm install "$latest_node" > "$node_log" 2>&1
+    ) &
+    local node_pid=$!
+
+    # Show progress spinner
+    show_progress "    ├──" "Node.js $latest_node" "$node_pid"
+
+    # Wait for completion and check result
+    wait "$node_pid"
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+      printf "    ├── %b[SUCCESS]%b Node.js %s installed\n" "$GREEN" "$NC" "$latest_node"
+    else
+      printf "    └── %b[ERROR]%b Failed to install Node.js %s (see %s)\n" "$RED" "$NC" "$latest_node" "$node_log"
+      return 1
+    fi
+  else
+    printf "    ├── %b[SUCCESS]%b Node.js %s already installed\n" "$GREEN" "$NC" "$latest_node"
+  fi
+
+  # Set default Node version and update npm
+  nvm alias default "$latest_node"
+  nvm use default
+  printf "    └── %b[SUCCESS]%b Node.js environment ready\n" "$GREEN" "$NC"
+}
+
 # Shell configuration
 setup_antidote() {
   # This function is now called from configure_shell, so suppress its own logging
@@ -796,6 +843,15 @@ setup_shell_completions() {
     "if command -v pyenv >/dev/null 2>&1; then"
     "    eval \"\$(pyenv init -)\""
     "fi"
+    ""
+    "# NVM initialization"
+    "export NVM_DIR=\"\$HOME/.nvm\""
+    "if [ -s \"\$(brew --prefix)/opt/nvm/nvm.sh\" ]; then"
+    "    source \"\$(brew --prefix)/opt/nvm/nvm.sh\""
+    "fi"
+    "if [ -s \"\$(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm\" ]; then"
+    "    source \"\$(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm\""
+    "fi"
   )
 
   if ! grep -q "Initialize completions" "$ZSHRC_PATH"; then
@@ -836,6 +892,15 @@ setup_shell_completions() {
   # Initialize pyenv for current session
   if command -v pyenv > /dev/null 2>&1; then
     eval "$(pyenv init -)" 2> /dev/null || true
+  fi
+
+  # Initialize nvm for current session
+  export NVM_DIR="$HOME/.nvm"
+  if [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]]; then
+    source "$(brew --prefix)/opt/nvm/nvm.sh" 2> /dev/null || true
+  fi
+  if [[ -s "$(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm" ]]; then
+    source "$(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm" 2> /dev/null || true
   fi
 }
 
@@ -1029,6 +1094,7 @@ configure_shell() {
   local configs=(
     "rbenv:rbenv init - zsh"
     "pyenv:pyenv init --path\npyenv init -"
+    "nvm:[ -s \"$(brew --prefix)/opt/nvm/nvm.sh\" ] && source \"$(brew --prefix)/opt/nvm/nvm.sh\""
     "direnv:direnv hook zsh"
     "starship:starship init zsh"
   )
@@ -1065,6 +1131,7 @@ main() {
   configure_shell || exit 1
   setup_ruby_environment || log_warning "Ruby environment setup incomplete"
   setup_python_environment || log_warning "Python environment setup incomplete"
+  setup_node_environment || log_warning "Node.js environment setup incomplete"
 
   echo -e "\n=== Setup Complete ==="
   printf "└── %b[SUCCESS]%b All components installed and configured\n" "$GREEN" "$NC"

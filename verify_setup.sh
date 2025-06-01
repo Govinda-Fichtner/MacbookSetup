@@ -61,7 +61,7 @@ extract_version() {
       # "git version 2.49.0" -> "2.49.0"
       echo "$version_string" | sed -n 's/.*version \([0-9][0-9.]*\).*/\1/p'
       ;;
-    rbenv | pyenv | starship)
+    rbenv | pyenv | nvm | starship)
       # "rbenv 1.3.2" -> "1.3.2"
       echo "$version_string" | sed -n 's/.* \([0-9][0-9.]*\).*/\1/p'
       ;;
@@ -219,7 +219,7 @@ verify_software_tools() {
 
   # Core tools
   echo "├── Core Tools"
-  local core_tools=(brew git rbenv pyenv direnv starship)
+  local core_tools=(brew git rbenv pyenv nvm direnv starship)
   local i=0
   for tool in "${core_tools[@]}"; do
     local prefix="│   "
@@ -314,7 +314,7 @@ verify_shell_completions() {
 
   # Core completions
   echo "├── Core Completions"
-  local core_comps=(git rbenv pyenv direnv)
+  local core_comps=(git rbenv pyenv nvm direnv)
   local i=0
   for tool in "${core_comps[@]}"; do
     local prefix="│   "
@@ -554,6 +554,13 @@ check_completion() {
       # Indirect verification: check if pyenv is properly initialized and can list versions
       if command -v pyenv > /dev/null 2>&1 && pyenv versions > /dev/null 2>&1; then
         return 0 # pyenv is working, completion would likely work
+      fi
+      return 1
+      ;;
+    nvm)
+      # Indirect verification: check if nvm is properly initialized and available
+      if [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]] && [[ -s "$(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm" ]]; then
+        return 0 # nvm and completion files exist
       fi
       return 1
       ;;

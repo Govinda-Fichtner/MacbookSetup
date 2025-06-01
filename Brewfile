@@ -9,6 +9,7 @@ tap "cirruslabs/cli"  # Added for Cirrus CI tooling
 brew "git"
 brew "rbenv"
 brew "pyenv"
+brew "nvm"
 brew "direnv"
 brew "starship"         # Cross-shell customizable prompt
 brew "fzf"              # Command-line fuzzy finder
