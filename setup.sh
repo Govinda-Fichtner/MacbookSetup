@@ -36,6 +36,52 @@ log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1" >&2; }
 log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
 log_debug() { printf "DEBUG: %s\n" "$1" >&2; }
 
+# Progress spinner function
+show_progress() {
+  local prefix="$1"
+  local message="$2"
+  local pid="$3"
+
+  # In CI, just show static message
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "%s %b[INSTALLING]%b %s (running in background)\n" "$prefix" "$BLUE" "$NC" "$message"
+    return 0
+  fi
+
+  local spinner="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+  local i=0
+  local start_time
+  start_time=$(date +%s)
+
+  # Hide cursor
+  printf "\033[?25l"
+
+  while kill -0 "$pid" 2> /dev/null; do
+    local current_time
+    current_time=$(date +%s)
+    local elapsed=$((current_time - start_time))
+    local mins=$((elapsed / 60))
+    local secs=$((elapsed % 60))
+    local time_str=""
+
+    if [[ $mins -gt 0 ]]; then
+      time_str=$(printf "%dm %02ds" "$mins" "$secs")
+    else
+      time_str=$(printf "%ds" "$secs")
+    fi
+
+    printf "\r%s %b[INSTALLING]%b %s %c (%s)" \
+      "$prefix" "$BLUE" "$NC" "$message" \
+      "${spinner:$i:1}" "$time_str"
+
+    i=$(((i + 1) % ${#spinner}))
+    sleep 0.2
+  done
+
+  # Show cursor and clear line
+  printf "\033[?25h\r\033[K"
+}
+
 # Helper function to extract clean version numbers (shared with verify_setup.sh)
 extract_version() {
   local version_string="$1"
@@ -421,15 +467,27 @@ setup_ruby_environment() {
   latest_ruby=$(rbenv install -l | grep -v - | grep -v dev | tail -1 | tr -d '[:space:]')
 
   if ! rbenv versions | grep -q "$latest_ruby"; then
-    printf "│   ├── %b[INSTALLING]%b Ruby %s (this may take several minutes)\n" "$BLUE" "$NC" "$latest_ruby"
-    # Suppress verbose output by redirecting to log file
+    # Start Ruby installation in background
     local ruby_log="/tmp/ruby_install.log"
-    RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl) --with-readline-dir=$(brew --prefix readline)" \
-      rbenv install "$latest_ruby" > "$ruby_log" 2>&1 || {
+    (
+      RUBY_CONFIGURE_OPTS="--with-openssl-dir=$(brew --prefix openssl) --with-readline-dir=$(brew --prefix readline)" \
+        rbenv install "$latest_ruby" > "$ruby_log" 2>&1
+    ) &
+    local ruby_pid=$!
+
+    # Show progress spinner
+    show_progress "│   ├──" "Ruby $latest_ruby" "$ruby_pid"
+
+    # Wait for completion and check result
+    wait "$ruby_pid"
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+      printf "│   ├── %b[SUCCESS]%b Ruby %s installed\n" "$GREEN" "$NC" "$latest_ruby"
+    else
       printf "│   └── %b[ERROR]%b Failed to install Ruby %s (see %s)\n" "$RED" "$NC" "$latest_ruby" "$ruby_log"
       return 1
-    }
-    printf "│   ├── %b[SUCCESS]%b Ruby %s installed\n" "$GREEN" "$NC" "$latest_ruby"
+    fi
   else
     printf "│   ├── %b[SUCCESS]%b Ruby %s already installed\n" "$GREEN" "$NC" "$latest_ruby"
   fi
@@ -456,16 +514,28 @@ setup_python_environment() {
   latest_python=$(pyenv install --list | grep -v - | grep -v a | grep -v b | grep -v rc | grep "^  [0-9]" | tail -1 | tr -d '[:space:]')
 
   if ! pyenv versions | grep -q "$latest_python"; then
-    printf "    ├── %b[INSTALLING]%b Python %s (this may take several minutes)\n" "$BLUE" "$NC" "$latest_python"
-    # Suppress verbose output by redirecting to log file
+    # Start Python installation in background
     local python_log="/tmp/python_install.log"
-    CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix sqlite3)/include" \
-    LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix sqlite3)/lib" \
-      pyenv install "$latest_python" > "$python_log" 2>&1 || {
+    (
+      CPPFLAGS="-I$(brew --prefix openssl)/include -I$(brew --prefix sqlite3)/include" \
+      LDFLAGS="-L$(brew --prefix openssl)/lib -L$(brew --prefix sqlite3)/lib" \
+        pyenv install "$latest_python" > "$python_log" 2>&1
+    ) &
+    local python_pid=$!
+
+    # Show progress spinner
+    show_progress "    ├──" "Python $latest_python" "$python_pid"
+
+    # Wait for completion and check result
+    wait "$python_pid"
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+      printf "    ├── %b[SUCCESS]%b Python %s installed\n" "$GREEN" "$NC" "$latest_python"
+    else
       printf "    └── %b[ERROR]%b Failed to install Python %s (see %s)\n" "$RED" "$NC" "$latest_python" "$python_log"
       return 1
-    }
-    printf "    ├── %b[SUCCESS]%b Python %s installed\n" "$GREEN" "$NC" "$latest_python"
+    fi
   else
     printf "    ├── %b[SUCCESS]%b Python %s already installed\n" "$GREEN" "$NC" "$latest_python"
   fi
