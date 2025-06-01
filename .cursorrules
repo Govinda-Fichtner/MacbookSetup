@@ -108,6 +108,55 @@ feat: add tree structure to setup.sh output for consistency
 - Test all changes with `zsh -n` syntax checking
 - Ensure compatibility with both zsh and bash environments
 
+## 🛠️ Tool Integration Patterns (Added from Node.js/nvm experience)
+
+### **Tool Classification and Handling**
+- **Standard CLI Tools**: rbenv, pyenv, terraform → Direct command line access
+- **Sourced Tools**: nvm → Require shell sourcing for initialization
+- **GUI Applications**: Warp, iTerm2 → Configuration via plist manipulation
+- **Container Tools**: Docker, OrbStack → Environment-dependent availability
+
+### **Language Environment Standards**
+```bash
+# Template for adding new language environments:
+setup_<language>_environment() {
+  printf "├── %b<Language> Environment%b\n" "$BLUE" "$NC"
+
+  # 1. Validate tool availability (with proper sourcing if needed)
+  # 2. Determine latest version using tool-specific method
+  # 3. Check if version already installed (tool-specific detection)
+  # 4. Background installation with progress spinner
+  # 5. Set default/global version
+  # 6. Optional: Update package manager
+  # 7. Success confirmation
+}
+```
+
+### **Verification Complexity Handling**
+- **Standard Tools**: Use `check_command "$tool"` and `"$tool" --version`
+- **Sourced Tools**: Create special case blocks with proper initialization
+- **Version Extraction**: Add tool-specific patterns to `extract_version()` function
+- **Environment Graceful Degradation**: Distinguish between missing vs unavailable in CI
+
+### **Shell Integration Rules**
+- Tools requiring sourcing (like nvm) need:
+  - Initialization in setup functions: `source "$(brew --prefix)/opt/tool/tool.sh"`
+  - Special verification logic: Custom detection blocks in verify_setup.sh
+  - Shell config addition: Proper PATH and sourcing in .zshrc
+  - Completion handling: Both shell integration AND completion files
+
+### **Error Handling for Special Cases**
+- Use tool-specific error detection rather than generic patterns
+- Provide informative error messages about tool requirements
+- Maintain CI compatibility with appropriate warnings vs errors
+- Always test both "tool not installed" and "tool installed but not working" scenarios
+
+### **Consistency Enforcement Rules**
+- Language environments must follow identical tree structure patterns
+- All background installations must use `show_progress()` with proper spinner
+- Version extraction must use shared `extract_version()` function
+- Verification logic must handle tool-specific requirements while maintaining output consistency
+
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file
 - Update rules based on what works in practice
