@@ -640,6 +640,112 @@ check_completion() {
   esac
 }
 
+# Function to verify terminal fonts
+verify_terminal_fonts() {
+  echo -e "\n=== Terminal Fonts ==="
+  local font_issues=false
+
+  # Skip in CI environments
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "└── %b[SKIPPED]%b Terminal font verification (CI environment)\n" "$YELLOW" "$RESET"
+    return 0
+  fi
+
+  # First, check if Nerd Fonts are available
+  printf "├── %b[CHECKING]%b Nerd Font availability\n" "$BLUE" "$RESET"
+  local available_fonts=(
+    "FiraCode Nerd Font Mono"
+    "JetBrains Mono Nerd Font"
+    "Fira Code Nerd Font"
+  )
+
+  local nerd_font_found=false
+  for font in "${available_fonts[@]}"; do
+    if system_profiler SPFontsDataType 2> /dev/null | grep -q "$font"; then
+      printf "│   ├── %b[FOUND]%b %s\n" "$GREEN" "$RESET" "$font"
+      nerd_font_found=true
+      break
+    fi
+  done
+
+  if [[ "$nerd_font_found" == "false" ]]; then
+    printf "│   └── %b[WARNING]%b No Nerd Fonts found - Starship icons may not display properly\n" "$YELLOW" "$RESET"
+    font_issues=true
+  else
+    printf "│   └── %b[SUCCESS]%b Nerd Fonts available\n" "$GREEN" "$RESET"
+  fi
+
+  # Check Warp terminal configuration
+  printf "├── %b[CHECKING]%b Warp terminal fonts\n" "$BLUE" "$RESET"
+  if [[ -d "/Applications/Warp.app" ]]; then
+    local warp_font_name
+    local warp_font_size
+    warp_font_name=$(defaults read dev.warp.Warp-Stable FontName 2> /dev/null || echo "unknown")
+    warp_font_size=$(defaults read dev.warp.Warp-Stable FontSize 2> /dev/null || echo "unknown")
+
+    if [[ "$warp_font_name" != "unknown" && "$warp_font_size" != "unknown" ]]; then
+      printf "│   ├── %b[INFO]%b Current: %s %spt\n" "$BLUE" "$RESET" "$warp_font_name" "$warp_font_size"
+
+      # Check if using Nerd Font
+      if [[ "$warp_font_name" == *"Nerd Font"* || "$warp_font_name" == "Fira Code" ]]; then
+        printf "│   ├── %b[SUCCESS]%b Using Starship-compatible font\n" "$GREEN" "$RESET"
+      else
+        printf "│   ├── %b[WARNING]%b Not using Nerd Font - icons may not display\n" "$YELLOW" "$RESET"
+        font_issues=true
+      fi
+
+      # Check font size
+      if (($(echo "$warp_font_size >= 14" | bc -l 2> /dev/null || echo "0"))); then
+        printf "│   └── %b[SUCCESS]%b Font size adequate for Starship\n" "$GREEN" "$RESET"
+      else
+        printf "│   └── %b[WARNING]%b Font size may be too small for optimal Starship display\n" "$YELLOW" "$RESET"
+        font_issues=true
+      fi
+    else
+      printf "│   └── %b[INFO]%b Font configuration not detected\n" "$BLUE" "$RESET"
+    fi
+  else
+    printf "│   └── %b[INFO]%b Warp not installed\n" "$BLUE" "$RESET"
+  fi
+
+  # Check iTerm2 terminal configuration
+  printf "└── %b[CHECKING]%b iTerm2 terminal fonts\n" "$BLUE" "$RESET"
+  if [[ -d "/Applications/iTerm.app" ]]; then
+    local iterm_prefs
+    iterm_prefs="/Users/$(whoami)/Library/Preferences/com.googlecode.iterm2.plist"
+
+    if [[ -f "$iterm_prefs" ]]; then
+      local current_font
+      current_font=$(defaults read com.googlecode.iterm2 2> /dev/null | grep -A1 '"Normal Font"' | tail -1 | sed 's/[[:space:]]*= "//; s/";$//' || echo "unknown")
+
+      if [[ "$current_font" != "unknown" && -n "$current_font" ]]; then
+        printf "    ├── %b[INFO]%b Current font: %s\n" "$BLUE" "$RESET" "$current_font"
+
+        if [[ "$current_font" == *"Nerd Font"* ]]; then
+          printf "    └── %b[SUCCESS]%b Using Nerd Font - Starship compatible\n" "$GREEN" "$RESET"
+        else
+          printf "    └── %b[WARNING]%b Not using Nerd Font - consider switching for Starship icons\n" "$YELLOW" "$RESET"
+          font_issues=true
+        fi
+      else
+        printf "    └── %b[INFO]%b Font configuration not detected\n" "$BLUE" "$RESET"
+      fi
+    else
+      printf "    └── %b[INFO]%b iTerm2 not yet configured\n" "$BLUE" "$RESET"
+    fi
+  else
+    printf "    └── %b[INFO]%b iTerm2 not installed\n" "$BLUE" "$RESET"
+  fi
+
+  if [[ "$font_issues" == "true" ]]; then
+    log_warning "Terminal font configuration has recommendations for optimal Starship display"
+    return 1
+  else
+    log_success "Terminal fonts verified for Starship compatibility"
+    return 0
+  fi
+}
+
 # Main verification function
 main() {
   local verification_failed=false
@@ -682,6 +788,16 @@ main() {
     log_error "Zsh plugins verification failed"
     verification_failed=true
     ((failed_checks++))
+  else
+    ((passed_checks++))
+  fi
+  ((total_checks++))
+
+  # Verify terminal fonts (non-critical check)
+  if ! verify_terminal_fonts; then
+    log_warning "Terminal font configuration needs attention (see recommendations above)"
+    # Don't fail the build for font configuration issues
+    ((passed_checks++))
   else
     ((passed_checks++))
   fi

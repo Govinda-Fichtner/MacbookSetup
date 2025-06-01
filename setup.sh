@@ -839,6 +839,123 @@ setup_shell_completions() {
   fi
 }
 
+configure_terminal_fonts() {
+  echo -e "\n=== Terminal Configuration ==="
+
+  # Skip in CI environments as these are GUI applications
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "└── %b[SKIPPED]%b Terminal font configuration (CI environment)\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  # First, verify Nerd Fonts are available
+  printf "├── %b[CHECKING]%b Nerd Font availability\n" "$BLUE" "$NC"
+  local available_fonts=(
+    "FiraCode Nerd Font Mono"
+    "JetBrains Mono Nerd Font"
+    "Fira Code Nerd Font"
+  )
+
+  local nerd_font_found=false
+  local recommended_font=""
+
+  for font in "${available_fonts[@]}"; do
+    if system_profiler SPFontsDataType 2> /dev/null | grep -q "$font"; then
+      printf "│   ├── %b[FOUND]%b %s\n" "$GREEN" "$NC" "$font"
+      if [[ -z "$recommended_font" ]]; then
+        recommended_font="$font"
+      fi
+      nerd_font_found=true
+    fi
+  done
+
+  if [[ "$nerd_font_found" == "false" ]]; then
+    printf "│   └── %b[WARNING]%b No Nerd Fonts found - Starship icons may not display properly\n" "$YELLOW" "$NC"
+    return 1
+  else
+    printf "│   └── %b[SUCCESS]%b Nerd Fonts available for Starship\n" "$GREEN" "$NC"
+  fi
+
+  # Configure Warp terminal automatically
+  printf "├── %b[CONFIGURING]%b Warp terminal\n" "$BLUE" "$NC"
+  if [[ -d "/Applications/Warp.app" ]]; then
+    local current_warp_font_name
+    local current_warp_font_size
+    current_warp_font_name=$(defaults read dev.warp.Warp-Stable FontName 2> /dev/null || echo "unknown")
+    current_warp_font_size=$(defaults read dev.warp.Warp-Stable FontSize 2> /dev/null || echo "unknown")
+
+    local needs_font_update=false
+    local needs_size_update=false
+
+    # Check if we need to update the font
+    if [[ "$current_warp_font_name" != "FiraCode Nerd Font Mono" && "$current_warp_font_name" != "Fira Code" ]]; then
+      needs_font_update=true
+    fi
+
+    # Check if we need to update the size (target 14pt)
+    if [[ "$current_warp_font_size" != "14.0" ]]; then
+      needs_size_update=true
+    fi
+
+    if [[ "$needs_font_update" == "true" || "$needs_size_update" == "true" ]]; then
+      printf "│   ├── %b[UPDATING]%b Current: %s %spt\n" "$BLUE" "$NC" "$current_warp_font_name" "$current_warp_font_size"
+
+      # Set optimal font for Starship
+      if defaults write dev.warp.Warp-Stable FontName -string "FiraCode Nerd Font Mono" 2> /dev/null \
+        && defaults write dev.warp.Warp-Stable FontSize -string "14.0" 2> /dev/null; then
+        printf "│   ├── %b[SUCCESS]%b Font updated to FiraCode Nerd Font Mono 14pt\n" "$GREEN" "$NC"
+        printf "│   └── %b[INFO]%b Restart Warp to see changes\n" "$BLUE" "$NC"
+      else
+        printf "│   └── %b[WARNING]%b Failed to update font settings\n" "$YELLOW" "$NC"
+      fi
+    else
+      printf "│   └── %b[SUCCESS]%b Already configured: %s %spt\n" "$GREEN" "$NC" "$current_warp_font_name" "$current_warp_font_size"
+    fi
+  else
+    printf "│   └── %b[WARNING]%b Warp not installed\n" "$YELLOW" "$NC"
+  fi
+
+  # Check iTerm2 terminal configuration
+  printf "└── %b[CHECKING]%b iTerm2 terminal\n" "$BLUE" "$NC"
+  if [[ -d "/Applications/iTerm.app" ]]; then
+    local iterm_prefs
+    iterm_prefs="/Users/$(whoami)/Library/Preferences/com.googlecode.iterm2.plist"
+
+    if [[ -f "$iterm_prefs" ]]; then
+      # Try to extract font information more reliably
+      local current_font
+      current_font=$(defaults read com.googlecode.iterm2 2> /dev/null | grep -A1 '"Normal Font"' | tail -1 | sed 's/[[:space:]]*= "//; s/";$//' || echo "unknown")
+
+      if [[ "$current_font" != "unknown" && -n "$current_font" ]]; then
+        printf "    ├── %b[INFO]%b Current font: %s\n" "$BLUE" "$NC" "$current_font"
+
+        # Check if it's a Nerd Font and appropriate size
+        if [[ "$current_font" == *"Nerd Font"* ]]; then
+          printf "    ├── %b[SUCCESS]%b Using Nerd Font - Starship compatible\n" "$GREEN" "$NC"
+        else
+          printf "    ├── %b[RECOMMENDATION]%b Switch to Nerd Font for Starship icons\n" "$YELLOW" "$NC"
+        fi
+      else
+        printf "    ├── %b[INFO]%b Font configuration not detected\n" "$BLUE" "$NC"
+      fi
+
+      printf "    └── %b[INFO]%b Configure font manually: Preferences → Profiles → Text\n" "$BLUE" "$NC"
+      printf "        └── Recommended: %s, 14pt\n" "$recommended_font"
+    else
+      printf "    ├── %b[INFO]%b iTerm2 not yet configured\n" "$BLUE" "$NC"
+      printf "    └── %b[INFO]%b Configure font: Preferences → Profiles → Text → Font\n" "$BLUE" "$NC"
+      printf "        └── Recommended: %s, 14pt\n" "$recommended_font"
+    fi
+  else
+    printf "    └── %b[WARNING]%b iTerm2 not installed\n" "$YELLOW" "$NC"
+  fi
+
+  printf "\n%b[CONFIGURATION SUMMARY]%b\n" "$BLUE" "$NC"
+  printf "• Warp: Automatically configured (restart required)\n"
+  printf "• iTerm2: Manual configuration needed (see instructions above)\n"
+  printf "• Recommended font: %s, 14pt\n" "$recommended_font"
+}
+
 configure_shell() {
   echo -e "\n=== Shell Configuration ==="
 
@@ -946,6 +1063,7 @@ main() {
   install_packages || exit 1
   setup_orbstack || log_warning "OrbStack setup incomplete"
   install_hashicorp_tools || log_warning "Some HashiCorp tools may not be installed"
+  configure_terminal_fonts || log_warning "Terminal font configuration incomplete"
   configure_shell || exit 1
   setup_ruby_environment || log_warning "Ruby environment setup incomplete"
   setup_python_environment || log_warning "Python environment setup incomplete"
