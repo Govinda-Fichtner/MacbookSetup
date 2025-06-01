@@ -672,7 +672,7 @@ verify_terminal_fonts() {
     printf "│   └── %b[WARNING]%b No Nerd Fonts found - Starship icons may not display properly\n" "$YELLOW" "$RESET"
     font_issues=true
   else
-    printf "│   └── %b[SUCCESS]%b Nerd Fonts available\n" "$GREEN" "$RESET"
+    printf "│   └── %b[SUCCESS]%b Nerd Fonts available for Starship\n" "$GREEN" "$RESET"
   fi
 
   # Check Warp terminal configuration
@@ -693,15 +693,15 @@ verify_terminal_fonts() {
 
         # Check if using Nerd Font
         if [[ "$warp_font_name" == *"Nerd Font"* || "$warp_font_name" == "Fira Code" ]]; then
-          printf "│   ├── %b[SUCCESS]%b Using Starship-compatible font\n" "$GREEN" "$RESET"
+          printf "│   ├── %b[SUCCESS]%b Using Nerd Font - Starship compatible\n" "$GREEN" "$RESET"
         else
-          printf "│   ├── %b[WARNING]%b Not using Nerd Font - icons may not display\n" "$YELLOW" "$RESET"
+          printf "│   ├── %b[WARNING]%b Not using Nerd Font - Starship icons may not display\n" "$YELLOW" "$RESET"
           font_issues=true
         fi
 
         # Check font size
         if (($(echo "$warp_font_size >= 14" | bc -l 2> /dev/null || echo "0"))); then
-          printf "│   └── %b[SUCCESS]%b Font size adequate for Starship\n" "$GREEN" "$RESET"
+          printf "│   └── %b[SUCCESS]%b Font size adequate for Starship display\n" "$GREEN" "$RESET"
         else
           printf "│   └── %b[WARNING]%b Font size may be too small for optimal Starship display\n" "$YELLOW" "$RESET"
           font_issues=true
@@ -728,19 +728,19 @@ verify_terminal_fonts() {
       current_font=$(/usr/libexec/PlistBuddy -c "Print :\"New Bookmarks\":0:\"Normal Font\"" "$iterm_prefs" 2> /dev/null || echo "unknown")
 
       if [[ "$current_font" != "unknown" && -n "$current_font" ]]; then
-        printf "    ├── %b[INFO]%b Current font: %s\n" "$BLUE" "$RESET" "$current_font"
+        printf "    ├── %b[INFO]%b Current: %s\n" "$BLUE" "$RESET" "$current_font"
 
         if [[ "$current_font" == *"Nerd Font"* ]]; then
           printf "    └── %b[SUCCESS]%b Using Nerd Font - Starship compatible\n" "$GREEN" "$RESET"
         else
-          printf "    └── %b[WARNING]%b Not using Nerd Font - consider switching for Starship icons\n" "$YELLOW" "$RESET"
+          printf "    └── %b[WARNING]%b Not using Nerd Font - Starship icons may not display\n" "$YELLOW" "$RESET"
           font_issues=true
         fi
       else
         printf "    └── %b[INFO]%b Font configuration not detected\n" "$BLUE" "$RESET"
       fi
     else
-      printf "    └── %b[INFO]%b iTerm2 not yet configured\n" "$BLUE" "$RESET"
+      printf "    └── %b[INFO]%b iTerm2 preferences not found\n" "$BLUE" "$RESET"
     fi
   else
     printf "    └── %b[INFO]%b iTerm2 not installed\n" "$BLUE" "$RESET"

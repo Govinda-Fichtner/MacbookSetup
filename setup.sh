@@ -877,7 +877,7 @@ configure_terminal_fonts() {
   fi
 
   # Configure Warp terminal automatically
-  printf "├── %b[CONFIGURING]%b Warp terminal\n" "$BLUE" "$NC"
+  printf "├── %b[CONFIGURING]%b Warp terminal fonts\n" "$BLUE" "$NC"
   if [[ -d "/Applications/Warp.app" ]]; then
     local warp_prefs
     warp_prefs="/Users/$(whoami)/Library/Preferences/dev.warp.Warp-Stable.plist"
@@ -912,11 +912,10 @@ configure_terminal_fonts() {
         printf "│   ├── %b[SUCCESS]%b Font already configured correctly\n" "$GREEN" "$NC"
       fi
     else
-      printf "│   ├── %b[INFO]%b Warp preferences not found\n" "$BLUE" "$NC"
-      printf "│   └── %b[RECOMMENDATION]%b Launch Warp once to create preferences, then re-run setup\n" "$YELLOW" "$NC"
+      printf "│   └── %b[INFO]%b Warp preferences not found\n" "$BLUE" "$NC"
     fi
   else
-    printf "│   └── %b[WARNING]%b Warp not installed\n" "$YELLOW" "$NC"
+    printf "│   └── %b[INFO]%b Warp not installed\n" "$BLUE" "$NC"
   fi
 
   # Configure iTerm2 terminal
@@ -930,7 +929,7 @@ configure_terminal_fonts() {
       local current_font
       current_font=$(/usr/libexec/PlistBuddy -c "Print :\"New Bookmarks\":0:\"Normal Font\"" "$iterm_prefs" 2> /dev/null || echo "unknown")
 
-      printf "    ├── %b[INFO]%b Current font: %s\n" "$BLUE" "$NC" "$current_font"
+      printf "    ├── %b[INFO]%b Current: %s\n" "$BLUE" "$NC" "$current_font"
 
       # Set optimal font for Starship using PlistBuddy
       local target_font="$recommended_font 14"
@@ -943,8 +942,7 @@ configure_terminal_fonts() {
         printf "    ├── %b[SUCCESS]%b Font already configured correctly\n" "$GREEN" "$NC"
       fi
     else
-      printf "    ├── %b[INFO]%b iTerm2 preferences not found\n" "$BLUE" "$NC"
-      printf "    └── %b[RECOMMENDATION]%b Launch iTerm2 once to create preferences, then re-run setup\n" "$YELLOW" "$NC"
+      printf "    └── %b[INFO]%b iTerm2 preferences not found\n" "$BLUE" "$NC"
     fi
   else
     printf "    └── %b[INFO]%b iTerm2 not installed\n" "$BLUE" "$NC"
