@@ -36,6 +36,46 @@ log_warning() { printf "${YELLOW}[WARNING]${NC} %s\n" "$1" >&2; }
 log_error() { printf "${RED}[ERROR]${NC} %s\n" "$1" >&2; }
 log_debug() { printf "DEBUG: %s\n" "$1" >&2; }
 
+# Helper function to extract clean version numbers (shared with verify_setup.sh)
+extract_version() {
+  local version_string="$1"
+  local tool="$2"
+
+  # Handle empty version strings
+  [[ -z "$version_string" ]] && echo "" && return
+
+  case "$tool" in
+    brew)
+      # "Homebrew 4.5.3" -> "4.5.3"
+      echo "$version_string" | sed -n 's/.*Homebrew \([0-9][0-9.]*\).*/\1/p'
+      ;;
+    git)
+      # "git version 2.49.0" -> "2.49.0"
+      echo "$version_string" | sed -n 's/.*version \([0-9][0-9.]*\).*/\1/p'
+      ;;
+    rbenv | pyenv | starship)
+      # "rbenv 1.3.2" -> "1.3.2"
+      echo "$version_string" | sed -n 's/.* \([0-9][0-9.]*\).*/\1/p'
+      ;;
+    direnv)
+      # "2.36.0" -> "2.36.0" (direnv outputs just the version number)
+      echo "$version_string" | sed -n 's/^\([0-9][0-9.]*\).*/\1/p'
+      ;;
+    terraform)
+      # "Terraform v1.12.1" -> "1.12.1"
+      echo "$version_string" | sed -n 's/.*v\([0-9][0-9.]*\).*/\1/p'
+      ;;
+    packer)
+      # "Packer v1.12.0" -> "1.12.0"
+      echo "$version_string" | sed -n 's/.*Packer v\([0-9][0-9.]*\).*/\1/p'
+      ;;
+    *)
+      # For other tools, try to extract the first version-like pattern
+      echo "$version_string" | sed -n 's/.*\([0-9][0-9.]*[0-9]\).*/\1/p' | head -1
+      ;;
+  esac
+}
+
 # Utility functions
 check_command() {
   command -v "$1" > /dev/null 2>&1
@@ -227,7 +267,7 @@ setup_orbstack() {
 }
 
 install_packages() {
-  log_info "Installing packages from Brewfile..."
+  echo -e "\n=== Installing Packages ==="
 
   # Check if Brewfile exists
   if [[ ! -f "Brewfile" ]]; then
@@ -237,7 +277,7 @@ install_packages() {
 
   # Remove Docker from Brewfile if it exists (since it comes with OrbStack)
   if grep -q "docker" "Brewfile"; then
-    log_info "Removing Docker from Brewfile as it comes with OrbStack..."
+    printf "├── %bRemoving Docker from Brewfile%b (comes with OrbStack)\n" "$YELLOW" "$NC"
     sed -i.bak '/docker/d' "Brewfile"
     rm -f "Brewfile.bak"
   fi
@@ -252,9 +292,9 @@ install_packages() {
   # This handles cases where brew bundle check gives false positives
   if [[ $check_status -ne 0 ]] || [[ "${CI:-false}" == "true" ]]; then
     if [[ "${CI:-false}" == "true" ]]; then
-      log_info "CI environment detected - ensuring all packages are installed"
+      printf "├── %bCI environment detected%b - ensuring all packages are installed\n" "$BLUE" "$NC"
     else
-      log_info "Some packages need to be installed or updated"
+      printf "├── %bInstalling/updating packages%b from Brewfile\n" "$BLUE" "$NC"
     fi
     echo "==== brew bundle install ====" >> "$bundle_log"
     brew bundle install 2>&1 | tee -a "$bundle_log"
@@ -263,17 +303,16 @@ install_packages() {
       log_error "Failed to install packages (exit code $install_status). See $bundle_log for details."
       return 1
     fi
-    log_success "Package installation completed successfully"
+    printf "└── %b[SUCCESS]%b Package installation completed\n" "$GREEN" "$NC"
   else
-    log_success "All packages from Brewfile are already installed."
+    printf "└── %b[SUCCESS]%b All packages already installed\n" "$GREEN" "$NC"
   fi
-
-  log_success "Package installation completed. Log: $bundle_log"
 }
 
 # Language environment setup
 setup_ruby_environment() {
-  log_info "Setting up Ruby environment..."
+  echo -e "\n=== Setting Up Language Environments ==="
+  printf "├── %bRuby Environment%b\n" "$BLUE" "$NC"
 
   if ! check_command rbenv; then
     log_error "rbenv not found. Please ensure it's installed."
@@ -298,11 +337,11 @@ setup_ruby_environment() {
 
   # Set global Ruby version
   rbenv global "$latest_ruby"
-  log_success "Ruby environment setup completed."
+  printf "│   └── %b[SUCCESS]%b Ruby environment ready\n" "$GREEN" "$NC"
 }
 
 setup_python_environment() {
-  log_info "Setting up Python environment..."
+  printf "└── %bPython Environment%b\n" "$BLUE" "$NC"
 
   if ! check_command pyenv; then
     log_error "pyenv not found. Please ensure it's installed."
@@ -329,7 +368,7 @@ setup_python_environment() {
 
   # Set global Python version
   pyenv global "$latest_python"
-  log_success "Python environment setup completed."
+  printf "    └── %b[SUCCESS]%b Python environment ready\n" "$GREEN" "$NC"
 }
 
 # Shell configuration
@@ -663,7 +702,7 @@ configure_shell() {
 
 # Main execution
 main() {
-  log_info "Starting macOS development environment setup (v${SCRIPT_VERSION})..."
+  echo -e "\n=== macOS Development Environment Setup v${SCRIPT_VERSION} ==="
 
   validate_system || exit 1
   install_homebrew || exit 1
@@ -714,8 +753,9 @@ main() {
 
   log_success "Antidote setup completed"
 
-  log_success "Setup completed successfully!"
-  log_info "Please restart your terminal or run: source $ZSHRC_PATH"
+  echo -e "\n=== Setup Complete ==="
+  printf "└── %b[SUCCESS]%b All components installed and configured\n" "$GREEN" "$NC"
+  printf "\n%bNext steps:%b Please restart your terminal or run: source %s\n" "$YELLOW" "$NC" "$ZSHRC_PATH"
 }
 
 main "$@"
