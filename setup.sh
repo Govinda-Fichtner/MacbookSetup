@@ -107,21 +107,24 @@ backup_file() {
 
 # System validation
 validate_system() {
-  log_info "Validating system requirements..."
+  echo -e "\n=== System Validation ==="
 
+  printf "├── %b[CHECKING]%b Operating system\n" "$BLUE" "$NC"
   # Check OS
   if [[ "$(uname)" != "Darwin" ]]; then
-    log_error "This script is intended for macOS only."
+    printf "│   └── %b[ERROR]%b This script requires macOS\n" "$RED" "$NC"
     return 1
   fi
+  printf "│   └── %b[SUCCESS]%b macOS detected\n" "$GREEN" "$NC"
 
+  printf "└── %b[CHECKING]%b User permissions\n" "$BLUE" "$NC"
   # Check if running as root
   if [[ $EUID -eq 0 ]]; then
-    log_error "This script should not be run as root. Please run without sudo."
+    printf "    └── %b[ERROR]%b Do not run as root - use regular user\n" "$RED" "$NC"
     return 1
   fi
+  printf "    └── %b[SUCCESS]%b Running as regular user\n" "$GREEN" "$NC"
 
-  log_success "System validation passed."
   return 0
 }
 
@@ -130,12 +133,16 @@ install_hashicorp_tool() {
   local tool="$1"
   local version="$2"
   local arch
+  local connector="$3"
 
-  log_info "Checking if $tool is installed..."
+  printf "%s %b[CHECKING]%b %s\n" "$connector" "$BLUE" "$NC" "$tool"
   if check_command "$tool"; then
     local current_version
-    current_version=$("$tool" --version 2> /dev/null)
-    log_success "$tool is already installed (version: $current_version)."
+    current_version=$("$tool" --version 2> /dev/null | head -1)
+    # Extract clean version for display
+    local clean_version
+    clean_version=$(extract_version "$current_version" "$tool")
+    printf "│   └── %b[SUCCESS]%b Already installed (v%s)\n" "$GREEN" "$NC" "$clean_version"
     return 0
   fi
 
@@ -149,32 +156,33 @@ install_hashicorp_tool() {
   # Create temporary directory
   local tmp_dir
   tmp_dir=$(mktemp -d) || {
-    log_error "Failed to create temporary directory"
+    printf "│   └── %b[ERROR]%b Failed to create temporary directory\n" "$RED" "$NC"
     return 1
   }
 
   local download_url="https://releases.hashicorp.com/$tool/$version/${tool}_${version}_darwin_${arch}.zip"
   local zip_file="$tmp_dir/$tool.zip"
 
+  printf "│   ├── %b[DOWNLOADING]%b %s v%s\n" "$BLUE" "$NC" "$tool" "$version"
   # Download and install
   if curl -sSL "$download_url" -o "$zip_file" \
     && unzip -q "$zip_file" -d "$tmp_dir" \
     && sudo mv "$tmp_dir/$tool" /usr/local/bin/ \
     && sudo chmod +x "/usr/local/bin/$tool"; then
-    log_success "$tool installed successfully."
+    printf "│   └── %b[SUCCESS]%b %s v%s installed\n" "$GREEN" "$NC" "$tool" "$version"
     rm -rf "$tmp_dir"
     return 0
   else
-    log_error "Failed to install $tool"
+    printf "│   └── %b[ERROR]%b Failed to install %s\n" "$RED" "$NC" "$tool"
     rm -rf "$tmp_dir"
     return 1
   fi
 }
 
 install_hashicorp_tools() {
-  log_info "Installing HashiCorp tools..."
-  install_hashicorp_tool "terraform" "1.12.1" || log_warning "Terraform installation skipped"
-  install_hashicorp_tool "packer" "1.12.0" || log_warning "Packer installation skipped"
+  echo -e "\n=== Infrastructure Tools ==="
+  install_hashicorp_tool "terraform" "1.12.1" "├──" || printf "├── %b[WARNING]%b Terraform installation skipped\n" "$YELLOW" "$NC"
+  install_hashicorp_tool "packer" "1.12.0" "└──" || printf "└── %b[WARNING]%b Packer installation skipped\n" "$YELLOW" "$NC"
 }
 
 # Homebrew installation and package management
@@ -211,64 +219,67 @@ install_homebrew() {
 }
 
 setup_orbstack() {
+  echo -e "\n=== Container Environment ==="
+
   # Skip OrbStack setup if SKIP_ORBSTACK is set to true
   if [[ "${SKIP_ORBSTACK:-false}" == "true" ]]; then
-    log_info "Skipping OrbStack setup as SKIP_ORBSTACK=true"
+    printf "└── %b[SKIPPED]%b OrbStack setup (SKIP_ORBSTACK=true)\n" "$YELLOW" "$NC"
     return 0
   fi
 
-  log_info "Setting up OrbStack..."
+  printf "├── %b[CHECKING]%b OrbStack installation\n" "$BLUE" "$NC"
   if ! check_command orbctl; then
     if [[ "${CI:-false}" == "true" ]]; then
-      log_warning "OrbStack is not installed (expected in CI environment)"
+      printf "└── %b[WARNING]%b OrbStack not installed (expected in CI)\n" "$YELLOW" "$NC"
       return 0
     else
-      log_error "OrbStack is not installed. Please install it first."
+      printf "└── %b[ERROR]%b OrbStack not installed - please install first\n" "$RED" "$NC"
       return 1
     fi
   fi
 
   # Ensure OrbStack is in PATH
   if [[ -d "/Applications/OrbStack.app" ]]; then
-    log_info "Adding OrbStack to PATH..."
+    printf "├── %b[CONFIGURING]%b Adding OrbStack to PATH\n" "$BLUE" "$NC"
     # shellcheck disable=SC2016
     echo 'export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"' >> "$ZSHRC_PATH"
     export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"
   fi
 
   # Start OrbStack if it's not running
+  printf "├── %b[CHECKING]%b OrbStack status\n" "$BLUE" "$NC"
   if ! orbctl status > /dev/null 2>&1; then
-    log_info "Starting OrbStack..."
+    printf "│   ├── %b[STARTING]%b OrbStack service\n" "$BLUE" "$NC"
     if ! orbctl start; then
       if [[ "${CI:-false}" == "true" ]]; then
-        log_warning "Failed to start OrbStack (expected in CI environment)"
+        printf "│   └── %b[WARNING]%b Failed to start (expected in CI)\n" "$YELLOW" "$NC"
         return 0
       else
-        log_error "Failed to start OrbStack"
+        printf "│   └── %b[ERROR]%b Failed to start OrbStack\n" "$RED" "$NC"
         return 1
       fi
     fi
-  fi
 
-  # Wait for OrbStack to be fully initialized
-  log_info "Waiting for OrbStack to initialize..."
-  local retries=30
-  while [[ $retries -gt 0 ]]; do
-    if orbctl status > /dev/null 2>&1; then
-      break
+    # Wait for OrbStack to be fully initialized
+    printf "│   └── %b[WAITING]%b Initializing OrbStack\n" "$BLUE" "$NC"
+    local retries=30
+    while [[ $retries -gt 0 ]]; do
+      if orbctl status > /dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+      ((retries--))
+    done
+
+    if [[ $retries -eq 0 ]]; then
+      printf "└── %b[ERROR]%b OrbStack failed to initialize\n" "$RED" "$NC"
+      return 1
     fi
-    sleep 1
-    ((retries--))
-  done
-
-  if [[ $retries -eq 0 ]]; then
-    log_error "OrbStack failed to initialize"
-    return 1
+  else
+    printf "│   └── %b[SUCCESS]%b OrbStack already running\n" "$GREEN" "$NC"
   fi
 
-  # OrbStack completions will be generated later in generate_completion_files()
-
-  log_success "OrbStack setup completed"
+  printf "└── %b[SUCCESS]%b Container environment ready\n" "$GREEN" "$NC"
 }
 
 install_packages() {
@@ -649,7 +660,7 @@ generate_completion_files() {
 }
 
 setup_shell_completions() {
-  log_info "Setting up shell completions..."
+  # This function is now called from configure_shell, so suppress its own logging
 
   # Ensure completion directories exist
   ensure_dir "$COMPLETION_DIR"
@@ -741,27 +752,74 @@ setup_shell_completions() {
 
   # Initialize pyenv for current session
   if command -v pyenv > /dev/null 2>&1; then
-    eval "$(pyenv init -)" 2> /dev/null || log_warning "Failed to initialize pyenv for current session"
+    eval "$(pyenv init -)" 2> /dev/null || true
   fi
-
-  log_success "Shell completions setup completed."
 }
 
 configure_shell() {
-  log_info "Configuring shell environment..."
+  echo -e "\n=== Shell Configuration ==="
 
   # Create or backup .zshrc
+  printf "├── %b[CONFIGURING]%b Shell environment\n" "$BLUE" "$NC"
   if [[ ! -f "$ZSHRC_PATH" ]]; then
     touch "$ZSHRC_PATH"
+    printf "│   ├── %b[CREATED]%b .zshrc file\n" "$GREEN" "$NC"
   else
-    backup_file "$ZSHRC_PATH"
+    backup_file "$ZSHRC_PATH" > /dev/null 2>&1
+    printf "│   ├── %b[BACKED UP]%b Existing .zshrc\n" "$BLUE" "$NC"
   fi
 
-  # Setup components
-  setup_antidote
-  setup_shell_completions
+  # Setup Antidote plugin manager
+  printf "│   ├── %b[SETTING UP]%b Antidote plugin manager\n" "$BLUE" "$NC"
+  setup_antidote > /dev/null 2>&1
+
+  # Install Antidote if needed
+  if ! command -v antidote > /dev/null 2>&1; then
+    printf "│   │   ├── %b[INSTALLING]%b Antidote\n" "$BLUE" "$NC"
+    if brew install antidote > /dev/null 2>&1; then
+      printf "│   │   └── %b[SUCCESS]%b Antidote installed\n" "$GREEN" "$NC"
+    else
+      printf "│   │   └── %b[ERROR]%b Failed to install Antidote\n" "$RED" "$NC"
+      return 1
+    fi
+  else
+    printf "│   │   └── %b[SUCCESS]%b Antidote already available\n" "$GREEN" "$NC"
+  fi
+
+  # Source Antidote and bundle plugins
+  if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
+    printf "│   │   ├── %b[LOADING]%b Antidote plugins\n" "$BLUE" "$NC"
+    # Initialize completion system
+    autoload -Uz compinit
+    if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
+      compinit -i
+    else
+      compinit -C -i
+    fi
+
+    source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
+    # Clear antidote cache to prevent stale plugin loading issues
+    antidote purge 2> /dev/null || true
+
+    # Load plugins with error handling
+    if antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" 2> /dev/null; then
+      printf "│   │   └── %b[SUCCESS]%b Plugins loaded successfully\n" "$GREEN" "$NC"
+    else
+      printf "│   │   └── %b[WARNING]%b Some plugins failed to load\n" "$YELLOW" "$NC"
+      # Try to update plugins to fix any issues
+      antidote update 2> /dev/null || true
+    fi
+  else
+    printf "│   │   └── %b[ERROR]%b Antidote installation not found\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Setup shell completions
+  printf "│   ├── %b[SETTING UP]%b Shell completions\n" "$BLUE" "$NC"
+  setup_shell_completions > /dev/null 2>&1
 
   # Add tool-specific configurations
+  printf "│   └── %b[CONFIGURING]%b Tool integrations\n" "$BLUE" "$NC"
   local configs=(
     "rbenv:rbenv init - zsh"
     "pyenv:pyenv init --path\npyenv init -"
@@ -776,11 +834,16 @@ configure_shell() {
     if check_command "$tool"; then
       if ! grep -q "$tool" "$ZSHRC_PATH"; then
         echo -e "\n# Initialize $tool\neval \"\$($init_cmd)\"" >> "$ZSHRC_PATH"
+        printf "│       ├── %b[ADDED]%b %s integration\n" "$GREEN" "$NC" "$tool"
+      else
+        printf "│       ├── %b[EXISTS]%b %s integration\n" "$BLUE" "$NC" "$tool"
       fi
+    else
+      printf "│       ├── %b[SKIPPED]%b %s (not installed)\n" "$YELLOW" "$NC" "$tool"
     fi
   done
 
-  log_success "Shell configuration completed."
+  printf "└── %b[SUCCESS]%b Shell configuration completed\n" "$GREEN" "$NC"
 }
 
 # Main execution
@@ -795,46 +858,6 @@ main() {
   configure_shell || exit 1
   setup_ruby_environment || log_warning "Ruby environment setup incomplete"
   setup_python_environment || log_warning "Python environment setup incomplete"
-
-  # Install Antidote
-  if ! command -v antidote > /dev/null 2>&1; then
-    log_info "Installing Antidote..."
-    brew install antidote || {
-      log_error "Failed to install Antidote"
-      return 1
-    }
-  fi
-
-  # Source Antidote and bundle plugins
-  if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
-    # Initialize completion system
-    autoload -Uz compinit
-    if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
-      compinit -i
-    else
-      compinit -C -i
-    fi
-
-    source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
-    log_info "Loading Antidote plugins..."
-
-    # Clear antidote cache to prevent stale plugin loading issues
-    antidote purge 2> /dev/null || true
-
-    # Load plugins with error handling
-    if antidote load "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" 2> /dev/null; then
-      log_success "Antidote plugins loaded successfully"
-    else
-      log_warning "Some Antidote plugins failed to load, but continuing..."
-      # Try to update plugins to fix any issues
-      antidote update 2> /dev/null || true
-    fi
-  else
-    log_error "Antidote installation not found"
-    return 1
-  fi
-
-  log_success "Antidote setup completed"
 
   echo -e "\n=== Setup Complete ==="
   printf "└── %b[SUCCESS]%b All components installed and configured\n" "$GREEN" "$NC"
