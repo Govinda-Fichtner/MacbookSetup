@@ -317,46 +317,70 @@ install_packages() {
       return 1
     fi
 
-    # Extract and display installed packages
-    printf "│   ├── %bInstalled packages:%b\n" "$GREEN" "$NC"
-
-    # Parse the output to show what was actually processed
-    local package_count=0
+    # Parse the output to categorize packages
+    local installing_packages=""
+    local upgrading_packages=""
+    local tapping_packages=""
+    local using_packages=""
     local install_count=0
     local using_count=0
+    local package_name
 
     while IFS= read -r line; do
-      # Use case statement instead of regex for better compatibility
       case "$line" in
-        Installing* | Upgrading* | Tapping*)
-          local package_name
-          local action
-          package_name=$(echo "$line" | sed 's/^[A-Za-z]* //' | cut -d' ' -f1)
-          action=$(echo "$line" | cut -d' ' -f1)
-          local action_color="$GREEN"
-          [[ "$action" == "Upgrading" ]] && action_color="$YELLOW"
-          [[ "$action" == "Tapping" ]] && action_color="$BLUE"
-          printf "│   │   ├── %b[%s]%b %s\n" "$action_color" "$(echo "$action" | tr '[:lower:]' '[:upper:]')" "$NC" "$package_name"
-          ((package_count++))
-          ((install_count++))
+        Installing*)
+          package_name=$(echo "$line" | sed 's/^Installing //' | cut -d' ' -f1)
+          installing_packages="${installing_packages}${installing_packages:+, }${package_name}"
+          install_count=$((install_count + 1))
+          ;;
+        Upgrading*)
+          package_name=$(echo "$line" | sed 's/^Upgrading //' | cut -d' ' -f1)
+          upgrading_packages="${upgrading_packages}${upgrading_packages:+, }${package_name}"
+          install_count=$((install_count + 1))
+          ;;
+        Tapping*)
+          package_name=$(echo "$line" | sed 's/^Tapping //' | cut -d' ' -f1)
+          tapping_packages="${tapping_packages}${tapping_packages:+, }${package_name}"
+          install_count=$((install_count + 1))
           ;;
         Using*)
-          ((using_count++))
+          package_name="${line#Using }"
+          using_packages="${using_packages}${using_packages:+, }${package_name}"
+          using_count=$((using_count + 1))
           ;;
       esac
     done < "$bundle_output"
 
+    # Display aggregated packages by category
+    if [ -n "$installing_packages" ]; then
+      printf "│   ├── %b[INSTALLING]%b %s\n" "$GREEN" "$NC" "$installing_packages"
+    fi
+    if [ -n "$upgrading_packages" ]; then
+      printf "│   ├── %b[UPGRADING]%b %s\n" "$YELLOW" "$NC" "$upgrading_packages"
+    fi
+    if [ -n "$tapping_packages" ]; then
+      printf "│   ├── %b[TAPPING]%b %s\n" "$BLUE" "$NC" "$tapping_packages"
+    fi
+    if [ -n "$using_packages" ]; then
+      printf "│   ├── %b[USING]%b %s\n" "$BLUE" "$NC" "$using_packages"
+    fi
+
     # Show completion summary from brew bundle
+    local total_packages=$((install_count + using_count))
     if grep -q "complete!" "$bundle_output"; then
       local total_deps
       total_deps=$(grep "dependencies now installed" "$bundle_output" | grep -o '[0-9]*' | head -1)
-      if [[ $install_count -gt 0 ]]; then
-        printf "│   └── %b[SUCCESS]%b %s new, %s total dependencies ready\n" "$GREEN" "$NC" "$install_count" "${total_deps:-$package_count}"
+      if [ "$install_count" -gt 0 ]; then
+        printf "│   └── %b[SUCCESS]%b %s new, %s total dependencies ready\n" "$GREEN" "$NC" "$install_count" "${total_deps:-$total_packages}"
       else
         printf "│   └── %b[SUCCESS]%b All %s dependencies already installed\n" "$GREEN" "$NC" "${total_deps:-$using_count}"
       fi
     else
-      printf "│   └── %b[SUCCESS]%b Package installation completed\n" "$GREEN" "$NC"
+      if [ "$total_packages" -gt 0 ]; then
+        printf "│   └── %b[SUCCESS]%b %s packages processed\n" "$GREEN" "$NC" "$total_packages"
+      else
+        printf "│   └── %b[SUCCESS]%b Package installation completed\n" "$GREEN" "$NC"
+      fi
     fi
 
     printf "└── %b[SUCCESS]%b Homebrew bundle complete\n" "$GREEN" "$NC"
