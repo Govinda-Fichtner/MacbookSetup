@@ -443,6 +443,12 @@ check_completion() {
         fi
       fi
 
+      # In CI environments, Docker/OrbStack may not be available - this is expected
+      if [[ "${CI:-false}" == "true" ]]; then
+        log_warning "Docker completion not available (expected in CI environment)"
+        return 0 # Don't fail the CI pipeline for expected Docker unavailability
+      fi
+
       return 1
       ;;
     orb | orbctl)
@@ -457,6 +463,13 @@ check_completion() {
           return 0 # orb tool is working, completion would likely work
         fi
       fi
+
+      # In CI environments, OrbStack tools may not be available - this is expected
+      if [[ "${CI:-false}" == "true" ]]; then
+        log_warning "$tool completion not available (expected in CI environment)"
+        return 0 # Don't fail the CI pipeline for expected OrbStack unavailability
+      fi
+
       return 1
       ;;
     terraform | packer)

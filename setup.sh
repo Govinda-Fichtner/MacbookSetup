@@ -178,8 +178,13 @@ setup_orbstack() {
 
   log_info "Setting up OrbStack..."
   if ! check_command orbctl; then
-    log_error "OrbStack is not installed. Please install it first."
-    return 1
+    if [[ "${CI:-false}" == "true" ]]; then
+      log_warning "OrbStack is not installed (expected in CI environment)"
+      return 0
+    else
+      log_error "OrbStack is not installed. Please install it first."
+      return 1
+    fi
   fi
 
   # Ensure OrbStack is in PATH
@@ -193,10 +198,15 @@ setup_orbstack() {
   # Start OrbStack if it's not running
   if ! orbctl status > /dev/null 2>&1; then
     log_info "Starting OrbStack..."
-    orbctl start || {
-      log_error "Failed to start OrbStack"
-      return 1
-    }
+    if ! orbctl start; then
+      if [[ "${CI:-false}" == "true" ]]; then
+        log_warning "Failed to start OrbStack (expected in CI environment)"
+        return 0
+      else
+        log_error "Failed to start OrbStack"
+        return 1
+      fi
+    fi
   fi
 
   # Wait for OrbStack to be fully initialized

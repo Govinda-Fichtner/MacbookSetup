@@ -54,10 +54,8 @@ commands:
             echo "Checking for .zsh_plugins.txt..."
             ls -la "${ZDOTDIR}/.zsh_plugins.txt" || echo "File not found!"
 
-            # Generate and modify CI setup script
-            chmod +x ci_modifiers.sh
-            zsh ./ci_modifiers.sh
-            chmod +x ci_setup.sh
+            # Make scripts executable
+            chmod +x setup.sh
             chmod +x verify_setup.sh
 
   run_setup:
@@ -79,7 +77,7 @@ commands:
 
             mkdir -p "${COMPLETION_DIR}"
             mkdir -p "${ZCOMPCACHE}"
-            zsh ./ci_setup.sh 2>&1 | tee /tmp/circleci-build.log
+            zsh ./setup.sh 2>&1 | tee /tmp/circleci-build.log
 
   run_verification:
     description: "Run the verification script"
