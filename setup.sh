@@ -22,10 +22,6 @@ readonly ANTIDOTE_PLUGINS_FILE="${ZDOTDIR}/.zsh_plugins.txt"
 # shellcheck disable=SC2155
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source logging module
-# shellcheck source=lib/logging.sh
-source "${SCRIPT_DIR}/lib/logging.sh"
-
 # Color definitions
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
