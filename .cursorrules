@@ -1,0 +1,115 @@
+# MacbookSetup Project - Cursor Rules
+
+## 🎯 Core Development Philosophy
+**Minimal Complexity Principle**: Always seek the least amount of code and complexity to achieve the goal.
+
+## 📋 Change Implementation Methodology
+
+### 1. **Step-by-Step Validation Protocol**
+- Make ONE small change at a time
+- Run `zsh -n setup.sh` and `zsh -n verify_setup.sh` after each change
+- Test execution with safe commands before proceeding
+- Never make multiple unrelated changes in one step
+
+### 2. **Pattern Reuse Strategy**
+- ALWAYS look for existing patterns before creating new ones
+- Reuse tree structure patterns from `generate_completion_files`
+- Maintain consistency between `setup.sh` and `verify_setup.sh`
+- Extend existing functions rather than creating new ones
+
+### 3. **Testing Pipeline (Required Before Commit)**
+```bash
+# Required checks in this exact order:
+1. zsh -n setup.sh && zsh -n verify_setup.sh
+2. ./verify_setup.sh > /dev/null  # execution test
+3. pre-commit run --all-files
+4. git add . && git commit -m "descriptive message"
+5. git push origin main
+```
+
+### 4. **Visual Consistency Rules**
+- Use tree structure (`├──`, `└──`) for hierarchical output
+- Maintain color coding: `$GREEN` for success, `$YELLOW` for warnings, `$BLUE` for info
+- Group related operations under section headers: `=== Section Name ===`
+- Keep consistent indentation patterns across both scripts
+
+## 🔧 Code Modification Guidelines
+
+### **Output Formatting Standards**
+```bash
+# Section headers
+echo -e "\n=== Section Name ==="
+
+# Tree items
+printf "├── %bOperation%b description\n" "$BLUE" "$NC"
+printf "└── %b[SUCCESS]%b Operation completed\n" "$GREEN" "$NC"
+
+# Nested items
+printf "│   └── %b[SUCCESS]%b Sub-operation ready\n" "$GREEN" "$NC"
+printf "    └── %b[SUCCESS]%b Deeply nested item\n" "$GREEN" "$NC"
+```
+
+### **Error Handling Preservation**
+- Never remove existing error handling while making cosmetic changes
+- Preserve all `|| return 1` and `|| exit 1` patterns
+- Maintain graceful degradation for CI environments
+- Keep warning messages for non-critical failures
+
+### **Function Modification Rules**
+- Prefer modifying output statements over changing function logic
+- Use `printf` over `echo` for colored output with variables
+- Replace `log_info` with section headers only for major groupings
+- Keep `log_error` and `log_warning` for actual error conditions
+
+## 📝 Commit Message Standards
+
+### **Format**: `<type>: <description> - <details>`
+
+**Types**: `feat`, `fix`, `refactor`, `style`, `docs`, `test`, `chore`
+
+**Example**:
+```
+feat: add tree structure to setup.sh output for consistency
+- Apply hierarchical tree output to match verify_setup.sh visual style
+- Group operations under sections: Installing Packages, Language Environments
+- Use minimal code changes, reusing existing tree patterns
+- Maintain clean visual flow throughout setup process
+```
+
+## 🚫 Anti-Patterns to Avoid
+
+### **Complexity Anti-Patterns**
+- ❌ Creating new utility functions when existing ones work
+- ❌ Adding configuration files for simple formatting changes
+- ❌ Over-engineering solutions that could be simple printf statements
+- ❌ Breaking working functionality for cosmetic improvements
+
+### **Testing Anti-Patterns**
+- ❌ Making multiple changes without intermediate testing
+- ❌ Committing without running the full testing pipeline
+- ❌ Assuming syntax check means execution will work
+- ❌ Skipping pre-commit hooks "just this once"
+
+## 🎨 Project-Specific Patterns
+
+### **Shell Script Consistency**
+- Both `setup.sh` and `verify_setup.sh` should have matching visual output
+- Use shared color variables: `$RED`, `$GREEN`, `$BLUE`, `$YELLOW`, `$NC`
+- Extract version numbers using the shared `extract_version()` function
+- Handle missing files gracefully with warnings, not errors
+
+### **CI/Local Environment Handling**
+- Always check `[[ "${CI:-false}" == "true" ]]` for CI-specific behavior
+- Use `SKIP_ORBSTACK=true` for testing without Docker dependencies
+- Provide graceful fallbacks for missing dependencies in CI
+
+### **Zsh Compatibility**
+- Use `for item in "${array[@]}"` instead of bash-style `${!array[@]}`
+- Test all changes with `zsh -n` syntax checking
+- Ensure compatibility with both zsh and bash environments
+
+## 🔄 Continuous Improvement
+- Document successful patterns in this file
+- Update rules based on what works in practice
+- Keep the "minimal complexity" principle as the north star
+- Review and refine these rules after major changes
