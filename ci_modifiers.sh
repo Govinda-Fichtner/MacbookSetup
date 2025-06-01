@@ -10,6 +10,9 @@
 set -euo pipefail
 IFS=$'\n\t'
 
+# Ensure CI environment is properly set
+export CI=true
+
 # Source logging module
 # shellcheck source=lib/logging.sh
 source "lib/logging.sh"
@@ -28,6 +31,7 @@ add_ci_env_vars() {
   # Add CI environment variables and Docker test function after set -e line
   sed '/^set -e/a\
 # CI-specific environment variables\
+export CI=true\
 export NONINTERACTIVE=1\
 export HOMEBREW_NO_AUTO_UPDATE=1\
 export HOMEBREW_NO_INSTALL_CLEANUP=1\
