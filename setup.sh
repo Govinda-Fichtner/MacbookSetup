@@ -498,7 +498,7 @@ setup_ruby_environment() {
 }
 
 setup_python_environment() {
-  printf "└── %bPython Environment%b\n" "$BLUE" "$NC"
+  printf "├── %bPython Environment%b\n" "$BLUE" "$NC"
 
   if ! check_command pyenv; then
     log_error "pyenv not found. Please ensure it's installed."
