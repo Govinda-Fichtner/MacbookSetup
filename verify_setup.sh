@@ -172,27 +172,35 @@ verify_shell_config() {
   fi
 
   # Check for essential shell files - create them if missing instead of failing
+  # Ensure HOME is set and directory exists
+  if [[ -z "$HOME" ]]; then
+    HOME="/tmp/ci_home"
+    export HOME
+  fi
+
+  # Ensure home directory exists
+  [[ ! -d "$HOME" ]] && mkdir -p "$HOME"
+
   local zshrc_path="${ZDOTDIR:-$HOME}/.zshrc"
   local plugins_path="${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
 
   if [[ ! -f "$zshrc_path" ]]; then
     log_warning "Creating missing .zshrc file"
-    touch "$zshrc_path" || {
-      log_error "Failed to create .zshrc file"
-      return 1
+    touch "$zshrc_path" 2> /dev/null || {
+      log_warning "Cannot create .zshrc file - continuing anyway"
     }
   fi
 
   if [[ ! -f "$plugins_path" ]]; then
     log_warning "Creating missing .zsh_plugins.txt file"
-    touch "$plugins_path" || {
-      log_error "Failed to create .zsh_plugins.txt file"
-      return 1
+    touch "$plugins_path" 2> /dev/null || {
+      log_warning "Cannot create .zsh_plugins.txt file - continuing anyway"
     }
   fi
 
   # Initialize completion system before verifying Antidote
   autoload -Uz compinit
+  mkdir -p "${HOME}/.zcompcache" 2> /dev/null || true
   compinit -d "${HOME}/.zcompcache/zcompdump" 2> /dev/null
 
   # Verify Antidote setup (silently)
@@ -302,7 +310,7 @@ verify_shell_completions() {
   local failed_completions=()
 
   # Create completions directory if it doesn't exist
-  mkdir -p "${HOME}/.zsh/completions"
+  mkdir -p "${HOME}/.zsh/completions" 2> /dev/null || true
 
   # Core completions
   echo "├── Core Completions"

@@ -322,17 +322,20 @@ install_packages() {
     # Parse the output to show what was actually installed/upgraded
     local package_count=0
     while IFS= read -r line; do
-      if [[ "$line" =~ ^(Installing|Upgrading|Tapping) ]]; then
-        local package_name
-        local action
-        package_name=$(echo "$line" | sed 's/^[A-Za-z]* //' | cut -d' ' -f1)
-        action=$(echo "$line" | cut -d' ' -f1)
-        local action_color="$GREEN"
-        [[ "$action" == "Upgrading" ]] && action_color="$YELLOW"
-        [[ "$action" == "Tapping" ]] && action_color="$BLUE"
-        printf "│   │   ├── %b[%s]%b %s\n" "$action_color" "${action^^}" "$NC" "$package_name"
-        ((package_count++))
-      fi
+      # Use case statement instead of regex for better compatibility
+      case "$line" in
+        Installing* | Upgrading* | Tapping*)
+          local package_name
+          local action
+          package_name=$(echo "$line" | sed 's/^[A-Za-z]* //' | cut -d' ' -f1)
+          action=$(echo "$line" | cut -d' ' -f1)
+          local action_color="$GREEN"
+          [[ "$action" == "Upgrading" ]] && action_color="$YELLOW"
+          [[ "$action" == "Tapping" ]] && action_color="$BLUE"
+          printf "│   │   ├── %b[%s]%b %s\n" "$action_color" "${action^^}" "$NC" "$package_name"
+          ((package_count++))
+          ;;
+      esac
     done < "$bundle_output"
 
     # Show completion summary from brew bundle
