@@ -379,10 +379,14 @@ verify_zsh_plugins() {
   local failed_plugins=()
   local plugin_errors=()
 
-  # Check if plugins file exists
-  if [[ ! -f "${ZDOTDIR:-$HOME}/.zsh_plugins.txt" ]]; then
-    log_error "Zsh plugins file not found"
-    return 1
+  # Check if plugins file exists - create if missing instead of failing
+  local plugins_path="${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
+  if [[ ! -f "$plugins_path" ]]; then
+    log_warning "Creating missing .zsh_plugins.txt file"
+    touch "$plugins_path" || {
+      log_error "Failed to create .zsh_plugins.txt file"
+      return 1
+    }
   fi
 
   # Initialize completion system before checking plugins
