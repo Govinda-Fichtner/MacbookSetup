@@ -179,15 +179,20 @@ install_hashicorp_tools() {
 
 # Homebrew installation and package management
 install_homebrew() {
-  log_info "Checking for Homebrew installation..."
+  echo -e "\n=== System Dependencies ==="
+  printf "├── %b[CHECKING]%b Homebrew installation\n" "$BLUE" "$NC"
+
   if check_command brew; then
-    log_success "Homebrew is already installed."
+    printf "└── %b[SUCCESS]%b Homebrew already installed\n" "$GREEN" "$NC"
     return 0
   fi
 
-  log_info "Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
-    log_error "Failed to install Homebrew"
+  printf "├── %b[INSTALLING]%b Homebrew (this may take a few minutes)\n" "$BLUE" "$NC"
+
+  # Install Homebrew with minimal output
+  local brew_install_log="/tmp/homebrew_install.log"
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > "$brew_install_log" 2>&1 || {
+    log_error "Failed to install Homebrew. See $brew_install_log for details."
     return 1
   }
 
@@ -202,7 +207,7 @@ install_homebrew() {
     eval "$(/usr/local/bin/brew shellenv)"
   fi
 
-  log_success "Homebrew installed successfully."
+  printf "└── %b[SUCCESS]%b Homebrew installation complete\n" "$GREEN" "$NC"
 }
 
 setup_orbstack() {
@@ -292,18 +297,57 @@ install_packages() {
   # This handles cases where brew bundle check gives false positives
   if [[ $check_status -ne 0 ]] || [[ "${CI:-false}" == "true" ]]; then
     if [[ "${CI:-false}" == "true" ]]; then
-      printf "├── %bCI environment detected%b - ensuring all packages are installed\n" "$BLUE" "$NC"
+      printf "├── %b[INSTALLING]%b Packages (CI mode)\n" "$BLUE" "$NC"
     else
-      printf "├── %bInstalling/updating packages%b from Brewfile\n" "$BLUE" "$NC"
+      printf "├── %b[INSTALLING]%b Packages from Brewfile\n" "$BLUE" "$NC"
     fi
+
+    # Capture brew bundle output to extract installed packages
+    local bundle_output="/tmp/brew_bundle_output.log"
     echo "==== brew bundle install ====" >> "$bundle_log"
-    brew bundle install 2>&1 | tee -a "$bundle_log"
-    local install_status=${PIPESTATUS[0]}
+    brew bundle install > "$bundle_output" 2>&1
+    local install_status=$?
+
+    # Also append to main log for debugging
+    cat "$bundle_output" >> "$bundle_log"
+
     if [[ $install_status -ne 0 ]]; then
       log_error "Failed to install packages (exit code $install_status). See $bundle_log for details."
       return 1
     fi
-    printf "└── %b[SUCCESS]%b Package installation completed\n" "$GREEN" "$NC"
+
+    # Extract and display installed packages
+    printf "│   ├── %bInstalled packages:%b\n" "$GREEN" "$NC"
+
+    # Parse the output to show what was actually installed/upgraded
+    local package_count=0
+    while IFS= read -r line; do
+      if [[ "$line" =~ ^(Installing|Upgrading|Tapping) ]]; then
+        local package_name
+        local action
+        package_name=$(echo "$line" | sed 's/^[A-Za-z]* //' | cut -d' ' -f1)
+        action=$(echo "$line" | cut -d' ' -f1)
+        local action_color="$GREEN"
+        [[ "$action" == "Upgrading" ]] && action_color="$YELLOW"
+        [[ "$action" == "Tapping" ]] && action_color="$BLUE"
+        printf "│   │   ├── %b[%s]%b %s\n" "$action_color" "${action^^}" "$NC" "$package_name"
+        ((package_count++))
+      fi
+    done < "$bundle_output"
+
+    # Show completion summary from brew bundle
+    if grep -q "complete!" "$bundle_output"; then
+      local total_deps
+      total_deps=$(grep "dependencies now installed" "$bundle_output" | grep -o '[0-9]*' | head -1)
+      printf "│   └── %b[SUCCESS]%b %s dependencies ready\n" "$GREEN" "$NC" "${total_deps:-$package_count}"
+    else
+      printf "│   └── %b[SUCCESS]%b Package installation completed\n" "$GREEN" "$NC"
+    fi
+
+    printf "└── %b[SUCCESS]%b Homebrew bundle complete\n" "$GREEN" "$NC"
+
+    # Clean up temporary file
+    rm -f "$bundle_output"
   else
     printf "└── %b[SUCCESS]%b All packages already installed\n" "$GREEN" "$NC"
   fi
