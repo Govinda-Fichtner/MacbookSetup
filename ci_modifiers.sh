@@ -347,19 +347,6 @@ test_docker_initialization() {
     esac
 }
 
-# Call the Docker initialization test
-test_docker_initialization || {
-    docker_test_result=$?
-    case $docker_test_result in
-        1)
-            log_warning "Docker partially functional - proceeding with limitations"
-            ;;
-        2)
-            log_error "Docker initialization failed - some features may not work"
-            ;;
-    esac
-}
-
 # Enhanced completion generation function for CI
 generate_ci_completion_files() {
     log_info "Generating completion files for CI environment..."
@@ -369,6 +356,19 @@ generate_ci_completion_files() {
 
     # Enhanced completion generation for CI with proper PATH handling
     export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+    # Run Docker initialization test first to set environment variables
+    if ! test_docker_initialization; then
+        docker_test_result=$?
+        case $docker_test_result in
+            1)
+                log_warning "Docker partially functional - proceeding with limitations"
+                ;;
+            2)
+                log_error "Docker initialization failed - some features may not work"
+                ;;
+        esac
+    fi
 
     # macOS/CI-compatible timeout function
     run_with_timeout() {
