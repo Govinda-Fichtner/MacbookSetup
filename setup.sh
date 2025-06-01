@@ -252,8 +252,14 @@ install_packages() {
   brew bundle check 2>&1 | tee -a "$bundle_log"
   local check_status=${PIPESTATUS[0]}
 
-  if [[ $check_status -ne 0 ]]; then
-    log_info "Some packages need to be installed or updated"
+  # In CI environments, always run install to ensure all packages are properly installed
+  # This handles cases where brew bundle check gives false positives
+  if [[ $check_status -ne 0 ]] || [[ "${CI:-false}" == "true" ]]; then
+    if [[ "${CI:-false}" == "true" ]]; then
+      log_info "CI environment detected - ensuring all packages are installed"
+    else
+      log_info "Some packages need to be installed or updated"
+    fi
     echo "==== brew bundle install ====" >> "$bundle_log"
     brew bundle install 2>&1 | tee -a "$bundle_log"
     local install_status=${PIPESTATUS[0]}
