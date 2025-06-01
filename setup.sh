@@ -383,7 +383,7 @@ antidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt"
 }
 
 generate_completion_files() {
-  log_info "Generating completion files..."
+  echo -e "\n=== Generating Completion Files ==="
 
   # macOS-compatible timeout function
   run_with_timeout() {
@@ -413,7 +413,8 @@ generate_completion_files() {
   }
 
   # Generate static completion files for tools that support it
-  local tools_with_completion=(
+  echo "├── Container Tools"
+  local container_tools=(
     "docker:docker completion zsh"
     "kubectl:kubectl completion zsh"
     "helm:helm completion zsh"
@@ -421,81 +422,106 @@ generate_completion_files() {
     "orbctl:orbctl completion zsh"
   )
 
-  for tool_config in "${tools_with_completion[@]}"; do
+  local i=0
+  for tool_config in "${container_tools[@]}"; do
     local tool="${tool_config%%:*}"
     local completion_cmd="${tool_config#*:}"
     local completion_file="${COMPLETION_DIR}/_${tool}"
+    local prefix="│   "
+    local connector="├──"
+    if [[ $i -eq $((${#container_tools[@]} - 1)) ]]; then
+      connector="└──"
+    fi
 
     if command -v "$tool" > /dev/null 2>&1; then
-      log_info "Generating completion for $tool..."
       if run_with_timeout 10 "$completion_cmd" > "$completion_file" 2> /dev/null; then
-        log_success "Generated completion file: $completion_file"
+        printf "%s%s %b[SUCCESS]%b %s completion generated\n" "$prefix" "$connector" "$GREEN" "$NC" "$tool"
       else
-        log_warning "Failed to generate completion for $tool (timeout or error)"
+        printf "%s%s %b[WARNING]%b %s completion failed (timeout or error)\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
         rm -f "$completion_file"
       fi
     else
-      log_warning "$tool not found, skipping completion generation"
+      printf "%s%s %b[WARNING]%b %s not found, skipping\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
     fi
+    ((i++))
   done
 
   # Generate completions for development environment tools
+  echo "├── Development Tools"
   local dev_tools=(
     "rbenv:rbenv completions zsh"
     "direnv:direnv hook zsh"
   )
 
+  local i=0
   for tool_config in "${dev_tools[@]}"; do
     local tool="${tool_config%%:*}"
     local completion_cmd="${tool_config#*:}"
     local completion_file="${COMPLETION_DIR}/_${tool}"
+    local prefix="│   "
+    local connector="├──"
+    if [[ $i -eq $((${#dev_tools[@]} - 1)) ]]; then
+      connector="└──"
+    fi
 
     if command -v "$tool" > /dev/null 2>&1; then
-      log_info "Generating completion for $tool..."
       if run_with_timeout 10 "$completion_cmd" > "$completion_file" 2> /dev/null; then
-        log_success "Generated completion file: $completion_file"
+        printf "%s%s %b[SUCCESS]%b %s completion generated\n" "$prefix" "$connector" "$GREEN" "$NC" "$tool"
       else
-        log_warning "Failed to generate completion for $tool"
+        printf "%s%s %b[WARNING]%b %s completion failed\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
         rm -f "$completion_file"
       fi
     else
-      log_warning "$tool not found, skipping completion generation"
+      printf "%s%s %b[WARNING]%b %s not found, skipping\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
     fi
+    ((i++))
   done
 
   # Special case for pyenv - copy system completion file
+  echo "├── Language Environment Tools"
   if command -v pyenv > /dev/null 2>&1; then
-    log_info "Setting up pyenv completion..."
     local pyenv_completion
     pyenv_completion=$(find "$(brew --prefix)" -name "pyenv.zsh" -path "*/completions/*" 2> /dev/null | head -1)
     if [[ -n "$pyenv_completion" && -f "$pyenv_completion" ]]; then
-      cp "$pyenv_completion" "${COMPLETION_DIR}/_pyenv" && log_success "Generated completion file: ${COMPLETION_DIR}/_pyenv"
+      cp "$pyenv_completion" "${COMPLETION_DIR}/_pyenv" \
+        && printf "│   └── %b[SUCCESS]%b pyenv completion generated\n" "$GREEN" "$NC"
     else
-      log_warning "Failed to find pyenv completion file"
+      printf "│   └── %b[WARNING]%b pyenv completion file not found\n" "$YELLOW" "$NC"
     fi
+  else
+    printf "│   └── %b[WARNING]%b pyenv not found, skipping\n" "$YELLOW" "$NC"
   fi
 
   # Set up HashiCorp tool completions (they use different mechanisms)
-
-  # Terraform has built-in autocomplete support
-  if command -v terraform > /dev/null 2>&1; then
-    log_info "Setting up completion for terraform..."
-    if terraform -install-autocomplete 2> /dev/null; then
-      log_success "Installed terraform autocomplete"
-    else
-      log_info "Terraform autocomplete already installed or failed to install"
+  echo "└── Infrastructure Tools"
+  local infra_tools=("terraform" "packer")
+  local i=0
+  for tool in "${infra_tools[@]}"; do
+    local prefix="    "
+    local connector="├──"
+    if [[ $i -eq $((${#infra_tools[@]} - 1)) ]]; then
+      connector="└──"
     fi
-  fi
 
-  # Packer also has built-in autocomplete support
-  if command -v packer > /dev/null 2>&1; then
-    log_info "Setting up completion for packer..."
-    if packer -autocomplete-install 2> /dev/null; then
-      log_success "Installed packer autocomplete"
+    if command -v "$tool" > /dev/null 2>&1; then
+      if [[ "$tool" == "terraform" ]]; then
+        if terraform -install-autocomplete 2> /dev/null; then
+          printf "%s%s %b[SUCCESS]%b %s autocomplete installed\n" "$prefix" "$connector" "$GREEN" "$NC" "$tool"
+        else
+          printf "%s%s %b[INFO]%b %s autocomplete already installed\n" "$prefix" "$connector" "$BLUE" "$NC" "$tool"
+        fi
+      elif [[ "$tool" == "packer" ]]; then
+        if packer -autocomplete-install 2> /dev/null; then
+          printf "%s%s %b[SUCCESS]%b %s autocomplete installed\n" "$prefix" "$connector" "$GREEN" "$NC" "$tool"
+        else
+          printf "%s%s %b[INFO]%b %s autocomplete already installed\n" "$prefix" "$connector" "$BLUE" "$NC" "$tool"
+        fi
+      fi
     else
-      log_info "Packer autocomplete already installed or failed to install"
+      printf "%s%s %b[WARNING]%b %s not found, skipping\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
     fi
-  fi
+    ((i++))
+  done
 
   log_success "Completion file generation completed."
 }

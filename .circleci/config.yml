@@ -50,10 +50,6 @@ commands:
                 echo "Created .zsh_plugins.txt successfully"
             fi
 
-            # Verify the file exists and show its location
-            echo "Checking for .zsh_plugins.txt..."
-            ls -la "${ZDOTDIR}/.zsh_plugins.txt" || echo "File not found!"
-
             # Make scripts executable
             chmod +x setup.sh
             chmod +x verify_setup.sh
@@ -64,20 +60,7 @@ commands:
       - run:
           name: Run setup script
           shell: /bin/zsh
-          command: |
-            export COMPLETION_DIR="${HOME}/.zsh/completions"
-            export ZCOMPCACHE="${HOME}/.zcompcache"
-            export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
-            export ANTIDOTE_HOME="${HOME}/.antidote"
-            export ZDOTDIR="${HOME}"
-
-            # Verify plugins file exists before setup
-            echo "Before setup - checking for plugins file:"
-            ls -la "${ZDOTDIR}/.zsh_plugins.txt" || echo "Plugins file missing before setup!"
-
-            mkdir -p "${COMPLETION_DIR}"
-            mkdir -p "${ZCOMPCACHE}"
-            zsh ./setup.sh 2>&1 | tee /tmp/circleci-build.log
+          command: zsh ./setup.sh 2>&1 | tee /tmp/circleci-build.log
 
   run_verification:
     description: "Run the verification script"
@@ -86,37 +69,7 @@ commands:
           name: Run verification script
           shell: /bin/zsh
           command: |
-            # Set up environment variables in zsh context
-            export COMPLETION_DIR="${HOME}/.zsh/completions"
-            export ZCOMPCACHE="${HOME}/.zcompcache"
-            export ZCOMPDUMP="${ZCOMPCACHE}/zcompdump"
-            export ANTIDOTE_HOME="${HOME}/.antidote"
-            export ZDOTDIR="${HOME}"
-
-            # Verify plugins file exists before verification
-            echo "Before verification - checking for plugins file:"
-            ls -la "${ZDOTDIR}/.zsh_plugins.txt" || echo "Plugins file missing before verification!"
-            cat "${ZDOTDIR}/.zsh_plugins.txt" || echo "Cannot read plugins file!"
-
-            # Create necessary directories
-            mkdir -p "${COMPLETION_DIR}"
-            mkdir -p "${ZCOMPCACHE}"
-
-            # Initialize zsh completion system (zsh-specific commands)
-            autoload -Uz compinit
-            compinit -d "${ZCOMPDUMP}"
-            fpath=("${COMPLETION_DIR}" $fpath)
-
-            # Load antidote if available
-            if [[ -e "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh" ]]; then
-                source "$(brew --prefix)/opt/antidote/share/antidote/antidote.zsh"
-                antidote load "${ZDOTDIR}/.zsh_plugins.txt"
-            fi
-
-            # Source zshrc
-            source "${ZDOTDIR}/.zshrc" || { echo "Failed to source ${ZDOTDIR}/.zshrc"; exit 1; }
-
-            # Run verification script with output redirection
+            source ~/.zshrc
             ./verify_setup.sh 2>&1 | tee verify.log
 
 # Define the main workflow

@@ -41,23 +41,24 @@ check_command() {
   command -v "$1" > /dev/null 2>&1
 }
 
-# Fix print_status to use a local variable for status
+# Status printing function
 print_status() {
-  local pstatus=$1
-  local label=$2
-  local msg=$3
-  case "$pstatus" in
+  local level="$1"
+  local label="$2"
+  local msg="${3:-}"
+
+  case "$level" in
     PASS)
-      printf "%b[✓]%b %-30s %s\n" "$GREEN" "$RESET" "$label" "$msg"
+      printf "%b[SUCCESS]%b %s %s\n" "$GREEN" "$RESET" "$label" "$msg"
       ;;
     FAIL)
-      printf "%b[✗]%b %-30s %s\n" "$RED" "$RESET" "$label" "$msg"
+      printf "%b[ERROR]%b %s %s\n" "$RED" "$RESET" "$label" "$msg"
       ;;
     SKIP)
-      printf "%b[⚠]%b %-30s %s\n" "$YELLOW" "$RESET" "$label" "$msg"
+      printf "%b[WARNING]%b %s %s\n" "$YELLOW" "$RESET" "$label" "$msg"
       ;;
     INFO)
-      printf "%b[ℹ]%b %-30s %s\n" "$BLUE" "$RESET" "$label" "$msg"
+      printf "%b[INFO]%b %s\n" "$BLUE" "$RESET" "$msg"
       ;;
   esac
 }
@@ -144,50 +145,77 @@ verify_shell_config() {
 
 # Function to verify software tools
 verify_software_tools() {
-  log_info "Verifying software tools"
+  echo -e "\n=== Software Tools ==="
   local failed_tools=()
 
   # Core tools
-  log_info "Core Tools"
-  for tool in brew git rbenv pyenv direnv starship; do
+  echo "├── Core Tools"
+  local core_tools=(brew git rbenv pyenv direnv starship)
+  local i=0
+  for tool in "${core_tools[@]}"; do
+    local prefix="│   "
+    local connector="├──"
+    if [[ $i -eq $((${#core_tools[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     if check_command "$tool"; then
       version=$("$tool" --version 2> /dev/null | head -1 || echo "")
-      print_status PASS "$tool" "$version"
+      printf "%s%s %b[SUCCESS]%b %s %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$tool" "$version"
     else
-      print_status FAIL "$tool"
+      printf "%s%s %b[ERROR]%b %s\n" "$prefix" "$connector" "$RED" "$RESET" "$tool"
       failed_tools+=("$tool")
     fi
+    ((i++))
   done
 
   # Container tools
-  log_info "Container Tools"
-  for tool in orb orbctl kubectl helm; do
+  echo "├── Container Tools"
+  local container_tools=(orb orbctl kubectl helm)
+  local i=0
+  for tool in "${container_tools[@]}"; do
+    local prefix="│   "
+    local connector="├──"
+    if [[ $i -eq $((${#container_tools[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     if check_command "$tool"; then
       version=$("$tool" version 2> /dev/null | head -1 || echo "")
-      print_status PASS "$tool" "$version"
+      printf "%s%s %b[SUCCESS]%b %s %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$tool" "$version"
     else
-      print_status WARNING "$tool" "Not available in this environment"
+      printf "%s%s %b[WARNING]%b %s (not available in this environment)\n" "$prefix" "$connector" "$YELLOW" "$RESET" "$tool"
     fi
+    ((i++))
   done
 
   # Docker is provided by OrbStack
   if check_command "docker"; then
     version=$(docker version --format '{{.Client.Version}}' 2> /dev/null || echo "")
-    print_status PASS "docker" "$version"
+    printf "│   └── %b[SUCCESS]%b docker %s\n" "$GREEN" "$RESET" "$version"
   else
-    print_status WARNING "docker" "Not available in this environment"
+    printf "│   └── %b[WARNING]%b docker (not available in this environment)\n" "$YELLOW" "$RESET"
   fi
 
   # Infrastructure tools
-  log_info "Infrastructure Tools"
-  for tool in terraform packer; do
+  echo "└── Infrastructure Tools"
+  local infra_tools=(terraform packer)
+  local i=0
+  for tool in "${infra_tools[@]}"; do
+    local prefix="    "
+    local connector="├──"
+    if [[ $i -eq $((${#infra_tools[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     if check_command "$tool"; then
       version=$("$tool" --version 2> /dev/null | head -1 || echo "")
-      print_status PASS "$tool" "$version"
+      printf "%s%s %b[SUCCESS]%b %s %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$tool" "$version"
     else
-      print_status FAIL "$tool"
+      printf "%s%s %b[ERROR]%b %s\n" "$prefix" "$connector" "$RED" "$RESET" "$tool"
       failed_tools+=("$tool")
     fi
+    ((i++))
   done
 
   if [[ ${#failed_tools[@]} -gt 0 ]]; then
@@ -201,43 +229,70 @@ verify_software_tools() {
 
 # Function to verify shell completions
 verify_shell_completions() {
-  log_info "Verifying shell completions"
+  echo -e "\n=== Shell Completions ==="
   local failed_completions=()
 
   # Create completions directory if it doesn't exist
   mkdir -p "${HOME}/.zsh/completions"
 
   # Core completions
-  log_info "Core Completions"
-  for tool in git rbenv pyenv direnv; do
+  echo "├── Core Completions"
+  local core_comps=(git rbenv pyenv direnv)
+  local i=0
+  for tool in "${core_comps[@]}"; do
+    local prefix="│   "
+    local connector="├──"
+    if [[ $i -eq $((${#core_comps[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     if check_completion "$tool"; then
-      print_status PASS "$tool completion"
+      printf "%s%s %b[SUCCESS]%b %s completion\n" "$prefix" "$connector" "$GREEN" "$RESET" "$tool"
     else
-      print_status FAIL "$tool completion"
+      printf "%s%s %b[ERROR]%b %s completion\n" "$prefix" "$connector" "$RED" "$RESET" "$tool"
       failed_completions+=("$tool")
     fi
+    ((i++))
   done
 
   # Container completions
-  log_info "Container Completions"
-  for tool in kubectl helm docker orb orbctl; do
+  echo "├── Container Completions"
+  local container_comps=(kubectl helm docker orb orbctl)
+  local i=0
+  for tool in "${container_comps[@]}"; do
+    local prefix="│   "
+    local connector="├──"
+    if [[ $i -eq $((${#container_comps[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     if check_completion "$tool"; then
-      print_status PASS "$tool completion"
+      printf "%s%s %b[SUCCESS]%b %s completion\n" "$prefix" "$connector" "$GREEN" "$RESET" "$tool"
     else
-      print_status FAIL "$tool completion"
+      printf "%s%s %b[ERROR]%b %s completion\n" "$prefix" "$connector" "$RED" "$RESET" "$tool"
       failed_completions+=("$tool")
     fi
+    ((i++))
   done
 
   # Infrastructure completions
-  log_info "Infrastructure Completions"
-  for tool in terraform packer; do
+  echo "└── Infrastructure Completions"
+  local infra_comps=(terraform packer)
+  local i=0
+  for tool in "${infra_comps[@]}"; do
+    local prefix="    "
+    local connector="├──"
+    if [[ $i -eq $((${#infra_comps[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     if check_completion "$tool"; then
-      print_status PASS "$tool completion"
+      printf "%s%s %b[SUCCESS]%b %s completion\n" "$prefix" "$connector" "$GREEN" "$RESET" "$tool"
     else
-      print_status FAIL "$tool completion"
+      printf "%s%s %b[ERROR]%b %s completion\n" "$prefix" "$connector" "$RED" "$RESET" "$tool"
       failed_completions+=("$tool")
     fi
+    ((i++))
   done
 
   if [[ ${#failed_completions[@]} -gt 0 ]]; then
@@ -272,48 +327,66 @@ verify_zsh_plugins() {
   )
 
   # Verify core plugins
-  log_info "Core Plugins"
-  for plugin in zsh-completions zsh-autosuggestions zsh-syntax-highlighting; do
+  echo "├── Core Plugins"
+  local core_plugins=(zsh-completions zsh-autosuggestions zsh-syntax-highlighting)
+  local i=0
+  for plugin in "${core_plugins[@]}"; do
+    local prefix="│   "
+    local connector="├──"
+    if [[ $i -eq $((${#core_plugins[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     local found=false
     for cache_dir in "${antidote_cache_locations[@]}"; do
       if [[ "$plugin" == "zsh-syntax-highlighting" ]]; then
         if [[ -f "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}/zsh-syntax-highlighting.zsh" ]] \
           || [[ -f "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}/zsh-syntax-highlighting.plugin.zsh" ]]; then
-          print_status PASS "$plugin"
+          printf "%s%s %b[SUCCESS]%b %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$plugin"
           found=true
           break
         fi
       else
         if [[ -d "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}/src" ]] \
           || [[ -d "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-zsh-users-SLASH-${plugin}" ]]; then
-          print_status PASS "$plugin"
+          printf "%s%s %b[SUCCESS]%b %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$plugin"
           found=true
           break
         fi
       fi
     done
     if [[ "$found" == "false" ]]; then
-      print_status FAIL "$plugin"
+      printf "%s%s %b[ERROR]%b %s\n" "$prefix" "$connector" "$RED" "$RESET" "$plugin"
       failed_plugins+=("$plugin")
     fi
+    ((i++))
   done
 
   # Verify Oh My Zsh plugins
-  log_info "Oh My Zsh Plugins"
-  for plugin in git kubectl helm terraform docker docker-compose common-aliases brew fzf; do
+  echo "└── Oh My Zsh Plugins"
+  local ohmyzsh_plugins=(git kubectl helm terraform docker docker-compose common-aliases brew fzf)
+  local i=0
+  for plugin in "${ohmyzsh_plugins[@]}"; do
+    local prefix="    "
+    local connector="├──"
+    if [[ $i -eq $((${#ohmyzsh_plugins[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
     local found=false
     for cache_dir in "${antidote_cache_locations[@]}"; do
       if [[ -d "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}" ]] \
         || [[ -d "${cache_dir}/https-COLON--SLASH--SLASH-github.com-SLASH-ohmyzsh-SLASH-ohmyzsh/plugins/${plugin}/src" ]]; then
-        print_status PASS "$plugin"
+        printf "%s%s %b[SUCCESS]%b %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$plugin"
         found=true
         break
       fi
     done
     if [[ "$found" == "false" ]]; then
-      print_status FAIL "$plugin"
+      printf "%s%s %b[ERROR]%b %s\n" "$prefix" "$connector" "$RED" "$RESET" "$plugin"
       failed_plugins+=("$plugin")
     fi
+    ((i++))
   done
 
   # Report results
