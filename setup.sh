@@ -289,12 +289,13 @@ install_packages() {
 
   # Log file for bundle output
   local bundle_log="/tmp/brew_bundle.log"
-  echo "==== brew bundle check ====" > "$bundle_log"
-  brew bundle check 2>&1 | tee -a "$bundle_log"
-  local check_status=${PIPESTATUS[0]}
 
-  # In CI environments, always run install to ensure all packages are properly installed
-  # This handles cases where brew bundle check gives false positives
+  # Check bundle status quietly first
+  echo "==== brew bundle check ====" > "$bundle_log"
+  brew bundle check >> "$bundle_log" 2>&1
+  local check_status=$?
+
+  # Always run install in CI, or if check shows missing dependencies
   if [[ $check_status -ne 0 ]] || [[ "${CI:-false}" == "true" ]]; then
     if [[ "${CI:-false}" == "true" ]]; then
       printf "├── %b[INSTALLING]%b Packages (CI mode)\n" "$BLUE" "$NC"
@@ -319,8 +320,11 @@ install_packages() {
     # Extract and display installed packages
     printf "│   ├── %bInstalled packages:%b\n" "$GREEN" "$NC"
 
-    # Parse the output to show what was actually installed/upgraded
+    # Parse the output to show what was actually processed
     local package_count=0
+    local install_count=0
+    local using_count=0
+
     while IFS= read -r line; do
       # Use case statement instead of regex for better compatibility
       case "$line" in
@@ -332,8 +336,12 @@ install_packages() {
           local action_color="$GREEN"
           [[ "$action" == "Upgrading" ]] && action_color="$YELLOW"
           [[ "$action" == "Tapping" ]] && action_color="$BLUE"
-          printf "│   │   ├── %b[%s]%b %s\n" "$action_color" "${action^^}" "$NC" "$package_name"
+          printf "│   │   ├── %b[%s]%b %s\n" "$action_color" "$(echo "$action" | tr '[:lower:]' '[:upper:]')" "$NC" "$package_name"
           ((package_count++))
+          ((install_count++))
+          ;;
+        Using*)
+          ((using_count++))
           ;;
       esac
     done < "$bundle_output"
@@ -342,7 +350,11 @@ install_packages() {
     if grep -q "complete!" "$bundle_output"; then
       local total_deps
       total_deps=$(grep "dependencies now installed" "$bundle_output" | grep -o '[0-9]*' | head -1)
-      printf "│   └── %b[SUCCESS]%b %s dependencies ready\n" "$GREEN" "$NC" "${total_deps:-$package_count}"
+      if [[ $install_count -gt 0 ]]; then
+        printf "│   └── %b[SUCCESS]%b %s new, %s total dependencies ready\n" "$GREEN" "$NC" "$install_count" "${total_deps:-$package_count}"
+      else
+        printf "│   └── %b[SUCCESS]%b All %s dependencies already installed\n" "$GREEN" "$NC" "${total_deps:-$using_count}"
+      fi
     else
       printf "│   └── %b[SUCCESS]%b Package installation completed\n" "$GREEN" "$NC"
     fi
