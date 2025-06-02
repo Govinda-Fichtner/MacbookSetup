@@ -131,7 +131,7 @@ ensure_dir() {
   local dir="$1"
   if [[ ! -d "$dir" ]]; then
     mkdir -p "$dir" || {
-      log_error "Failed to create directory: $dir"
+      printf "│   └── %b[ERROR]%b Failed to create directory: %s\n" "$RED" "$NC" "$dir"
       return 1
     }
   fi
@@ -144,10 +144,9 @@ backup_file() {
     timestamp=$(date +"%Y%m%d%H%M%S")
     local backup="${file}.backup.${timestamp}"
     cp "$file" "$backup" || {
-      log_error "Failed to create backup of $file"
+      printf "│   └── %b[ERROR]%b Failed to create backup of %s\n" "$RED" "$NC" "$file"
       return 1
     }
-    log_info "Created backup: $backup"
   fi
 }
 
@@ -246,7 +245,7 @@ install_homebrew() {
   # Install Homebrew with minimal output
   local brew_install_log="/tmp/homebrew_install.log"
   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > "$brew_install_log" 2>&1 || {
-    log_error "Failed to install Homebrew. See $brew_install_log for details."
+    printf "└── %b[ERROR]%b Failed to install Homebrew. See %s for details.\n" "$RED" "$NC" "$brew_install_log"
     return 1
   }
 
@@ -333,7 +332,7 @@ install_packages() {
 
   # Check if Brewfile exists
   if [[ ! -f "Brewfile" ]]; then
-    log_error "Brewfile not found in current directory. Please ensure it exists."
+    printf "└── %b[ERROR]%b Brewfile not found in current directory. Please ensure it exists.\n" "$RED" "$NC"
     return 1
   fi
 
@@ -370,7 +369,7 @@ install_packages() {
     cat "$bundle_output" >> "$bundle_log"
 
     if [[ $install_status -ne 0 ]]; then
-      log_error "Failed to install packages (exit code $install_status). See $bundle_log for details."
+      printf "└── %b[ERROR]%b Failed to install packages (exit code %s). See %s for details.\n" "$RED" "$NC" "$install_status" "$bundle_log"
       return 1
     fi
 
@@ -455,7 +454,7 @@ setup_ruby_environment() {
   printf "├── %bRuby Environment%b\n" "$BLUE" "$NC"
 
   if ! check_command rbenv; then
-    log_error "rbenv not found. Please ensure it's installed."
+    printf "│   └── %b[ERROR]%b rbenv not found. Please ensure it's installed.\n" "$RED" "$NC"
     return 1
   fi
 
@@ -501,7 +500,7 @@ setup_python_environment() {
   printf "├── %bPython Environment%b\n" "$BLUE" "$NC"
 
   if ! check_command pyenv; then
-    log_error "pyenv not found. Please ensure it's installed."
+    printf "    └── %b[ERROR]%b pyenv not found. Please ensure it's installed.\n" "$RED" "$NC"
     return 1
   fi
 
@@ -803,7 +802,7 @@ generate_completion_files() {
     ((i++))
   done
 
-  log_success "Completion file generation completed."
+  printf "└── %b[SUCCESS]%b Completion file generation completed\n" "$GREEN" "$NC"
 }
 
 setup_shell_completions() {
@@ -885,7 +884,7 @@ setup_shell_completions() {
   # Set up completions immediately for current session
   if [[ -f "$(brew --prefix)/opt/fzf/shell/completion.zsh" ]]; then
     # shellcheck disable=SC1090
-    source "$(brew --prefix)/opt/fzf/shell/completion.zsh" 2> /dev/null || log_warning "Failed to source fzf completion"
+    source "$(brew --prefix)/opt/fzf/shell/completion.zsh" 2> /dev/null || printf "│   │   └── %b[WARNING]%b Failed to source fzf completion\n" "$YELLOW" "$NC"
   fi
 
   # Initialize completion system for current session
@@ -1142,16 +1141,27 @@ main() {
   validate_system || exit 1
   install_homebrew || exit 1
   install_packages || exit 1
-  setup_orbstack || log_warning "OrbStack setup incomplete"
-  install_hashicorp_tools || log_warning "Some HashiCorp tools may not be installed"
-  configure_terminal_fonts || log_warning "Terminal font configuration incomplete"
+  setup_orbstack || printf "├── %b[WARNING]%b OrbStack setup incomplete\n" "$YELLOW" "$NC"
+  install_hashicorp_tools || printf "├── %b[WARNING]%b Some HashiCorp tools may not be installed\n" "$YELLOW" "$NC"
+  configure_terminal_fonts || printf "├── %b[WARNING]%b Terminal font configuration incomplete\n" "$YELLOW" "$NC"
   configure_shell || exit 1
-  setup_ruby_environment || log_warning "Ruby environment setup incomplete"
-  setup_python_environment || log_warning "Python environment setup incomplete"
-  setup_node_environment || log_warning "Node.js environment setup incomplete"
+  setup_ruby_environment || printf "├── %b[WARNING]%b Ruby environment setup incomplete\n" "$YELLOW" "$NC"
+  setup_python_environment || printf "├── %b[WARNING]%b Python environment setup incomplete\n" "$YELLOW" "$NC"
+  setup_node_environment || printf "└── %b[WARNING]%b Node.js environment setup incomplete\n" "$YELLOW" "$NC"
 
   echo -e "\n=== Setup Complete ==="
   printf "└── %b[SUCCESS]%b All components installed and configured\n" "$GREEN" "$NC"
+  # Ensure .zshrc is loaded in login shells by configuring .zprofile
+  printf "├── %b[CONFIGURING]%b Shell loading across terminal types\n" "$BLUE" "$NC"
+  local zprofile_path="$HOME/.zprofile"
+
+  if [[ ! -f "$zprofile_path" ]] || ! grep -q "source.*\.zshrc" "$zprofile_path"; then
+    echo '[[ -f ~/.zshrc ]] && source ~/.zshrc' >> "$zprofile_path"
+    printf "│   └── %b[SUCCESS]%b .zprofile configured to load .zshrc\n" "$GREEN" "$NC"
+  else
+    printf "│   └── %b[EXISTS]%b .zprofile already sources .zshrc\n" "$BLUE" "$NC"
+  fi
+
   printf "\n%bNext steps:%b Please restart your terminal or run: source %s\n" "$YELLOW" "$NC" "$ZSHRC_PATH"
 }
 
