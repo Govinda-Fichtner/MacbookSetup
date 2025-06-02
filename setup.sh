@@ -263,24 +263,56 @@ install_homebrew() {
   printf "└── %b[SUCCESS]%b Homebrew installation complete\n" "$GREEN" "$NC"
 }
 
-setup_orbstack() {
+setup_container_environment() {
   echo -e "\n=== Container Environment ==="
 
-  # Skip OrbStack setup if SKIP_ORBSTACK is set to true
+  # Handle different container environments based on CI vs local
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "├── %b[CI ENVIRONMENT]%b Setting up lightweight Docker with Colima\n" "$BLUE" "$NC"
+
+    # In CI, verify Docker CLI is available (should be installed via Brewfile)
+    if ! check_command "docker"; then
+      printf "│   └── %b[ERROR]%b Docker CLI not available in CI\n" "$RED" "$NC"
+      return 1
+    fi
+
+    # Check if Docker daemon is available, if not start Colima
+    if ! docker info > /dev/null 2>&1; then
+      printf "│   ├── %b[INFO]%b Docker daemon not running - starting Colima\n" "$BLUE" "$NC"
+
+      # Start Docker daemon via Colima (optimized for CI)
+      if check_command "colima"; then
+        printf "│   ├── %b[STARTING]%b Colima (lightweight Docker runtime)\n" "$BLUE" "$NC"
+        if colima start --cpu 2 --memory 4 --vm-type=vz --arch aarch64 > /dev/null 2>&1; then
+          printf "│   ├── %b[SUCCESS]%b Colima started successfully\n" "$GREEN" "$NC"
+        else
+          printf "│   ├── %b[WARNING]%b Failed to start Colima\n" "$YELLOW" "$NC"
+          printf "│   └── %b[INFO]%b MCP testing will be limited to configuration validation\n" "$BLUE" "$NC"
+          return 0
+        fi
+      else
+        printf "│   ├── %b[ERROR]%b Colima not available in CI environment\n" "$RED" "$NC"
+        printf "│   └── %b[INFO]%b Configuration validation will still proceed\n" "$BLUE" "$NC"
+        return 0
+      fi
+    else
+      printf "│   └── %b[SUCCESS]%b Docker daemon already available\n" "$GREEN" "$NC"
+    fi
+
+    printf "└── %b[SUCCESS]%b CI container environment ready (Colima)\n" "$GREEN" "$NC"
+    return 0
+  fi
+
+  # Local environment - handle OrbStack setup
   if [[ "${SKIP_ORBSTACK:-false}" == "true" ]]; then
     printf "└── %b[SKIPPED]%b OrbStack setup (SKIP_ORBSTACK=true)\n" "$YELLOW" "$NC"
     return 0
   fi
 
-  printf "├── %b[CHECKING]%b OrbStack installation\n" "$BLUE" "$NC"
+  printf "├── %b[LOCAL ENVIRONMENT]%b Setting up OrbStack (full Docker experience)\n" "$BLUE" "$NC"
   if ! check_command orbctl; then
-    if [[ "${CI:-false}" == "true" ]]; then
-      printf "└── %b[WARNING]%b OrbStack not installed (expected in CI)\n" "$YELLOW" "$NC"
-      return 0
-    else
-      printf "└── %b[ERROR]%b OrbStack not installed - please install first\n" "$RED" "$NC"
-      return 1
-    fi
+    printf "└── %b[ERROR]%b OrbStack not installed - please install first\n" "$RED" "$NC"
+    return 1
   fi
 
   # Ensure OrbStack is in PATH
@@ -296,13 +328,8 @@ setup_orbstack() {
   if ! orbctl status > /dev/null 2>&1; then
     printf "│   ├── %b[STARTING]%b OrbStack service\n" "$BLUE" "$NC"
     if ! orbctl start; then
-      if [[ "${CI:-false}" == "true" ]]; then
-        printf "│   └── %b[WARNING]%b Failed to start (expected in CI)\n" "$YELLOW" "$NC"
-        return 0
-      else
-        printf "│   └── %b[ERROR]%b Failed to start OrbStack\n" "$RED" "$NC"
-        return 1
-      fi
+      printf "│   └── %b[ERROR]%b Failed to start OrbStack\n" "$RED" "$NC"
+      return 1
     fi
 
     # Wait for OrbStack to be fully initialized
@@ -324,7 +351,7 @@ setup_orbstack() {
     printf "│   └── %b[SUCCESS]%b OrbStack already running\n" "$GREEN" "$NC"
   fi
 
-  printf "└── %b[SUCCESS]%b Container environment ready\n" "$GREEN" "$NC"
+  printf "└── %b[SUCCESS]%b Local container environment ready (OrbStack)\n" "$GREEN" "$NC"
 }
 
 install_packages() {
@@ -336,11 +363,17 @@ install_packages() {
     return 1
   fi
 
-  # Remove Docker from Brewfile if it exists (since it comes with OrbStack)
-  if grep -q "docker" "Brewfile"; then
-    printf "├── %bRemoving Docker from Brewfile%b (comes with OrbStack)\n" "$YELLOW" "$NC"
-    sed -i.bak '/docker/d' "Brewfile"
-    rm -f "Brewfile.bak"
+  # Handle Docker installation strategy based on environment
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "├── %b[CI ENVIRONMENT]%b Installing Docker CLI + Colima for lightweight MCP testing\n" "$BLUE" "$NC"
+    # In CI, keep Docker packages in Brewfile: docker, docker-compose, colima
+  else
+    # Remove Docker packages from Brewfile since OrbStack provides full Docker functionality
+    if grep -q '^brew "docker"' "Brewfile"; then
+      printf "├── %b[LOCAL ENVIRONMENT]%b Removing Docker packages (OrbStack provides full Docker)\n" "$YELLOW" "$NC"
+      sed -i.bak '/^brew "docker"/d; /^brew "docker-compose"/d; /^brew "colima"/d' "Brewfile"
+      rm -f "Brewfile.bak"
+    fi
   fi
 
   # Log file for bundle output
@@ -1289,7 +1322,7 @@ main() {
   validate_system || exit 1
   install_homebrew || exit 1
   install_packages || exit 1
-  setup_orbstack || printf "├── %b[WARNING]%b OrbStack setup incomplete\n" "$YELLOW" "$NC"
+  setup_container_environment || printf "├── %b[WARNING]%b Container environment setup incomplete\n" "$YELLOW" "$NC"
   install_hashicorp_tools || printf "├── %b[WARNING]%b Some HashiCorp tools may not be installed\n" "$YELLOW" "$NC"
   configure_terminal_fonts || printf "├── %b[WARNING]%b Terminal font configuration incomplete\n" "$YELLOW" "$NC"
   configure_shell || exit 1

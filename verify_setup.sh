@@ -818,10 +818,13 @@ verify_mcp_servers() {
   echo -e "\n=== MCP Servers ==="
   local mcp_issues=false
 
-  # Skip in CI environments
+  # Enhanced CI support - only skip if Docker is completely unavailable
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "└── %b[SKIPPED]%b MCP server verification (CI environment)\n" "$YELLOW" "$RESET"
-    return 0
+    if ! check_command "docker"; then
+      printf "└── %b[SKIPPED]%b MCP server verification (Docker not available in CI)\n" "$YELLOW" "$RESET"
+      return 0
+    fi
+    printf "├── %b[CI ENVIRONMENT]%b Enhanced MCP verification with Docker testing\n" "$BLUE" "$RESET"
   fi
 
   # Skip if MCP is disabled
@@ -839,10 +842,17 @@ verify_mcp_servers() {
 
   # Check if Docker daemon is running
   if ! docker info &> /dev/null; then
-    printf "│   └── %b[ERROR]%b Docker daemon not running\n" "$RED" "$RESET"
-    return 1
+    if [[ "${CI:-false}" == "true" ]]; then
+      printf "│   ├── %b[WARNING]%b Docker daemon not running in CI\n" "$YELLOW" "$RESET"
+      printf "│   └── %b[INFO]%b Will perform configuration-only validation\n" "$BLUE" "$RESET"
+      # In CI, continue with configuration validation even if daemon unavailable
+    else
+      printf "│   └── %b[ERROR]%b Docker daemon not running\n" "$RED" "$RESET"
+      return 1
+    fi
+  else
+    printf "│   └── %b[SUCCESS]%b Docker daemon running\n" "$GREEN" "$RESET"
   fi
-  printf "│   └── %b[SUCCESS]%b Docker daemon running\n" "$GREEN" "$RESET"
 
   # Verify docker-compose availability
   printf "├── %b[CHECKING]%b Docker Compose availability\n" "$BLUE" "$RESET"
@@ -869,21 +879,22 @@ verify_mcp_servers() {
   fi
   printf "│   └── %b[SUCCESS]%b docker-compose.yml exists\n" "$GREEN" "$RESET"
 
-  # Define MCP servers to check
-  local -A mcp_servers=(
-    ["github-mcp"]="Code Integration"
-    ["circleci-mcp"]="CI/CD Integration"
-  )
-
   # Check MCP server configurations and containers
   printf "├── %b[CHECKING]%b MCP server configurations\n" "$BLUE" "$RESET"
   local config_issues=false
 
-  for server in "${!mcp_servers[@]}"; do
-    local category="${mcp_servers[$server]}"
-    local config_file="$mcp_config_path/$server.json"
+  # Check each server configuration individually
+  for server_name in github circleci; do
+    local config_file="$mcp_config_path/$server_name/config.json"
+    local display_name="${server_name}-mcp"
+    local category
+    case "$server_name" in
+      github) category="Code Integration" ;;
+      circleci) category="CI/CD Integration" ;;
+      *) category="Unknown" ;;
+    esac
 
-    printf "│   ├── %b[CHECKING]%b %s (%s)\n" "$BLUE" "$RESET" "$server" "$category"
+    printf "│   ├── %b[CHECKING]%b %s (%s)\n" "$BLUE" "$RESET" "$display_name" "$category"
 
     # Check if config file exists
     if [[ ! -f "$config_file" ]]; then
@@ -912,13 +923,13 @@ verify_mcp_servers() {
   printf "└── %b[CHECKING]%b MCP server containers\n" "$BLUE" "$RESET"
   local container_issues=false
 
-  for server in "${!mcp_servers[@]}"; do
-    local category="${mcp_servers[$server]}"
-    printf "    ├── %b[CHECKING]%b %s container\n" "$BLUE" "$RESET" "$server"
+  for server_name in github circleci; do
+    local display_name="${server_name}-mcp"
+    printf "    ├── %b[CHECKING]%b %s container\n" "$BLUE" "$RESET" "$display_name"
 
     # Check if container exists and get its status
     local container_status
-    container_status=$(docker-compose -f "$mcp_config_path/docker-compose.yml" ps -q "$server" 2> /dev/null)
+    container_status=$(docker-compose -f "$mcp_config_path/docker-compose.yml" ps -q "$display_name" 2> /dev/null)
 
     if [[ -z "$container_status" ]]; then
       printf "    │   └── %b[WARNING]%b Container not created (run setup.sh to create)\n" "$YELLOW" "$RESET"
