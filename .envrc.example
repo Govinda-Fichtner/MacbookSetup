@@ -1,12 +1,13 @@
-# .envrc - Environment variables for MacbookSetup project
-# This file is loaded automatically by direnv when entering the project directory
+# .envrc.example - Template for environment variables
+# Copy this file to .envrc and add your actual tokens
+# This file is tracked by git, but .envrc is ignored for security
 
 # Shell configuration
 export ZDOTDIR="${HOME}"
 
 # MCP Server Configuration - Phase 1: Core servers
-export GITHUB_TOKEN="your-github-token"     # Code category
-export CIRCLECI_TOKEN="your-circleci-token" # CI/CD category
+export GITHUB_TOKEN="your_github_token_here"
+export CIRCLECI_TOKEN="your_circleci_token_here"
 
 # Future expansion by category (add as needed):
 
