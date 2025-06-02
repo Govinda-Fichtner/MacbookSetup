@@ -291,7 +291,7 @@ setup_container_environment() {
           colima_arch="x86_64"
         fi
 
-        if colima start --cpu 2 --memory 4 --vm-type=vz --arch "$colima_arch" > /dev/null 2>&1; then
+        if colima start --cpu 2 --memory 4 --vm-type=vz --arch "$colima_arch"; then
           printf "│   ├── %b[SUCCESS]%b Colima started successfully\n" "$GREEN" "$NC"
         else
           printf "│   ├── %b[WARNING]%b Failed to start Colima\n" "$YELLOW" "$NC"

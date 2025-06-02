@@ -862,7 +862,7 @@ verify_mcp_servers() {
         fi
         # Try to start Colima - suppress output as setup.sh should have done the main work
         # Use lower resource settings for a quick "ensure it's up" check
-        colima start --cpu 1 --memory 2 --vm-type=vz --arch "$colima_arch" &> /dev/null || true
+        colima start --cpu 1 --memory 2 --vm-type=vz --arch "$colima_arch" || true
         sleep 5 # Give Colima a moment to initialize the Docker socket
 
         if ! docker info &> /dev/null; then
