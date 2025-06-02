@@ -319,6 +319,39 @@ verify_software_tools() {
   return 0
 }
 
+# Function to verify design tools
+verify_design_tools() {
+  echo -e "\n=== Design Tools ==="
+  local failed_tools=()
+
+  # Design applications
+  echo "└── Design Applications"
+  local design_apps=("Figma")
+  local i=0
+  for app in "${design_apps[@]}"; do
+    local prefix="    "
+    local connector="├──"
+    if [[ $i -eq $((${#design_apps[@]} - 1)) ]]; then
+      connector="└──"
+    fi
+
+    if [[ -d "/Applications/${app}.app" ]]; then
+      printf "%s%s %b[SUCCESS]%b %s\n" "$prefix" "$connector" "$GREEN" "$RESET" "$app"
+    else
+      printf "%s%s %b[WARNING]%b %s (not installed)\n" "$prefix" "$connector" "$YELLOW" "$RESET" "$app"
+    fi
+    ((i++))
+  done
+
+  if [[ ${#failed_tools[@]} -gt 0 ]]; then
+    log_error "Failed design tools: ${failed_tools[*]}"
+    return 1
+  fi
+
+  log_success "Design tools verified"
+  return 0
+}
+
 # Function to verify shell completions
 verify_shell_completions() {
   echo -e "\n=== Shell Completions ==="
@@ -822,6 +855,16 @@ main() {
     log_error "Zsh plugins verification failed"
     verification_failed=true
     ((failed_checks++))
+  else
+    ((passed_checks++))
+  fi
+  ((total_checks++))
+
+  # Verify design tools (non-critical check)
+  if ! verify_design_tools; then
+    log_warning "Design tools verification had issues (see warnings above)"
+    # Don't fail the build for missing design tools
+    ((passed_checks++))
   else
     ((passed_checks++))
   fi
