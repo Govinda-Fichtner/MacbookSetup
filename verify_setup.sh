@@ -326,7 +326,7 @@ verify_design_tools() {
 
   # Design applications
   echo "└── Design Applications"
-  local design_apps=("Figma")
+  local design_apps=("Figma Beta")
   local i=0
   for app in "${design_apps[@]}"; do
     local prefix="    "
