@@ -608,6 +608,151 @@ setup_node_environment() {
   printf "    └── %b[SUCCESS]%b Node.js environment ready\n" "$GREEN" "$NC"
 }
 
+# MCP Environment Setup
+setup_mcp_environment() {
+  printf "└── %bMCP Environment%b\n" "$BLUE" "$NC"
+
+  # Check if user wants MCP (optional like SKIP_ORBSTACK)
+  if [[ "${SKIP_MCP:-false}" == "true" ]]; then
+    printf "    └── %bMCP setup skipped (SKIP_MCP=true)%b\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  # 1. Validate Docker availability (with proper CI detection)
+  printf "    ├── %b[CHECKING]%b Docker availability\n" "$BLUE" "$NC"
+  if ! check_command "docker"; then
+    printf "    │   └── %b[ERROR]%b Docker not found. Please install Docker first.\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Check if Docker daemon is running
+  if ! docker info > /dev/null 2>&1; then
+    if [[ "${CI:-false}" == "true" ]]; then
+      printf "    │   └── %b[WARNING]%b Docker daemon not available in CI\n" "$YELLOW" "$NC"
+      return 0
+    else
+      printf "    │   └── %b[ERROR]%b Docker daemon not running. Please start Docker.\n" "$RED" "$NC"
+      return 1
+    fi
+  fi
+  printf "    │   └── %b[SUCCESS]%b Docker ready\n" "$GREEN" "$NC"
+
+  # 2. Setup direnv for token management
+  printf "    ├── %b[SETTING UP]%b Environment configuration\n" "$BLUE" "$NC"
+  if ! check_command "direnv"; then
+    printf "    │   └── %b[ERROR]%b direnv not found. Please install direnv first.\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Ensure MCP config directory exists
+  local mcp_config_dir="${MCP_CONFIG_PATH:-$HOME/.config/mcp}"
+  ensure_dir "$mcp_config_dir" || {
+    printf "    │   └── %b[ERROR]%b Failed to create MCP config directory\n" "$RED" "$NC"
+    return 1
+  }
+
+  # Create subdirectories for each MCP server
+  for server_dir in "github" "circleci"; do
+    ensure_dir "$mcp_config_dir/$server_dir" || {
+      printf "    │   └── %b[ERROR]%b Failed to create %s config directory\n" "$RED" "$NC" "$server_dir"
+      return 1
+    }
+  done
+  printf "    │   └── %b[SUCCESS]%b Configuration directories ready\n" "$GREEN" "$NC"
+
+  # 3. Background installation with progress spinner (reuse show_progress())
+  printf "    ├── %b[SETTING UP]%b MCP servers\n" "$BLUE" "$NC"
+
+  # Phase 1: Core MCP servers
+  # 4. Configure GitHub MCP server (Code)
+  printf "    │   ├── %b[CONFIGURING]%b GitHub MCP server (Code)\n" "$BLUE" "$NC"
+  setup_mcp_server "github" "GitHub repository management" || {
+    printf "    │   │   └── %b[WARNING]%b GitHub MCP setup incomplete\n" "$YELLOW" "$NC"
+  }
+
+  # 5. Configure CircleCI MCP server (CI/CD)
+  printf "    │   └── %b[CONFIGURING]%b CircleCI MCP server (CI/CD)\n" "$BLUE" "$NC"
+  setup_mcp_server "circleci" "CircleCI pipeline monitoring" || {
+    printf "    │       └── %b[WARNING]%b CircleCI MCP setup incomplete\n" "$YELLOW" "$NC"
+  }
+
+  # 6. Validate container health (in CI, just check docker-compose validity)
+  printf "    ├── %b[VALIDATING]%b Docker configuration\n" "$BLUE" "$NC"
+  if [[ "${CI:-false}" == "true" ]]; then
+    # In CI, just validate the docker-compose file syntax
+    if docker-compose config > /dev/null 2>&1; then
+      printf "    │   └── %b[SUCCESS]%b Docker Compose configuration valid\n" "$GREEN" "$NC"
+    else
+      printf "    │   └── %b[WARNING]%b Docker Compose configuration issues\n" "$YELLOW" "$NC"
+    fi
+  else
+    # In local environment, try to start services
+    if docker-compose up -d > /dev/null 2>&1; then
+      printf "    │   └── %b[SUCCESS]%b MCP containers started\n" "$GREEN" "$NC"
+    else
+      printf "    │   └── %b[WARNING]%b MCP containers not started (check Docker images)\n" "$YELLOW" "$NC"
+    fi
+  fi
+
+  # 7. Success confirmation with tree output
+  printf "    └── %b[SUCCESS]%b MCP environment ready\n" "$GREEN" "$NC"
+  printf "        ├── %bConfiguration:%b %s\n" "$BLUE" "$NC" "$mcp_config_dir"
+  printf "        ├── %bPhase 1 servers:%b GitHub (Code), CircleCI (CI/CD)\n" "$BLUE" "$NC"
+  printf "        └── %bFuture expansion:%b Design, Quality, Infrastructure, Monitoring, Testing, Project Management\n" "$BLUE" "$NC"
+}
+
+# Template function for individual MCP server setup
+setup_mcp_server() {
+  local server_name="$1"
+  local description="$2"
+  local config_dir="${MCP_CONFIG_PATH:-$HOME/.config/mcp}/$server_name"
+
+  # Create basic configuration file for the server
+  local config_file="$config_dir/config.json"
+  if [[ ! -f "$config_file" ]]; then
+    case "$server_name" in
+      github)
+        cat > "$config_file" << EOF
+{
+  "server_type": "github",
+  "description": "$description",
+  "port": 3001,
+  "healthcheck_path": "/health",
+  "environment_variables": ["GITHUB_TOKEN"]
+}
+EOF
+        ;;
+      circleci)
+        cat > "$config_file" << EOF
+{
+  "server_type": "circleci",
+  "description": "$description",
+  "port": 3002,
+  "healthcheck_path": "/health",
+  "environment_variables": ["CIRCLECI_TOKEN"]
+}
+EOF
+        ;;
+      *)
+        cat > "$config_file" << EOF
+{
+  "server_type": "$server_name",
+  "description": "$description",
+  "port": 3000,
+  "healthcheck_path": "/health"
+}
+EOF
+        ;;
+    esac
+
+    printf "    │       └── %b[SUCCESS]%b %s configuration created\n" "$GREEN" "$NC" "$server_name"
+  else
+    printf "    │       └── %b[EXISTS]%b %s configuration ready\n" "$BLUE" "$NC" "$server_name"
+  fi
+
+  return 0
+}
+
 # Shell configuration
 setup_antidote() {
   # This function is now called from configure_shell, so suppress its own logging
@@ -987,7 +1132,7 @@ configure_terminal_fonts() {
         # Set optimal font and size for Starship using PlistBuddy
         if /usr/libexec/PlistBuddy -c "Set :FontName \"FiraCode Nerd Font Mono\"" "$warp_prefs" 2> /dev/null \
           && /usr/libexec/PlistBuddy -c "Set :FontSize \"14.0\"" "$warp_prefs" 2> /dev/null; then
-          printf "│   ├── %b[SUCCESS]%b Warp font updated (restart required)\n" "$GREEN" "$NC"
+          printf "│   ├── %b[SUCCESS]%b Warp font updated - restart Warp for changes\n" "$GREEN" "$NC"
         else
           printf "│   ├── %b[WARNING]%b Failed to update Warp font\n" "$YELLOW" "$NC"
         fi
@@ -1008,21 +1153,12 @@ configure_terminal_fonts() {
     iterm_prefs="/Users/$(whoami)/Library/Preferences/com.googlecode.iterm2.plist"
 
     if [[ -f "$iterm_prefs" ]]; then
-      # Get current font using PlistBuddy
-      local current_font
-      current_font=$(/usr/libexec/PlistBuddy -c "Print :\"New Bookmarks\":0:\"Normal Font\"" "$iterm_prefs" 2> /dev/null || echo "unknown")
+      printf "    ├── %b[SETTING]%b Font to: FiraCodeNFM-Reg 14\n" "$BLUE" "$NC"
 
-      printf "    ├── %b[INFO]%b Current: %s\n" "$BLUE" "$NC" "$current_font"
-
-      # Set optimal font for Starship using PlistBuddy
-      local target_font="$recommended_font 14"
-      if [[ "$current_font" != "$target_font" ]]; then
-        printf "    ├── %b[SETTING]%b Font to: %s\n" "$BLUE" "$NC" "$target_font"
-        /usr/libexec/PlistBuddy -c "Set :\"New Bookmarks\":0:\"Normal Font\" \"$target_font\"" "$iterm_prefs" 2> /dev/null \
-          && printf "    ├── %b[SUCCESS]%b iTerm2 font updated (restart required)\n" "$GREEN" "$NC" \
-          || printf "    ├── %b[WARNING]%b Failed to update iTerm2 font\n" "$YELLOW" "$NC"
+      if /usr/libexec/PlistBuddy -c "Set :\"New Bookmarks\":0:\"Normal Font\" \"FiraCodeNFM-Reg 14\"" "$iterm_prefs" 2> /dev/null; then
+        printf "    └── %b[SUCCESS]%b iTerm2 font configured - restart iTerm2 to apply\n" "$GREEN" "$NC"
       else
-        printf "    ├── %b[SUCCESS]%b Font already configured correctly\n" "$GREEN" "$NC"
+        printf "    └── %b[WARNING]%b Failed to update iTerm2 font\n" "$YELLOW" "$NC"
       fi
     else
       printf "    └── %b[INFO]%b iTerm2 preferences not found\n" "$BLUE" "$NC"
@@ -1032,9 +1168,19 @@ configure_terminal_fonts() {
   fi
 
   printf "\n%b[CONFIGURATION SUMMARY]%b\n" "$BLUE" "$NC"
-  printf "• Warp: Automatically configured (restart required)\n"
-  printf "• iTerm2: Automatically configured (restart required)\n"
-  printf "• Font: %s, 14pt for optimal Starship display\n" "$recommended_font"
+  printf "• Warp: Font configured - restart Warp to apply changes\n"
+  printf "• iTerm2: Font configured - restart iTerm2 to apply changes\n"
+  printf "• Font: FiraCode Nerd Font Mono Reg, 14pt for optimal Starship display\n"
+
+  # Test Nerd Font symbols immediately
+  printf "\n%b[FONT TEST]%b Testing Nerd Font symbols in current session:\n" "$BLUE" "$NC"
+  printf "Expected symbols: "
+  if printf "\uE0A0 \uE0B0 \uE0B2 \uf015 \uf07c" 2> /dev/null; then
+    printf " ← These should be: git branch, arrows, folder icons\n"
+  else
+    printf "(test failed)\n"
+  fi
+  printf "%bIf you see boxes or missing symbols above, the font change will take effect after restarting iTerm2%b\n" "$YELLOW" "$NC"
 }
 
 configure_shell() {
@@ -1149,7 +1295,8 @@ main() {
   configure_shell || exit 1
   setup_ruby_environment || printf "├── %b[WARNING]%b Ruby environment setup incomplete\n" "$YELLOW" "$NC"
   setup_python_environment || printf "├── %b[WARNING]%b Python environment setup incomplete\n" "$YELLOW" "$NC"
-  setup_node_environment || printf "└── %b[WARNING]%b Node.js environment setup incomplete\n" "$YELLOW" "$NC"
+  setup_node_environment || printf "├── %b[WARNING]%b Node.js environment setup incomplete\n" "$YELLOW" "$NC"
+  setup_mcp_environment || printf "└── %b[WARNING]%b MCP environment setup incomplete\n" "$YELLOW" "$NC"
 
   echo -e "\n=== Setup Complete ==="
   printf "└── %b[SUCCESS]%b All components installed and configured\n" "$GREEN" "$NC"

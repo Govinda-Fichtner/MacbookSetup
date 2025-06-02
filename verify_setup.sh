@@ -813,6 +813,152 @@ verify_terminal_fonts() {
   fi
 }
 
+# Function to verify MCP servers
+verify_mcp_servers() {
+  echo -e "\n=== MCP Servers ==="
+  local mcp_issues=false
+
+  # Skip in CI environments
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "└── %b[SKIPPED]%b MCP server verification (CI environment)\n" "$YELLOW" "$RESET"
+    return 0
+  fi
+
+  # Skip if MCP is disabled
+  if [[ "${SKIP_MCP:-false}" == "true" ]]; then
+    printf "└── %b[SKIPPED]%b MCP servers (SKIP_MCP=true)\n" "$YELLOW" "$RESET"
+    return 0
+  fi
+
+  # Verify Docker availability first
+  printf "├── %b[CHECKING]%b Docker availability\n" "$BLUE" "$RESET"
+  if ! check_command "docker"; then
+    printf "│   └── %b[ERROR]%b Docker not available - MCP servers require Docker\n" "$RED" "$RESET"
+    return 1
+  fi
+
+  # Check if Docker daemon is running
+  if ! docker info &> /dev/null; then
+    printf "│   └── %b[ERROR]%b Docker daemon not running\n" "$RED" "$RESET"
+    return 1
+  fi
+  printf "│   └── %b[SUCCESS]%b Docker daemon running\n" "$GREEN" "$RESET"
+
+  # Verify docker-compose availability
+  printf "├── %b[CHECKING]%b Docker Compose availability\n" "$BLUE" "$RESET"
+  if ! check_command "docker-compose"; then
+    printf "│   └── %b[ERROR]%b docker-compose not available\n" "$RED" "$RESET"
+    return 1
+  fi
+  printf "│   └── %b[SUCCESS]%b docker-compose available\n" "$GREEN" "$RESET"
+
+  # Verify MCP configuration directory
+  printf "├── %b[CHECKING]%b MCP configuration\n" "$BLUE" "$RESET"
+  local mcp_config_path="${MCP_CONFIG_PATH:-$HOME/.config/mcp}"
+  if [[ ! -d "$mcp_config_path" ]]; then
+    printf "│   └── %b[ERROR]%b MCP config directory not found: %s\n" "$RED" "$RESET" "$mcp_config_path"
+    return 1
+  fi
+  printf "│   └── %b[SUCCESS]%b MCP config directory exists\n" "$GREEN" "$RESET"
+
+  # Verify docker-compose.yml exists
+  printf "├── %b[CHECKING]%b Docker Compose configuration\n" "$BLUE" "$RESET"
+  if [[ ! -f "$mcp_config_path/docker-compose.yml" ]]; then
+    printf "│   └── %b[ERROR]%b docker-compose.yml not found\n" "$RED" "$RESET"
+    return 1
+  fi
+  printf "│   └── %b[SUCCESS]%b docker-compose.yml exists\n" "$GREEN" "$RESET"
+
+  # Define MCP servers to check
+  local -A mcp_servers=(
+    ["github-mcp"]="Code Integration"
+    ["circleci-mcp"]="CI/CD Integration"
+  )
+
+  # Check MCP server configurations and containers
+  printf "├── %b[CHECKING]%b MCP server configurations\n" "$BLUE" "$RESET"
+  local config_issues=false
+
+  for server in "${!mcp_servers[@]}"; do
+    local category="${mcp_servers[$server]}"
+    local config_file="$mcp_config_path/$server.json"
+
+    printf "│   ├── %b[CHECKING]%b %s (%s)\n" "$BLUE" "$RESET" "$server" "$category"
+
+    # Check if config file exists
+    if [[ ! -f "$config_file" ]]; then
+      printf "│   │   └── %b[ERROR]%b Configuration file missing: %s\n" "$RED" "$RESET" "$config_file"
+      config_issues=true
+      continue
+    fi
+
+    # Validate JSON configuration
+    if ! jq . "$config_file" > /dev/null 2>&1; then
+      printf "│   │   └── %b[ERROR]%b Invalid JSON configuration\n" "$RED" "$RESET"
+      config_issues=true
+      continue
+    fi
+
+    printf "│   │   └── %b[SUCCESS]%b Configuration valid\n" "$GREEN" "$RESET"
+  done
+
+  if [[ "$config_issues" == "true" ]]; then
+    mcp_issues=true
+  else
+    printf "│   └── %b[SUCCESS]%b All server configurations valid\n" "$GREEN" "$RESET"
+  fi
+
+  # Check MCP server container status
+  printf "└── %b[CHECKING]%b MCP server containers\n" "$BLUE" "$RESET"
+  local container_issues=false
+
+  for server in "${!mcp_servers[@]}"; do
+    local category="${mcp_servers[$server]}"
+    printf "    ├── %b[CHECKING]%b %s container\n" "$BLUE" "$RESET" "$server"
+
+    # Check if container exists and get its status
+    local container_status
+    container_status=$(docker-compose -f "$mcp_config_path/docker-compose.yml" ps -q "$server" 2> /dev/null)
+
+    if [[ -z "$container_status" ]]; then
+      printf "    │   └── %b[WARNING]%b Container not created (run setup.sh to create)\n" "$YELLOW" "$RESET"
+      container_issues=true
+    else
+      # Check if container is running
+      local running_status
+      running_status=$(docker inspect --format='{{.State.Status}}' "$container_status" 2> /dev/null)
+
+      case "$running_status" in
+        "running")
+          printf "    │   └── %b[SUCCESS]%b Container running\n" "$GREEN" "$RESET"
+          ;;
+        "exited")
+          printf "    │   └── %b[WARNING]%b Container stopped (can be started with docker-compose up)\n" "$YELLOW" "$RESET"
+          container_issues=true
+          ;;
+        *)
+          printf "    │   └── %b[WARNING]%b Container status: %s\n" "$YELLOW" "$RESET" "${running_status:-unknown}"
+          container_issues=true
+          ;;
+      esac
+    fi
+  done
+
+  if [[ "$container_issues" == "true" ]]; then
+    printf "    └── %b[INFO]%b Use 'docker-compose -f %s/docker-compose.yml up -d' to start services\n" "$BLUE" "$RESET" "$mcp_config_path"
+  else
+    printf "    └── %b[SUCCESS]%b All containers operational\n" "$GREEN" "$RESET"
+  fi
+
+  if [[ "$mcp_issues" == "true" ]]; then
+    log_warning "MCP server configuration has issues (see warnings above)"
+    return 1
+  else
+    log_success "MCP servers verified successfully"
+    return 0
+  fi
+}
+
 # Main verification function
 main() {
   local verification_failed=false
@@ -875,6 +1021,22 @@ main() {
     log_warning "Terminal font configuration needs attention (see recommendations above)"
     # Don't fail the build for font configuration issues
     ((passed_checks++))
+  else
+    ((passed_checks++))
+  fi
+  ((total_checks++))
+
+  # Verify MCP servers (non-critical check in CI, critical otherwise)
+  if ! verify_mcp_servers; then
+    if [[ "${CI:-false}" == "true" ]] || [[ "${SKIP_MCP:-false}" == "true" ]]; then
+      log_warning "MCP servers verification had issues (see warnings above)"
+      # Don't fail the build for MCP issues in CI or when skipped
+      ((passed_checks++))
+    else
+      log_error "MCP servers verification failed"
+      verification_failed=true
+      ((failed_checks++))
+    fi
   else
     ((passed_checks++))
   fi

@@ -25,6 +25,15 @@ brew "buildkit"         # Next-generation container image builder
 brew "dive"             # Tool for exploring Docker images
 brew "ctop"             # Top-like interface for container metrics
 brew "htop"             # Enhanced interactive process viewer
+brew "docker"           # Docker container runtime
+brew "docker-compose"   # Docker Compose orchestration
+
+# Development Tools
+brew "zsh"
+brew "antidote"      # Plugin manager for zsh
+brew "coreutils"     # GNU core utilities (provides gtimeout for macOS)
+brew "jq"            # JSON processing for MCP configurations
+brew "yq"            # YAML processing for configurations
 
 # Casks (GUI applications)
 cask "cursor"
@@ -42,11 +51,6 @@ cask "figma-agent"      # Font installers for Figma desktop app
 # These fonts are now available through the main Homebrew cask repository (no special tap needed)
 cask "font-fira-code-nerd-font"         # Popular coding font with Nerd Font icons, works well with Starship
 cask "font-jetbrains-mono-nerd-font"    # Clean, crisp font with Nerd Font icons, excellent for terminal use
-
-# Development Tools
-brew "zsh"
-brew "antidote"      # Plugin manager for zsh
-brew "coreutils"     # GNU core utilities (provides gtimeout for macOS)
 
 # CI/CD Tools
 brew "cirruslabs/cli/cirrus"  # Cirrus CI CLI for local validation and monitoring

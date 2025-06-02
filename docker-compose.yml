@@ -1,0 +1,221 @@
+# MCP Server Docker Compose Configuration
+# Template-driven architecture for easy MCP server addition by category
+version: '3.8'
+
+services:
+  # Phase 1: Core MCP servers
+
+  # Code category
+  github-mcp:
+    image: mcp-github-server:latest
+    container_name: github-mcp
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+    ports:
+      - "3001:3000"
+    volumes:
+      - "${MCP_CONFIG_PATH}/github:/app/config"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-network
+
+  # CI/CD category
+  circleci-mcp:
+    image: mcp-circleci-server:latest
+    container_name: circleci-mcp
+    environment:
+      - CIRCLECI_TOKEN=${CIRCLECI_TOKEN}
+      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+    ports:
+      - "3002:3000"
+    volumes:
+      - "${MCP_CONFIG_PATH}/circleci:/app/config"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mcp-network
+
+# Future expansion template by category (commented for now):
+
+# Design:
+#  figma-mcp:
+#    image: mcp-figma-server:latest
+#    container_name: figma-mcp
+#    environment:
+#      - FIGMA_TOKEN=${FIGMA_TOKEN}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3003:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/figma:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+
+# Quality:
+#  sonarqube-mcp:
+#    image: mcp-sonarqube-server:latest
+#    container_name: sonarqube-mcp
+#    environment:
+#      - SONARQUBE_TOKEN=${SONARQUBE_TOKEN}
+#      - SONARQUBE_URL=${SONARQUBE_URL}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3004:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/sonarqube:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+
+# Infrastructure:
+#  terraform-mcp:
+#    image: mcp-terraform-server:latest
+#    container_name: terraform-mcp
+#    environment:
+#      - TERRAFORM_CLOUD_TOKEN=${TERRAFORM_CLOUD_TOKEN}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3005:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/terraform:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+#
+#  aws-mcp:
+#    image: mcp-aws-server:latest
+#    container_name: aws-mcp
+#    environment:
+#      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+#      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3006:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/aws:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+
+# Additional infrastructure services (DigitalOcean, Heroku, Serverless, Netlify)
+# would follow the same pattern...
+
+# Monitoring:
+#  sentry-mcp:
+#    image: mcp-sentry-server:latest
+#    container_name: sentry-mcp
+#    environment:
+#      - SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+#      - SENTRY_ORG=${SENTRY_ORG}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3010:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/sentry:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+
+# Testing:
+#  playwright-mcp:
+#    image: mcp-playwright-server:latest
+#    container_name: playwright-mcp
+#    environment:
+#      - PLAYWRIGHT_SERVICE_URL=${PLAYWRIGHT_SERVICE_URL}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3015:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/playwright:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+
+# Project Management:
+#  linear-mcp:
+#    image: mcp-linear-server:latest
+#    container_name: linear-mcp
+#    environment:
+#      - LINEAR_API_KEY=${LINEAR_API_KEY}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3020:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/linear:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+#
+#  slack-mcp:
+#    image: mcp-slack-server:latest
+#    container_name: slack-mcp
+#    environment:
+#      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+#      - SLACK_APP_TOKEN=${SLACK_APP_TOKEN}
+#      - MCP_CONFIG_PATH=${MCP_CONFIG_PATH}
+#    ports:
+#      - "3021:3000"
+#    volumes:
+#      - "${MCP_CONFIG_PATH}/slack:/app/config"
+#    restart: unless-stopped
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 3
+#    networks:
+#      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  mcp-configs:
+    driver: local
