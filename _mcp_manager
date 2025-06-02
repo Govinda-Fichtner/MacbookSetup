@@ -1,0 +1,81 @@
+#compdef mcp_manager.sh
+
+# Zsh completion for mcp_manager.sh
+# Usage: Place this file in your fpath (e.g., /usr/local/share/zsh/site-functions/)
+# or source it directly in your .zshrc
+
+_mcp_manager() {
+  local context state line
+  typeset -A opt_args
+
+  _arguments -C \
+    '1: :_mcp_commands' \
+    '2: :_mcp_server_ids' \
+    '3: :_mcp_config_keys' \
+    '*: :_files'
+
+  case $state in
+    (commands)
+      _mcp_commands
+      ;;
+    (server_ids)
+      _mcp_server_ids
+      ;;
+    (config_keys)
+      _mcp_config_keys
+      ;;
+  esac
+}
+
+_mcp_commands() {
+  local commands
+  commands=(
+    'setup:Set up MCP server(s) (registry pull or local build)'
+    'test:Test MCP server(s) health via stdio/JSON-RPC'
+    'list:List configured servers from registry'
+    'parse:Parse configuration value from registry'
+    'help:Show help message'
+  )
+  _describe 'mcp_manager commands' commands
+}
+
+_mcp_server_ids() {
+  local server_ids
+  local registry_file="mcp_server_registry.yml"
+
+  # Only provide server completion if we're after setup/test commands
+  if [[ ${words[2]} == "setup" || ${words[2]} == "test" || ${words[2]} == "parse" ]]; then
+    if [[ -f "$registry_file" ]]; then
+      # Extract server IDs from registry file
+      server_ids=($(awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' "$registry_file" 2>/dev/null))
+      if [[ ${#server_ids[@]} -gt 0 ]]; then
+        _describe 'MCP servers' server_ids
+      else
+        _message "No servers found in registry"
+      fi
+    else
+      _message "Registry file not found: $registry_file"
+    fi
+  fi
+}
+
+_mcp_config_keys() {
+  # Only provide config key completion for parse command
+  if [[ ${words[2]} == "parse" && -n ${words[3]} ]]; then
+    local config_keys
+    config_keys=(
+      'name:Server display name'
+      'description:Server description'
+      'source.type:Source type (registry or build)'
+      'source.image:Docker image name'
+      'source.repository:Git repository URL'
+      'source.build_context:Docker build context'
+      'health_test.parse_mode:Response parsing mode'
+      'health_test.timeout:Test timeout seconds'
+    )
+    _describe 'configuration keys' config_keys
+  fi
+}
+
+# Main completion function
+_mcp_manager "$@"

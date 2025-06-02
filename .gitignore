@@ -41,6 +41,7 @@ tmp/
 # Local environment files
 .env
 .env.local
+.envrc
 .envrc.local
 
 # User-specific files

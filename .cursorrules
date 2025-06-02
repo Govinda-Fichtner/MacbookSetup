@@ -90,6 +90,12 @@ feat: add tree structure to setup.sh output for consistency
 - ❌ Assuming syntax check means execution will work
 - ❌ Skipping pre-commit hooks "just this once"
 
+### **Security Anti-Patterns**
+- ❌ **NEVER commit `.envrc` files** - They contain sensitive environment variables
+- ❌ Committing any file with real API tokens, passwords, or secrets
+- ❌ Using real credentials in example files (use placeholders like "your-token-here")
+- ❌ Ignoring GitHub push protection warnings about detected secrets
+
 ## 🎨 Project-Specific Patterns
 
 ### **Shell Script Consistency**
