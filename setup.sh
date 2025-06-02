@@ -729,8 +729,10 @@ generate_completion_files() {
   echo "├── Development Tools"
   local dev_tools=(
     "rbenv:rbenv completions zsh"
-    "direnv:direnv hook zsh"
   )
+
+  # Note: direnv doesn't provide official completions
+  # Available via third-party: zsh-users/zsh-completions
 
   local i=0
   for tool_config in "${dev_tools[@]}"; do
