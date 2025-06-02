@@ -283,7 +283,15 @@ setup_container_environment() {
       # Start Docker daemon via Colima (optimized for CI)
       if check_command "colima"; then
         printf "│   ├── %b[STARTING]%b Colima (lightweight Docker runtime)\n" "$BLUE" "$NC"
-        if colima start --cpu 2 --memory 4 --vm-type=vz --arch aarch64 > /dev/null 2>&1; then
+
+        local colima_arch
+        if [[ "$(uname -m)" == "arm64" ]]; then
+          colima_arch="aarch64"
+        else
+          colima_arch="x86_64"
+        fi
+
+        if colima start --cpu 2 --memory 4 --vm-type=vz --arch "$colima_arch" > /dev/null 2>&1; then
           printf "│   ├── %b[SUCCESS]%b Colima started successfully\n" "$GREEN" "$NC"
         else
           printf "│   ├── %b[WARNING]%b Failed to start Colima\n" "$YELLOW" "$NC"
@@ -366,7 +374,18 @@ install_packages() {
   # Handle Docker installation strategy based on environment
   if [[ "${CI:-false}" == "true" ]]; then
     printf "├── %b[CI ENVIRONMENT]%b Installing Docker CLI + Colima for lightweight MCP testing\n" "$BLUE" "$NC"
-    # In CI, keep Docker packages in Brewfile: docker, docker-compose, colima
+    # In CI, explicitly install Docker CLI, Docker Compose, and Colima
+    # These are needed for the lightweight MCP testing environment.
+    # The main Brewfile might not contain them if OrbStack is used locally.
+    if ! brew install docker docker-compose colima; then
+      printf "│   └── %b[ERROR]%b Failed to install Docker/Colima via Homebrew. MCP tests may fail.\n" "$RED" "$NC"
+      # Optionally, return 1 here if this is a critical failure for CI
+    else
+      printf "│   └── %b[SUCCESS]%b Docker CLI, Docker Compose, and Colima installed/updated for CI.\n" "$GREEN" "$NC"
+    fi
+    # The comment below is aspirational if Brewfile was the sole source,
+    # but direct install is more robust for CI when Brewfile is variable.
+    # # In CI, keep Docker packages in Brewfile: docker, docker-compose, colima
   else
     # Remove Docker packages from Brewfile since OrbStack provides full Docker functionality
     if grep -q '^brew "docker"' "Brewfile"; then
@@ -587,6 +606,7 @@ setup_node_environment() {
     return 1
   fi
 
+  # shellcheck disable=SC1090
   source "$(brew --prefix)/opt/nvm/nvm.sh"
 
   # Install latest LTS Node.js version
@@ -599,7 +619,7 @@ setup_node_environment() {
   fi
 
   # Check if this version is already installed via nvm (not system)
-  if ! nvm list | grep -E "^[[:space:]]*$latest_node" > /dev/null 2>&1; then
+  if ! nvm list | grep -E "^[[:space:]]*${latest_node// /\\\\ }" > /dev/null 2>&1; then
     # Start Node installation in background
     local node_log="/tmp/node_install.log"
     (
@@ -639,151 +659,6 @@ setup_node_environment() {
   fi
 
   printf "    └── %b[SUCCESS]%b Node.js environment ready\n" "$GREEN" "$NC"
-}
-
-# MCP Environment Setup
-setup_mcp_environment() {
-  printf "└── %bMCP Environment%b\n" "$BLUE" "$NC"
-
-  # Check if user wants MCP (optional like SKIP_ORBSTACK)
-  if [[ "${SKIP_MCP:-false}" == "true" ]]; then
-    printf "    └── %bMCP setup skipped (SKIP_MCP=true)%b\n" "$YELLOW" "$NC"
-    return 0
-  fi
-
-  # 1. Validate Docker availability (with proper CI detection)
-  printf "    ├── %b[CHECKING]%b Docker availability\n" "$BLUE" "$NC"
-  if ! check_command "docker"; then
-    printf "    │   └── %b[ERROR]%b Docker not found. Please install Docker first.\n" "$RED" "$NC"
-    return 1
-  fi
-
-  # Check if Docker daemon is running
-  if ! docker info > /dev/null 2>&1; then
-    if [[ "${CI:-false}" == "true" ]]; then
-      printf "    │   └── %b[WARNING]%b Docker daemon not available in CI\n" "$YELLOW" "$NC"
-      return 0
-    else
-      printf "    │   └── %b[ERROR]%b Docker daemon not running. Please start Docker.\n" "$RED" "$NC"
-      return 1
-    fi
-  fi
-  printf "    │   └── %b[SUCCESS]%b Docker ready\n" "$GREEN" "$NC"
-
-  # 2. Setup direnv for token management
-  printf "    ├── %b[SETTING UP]%b Environment configuration\n" "$BLUE" "$NC"
-  if ! check_command "direnv"; then
-    printf "    │   └── %b[ERROR]%b direnv not found. Please install direnv first.\n" "$RED" "$NC"
-    return 1
-  fi
-
-  # Ensure MCP config directory exists
-  local mcp_config_dir="${MCP_CONFIG_PATH:-$HOME/.config/mcp}"
-  ensure_dir "$mcp_config_dir" || {
-    printf "    │   └── %b[ERROR]%b Failed to create MCP config directory\n" "$RED" "$NC"
-    return 1
-  }
-
-  # Create subdirectories for each MCP server
-  for server_dir in "github" "circleci"; do
-    ensure_dir "$mcp_config_dir/$server_dir" || {
-      printf "    │   └── %b[ERROR]%b Failed to create %s config directory\n" "$RED" "$NC" "$server_dir"
-      return 1
-    }
-  done
-  printf "    │   └── %b[SUCCESS]%b Configuration directories ready\n" "$GREEN" "$NC"
-
-  # 3. Background installation with progress spinner (reuse show_progress())
-  printf "    ├── %b[SETTING UP]%b MCP servers\n" "$BLUE" "$NC"
-
-  # Phase 1: Core MCP servers
-  # 4. Configure GitHub MCP server (Code)
-  printf "    │   ├── %b[CONFIGURING]%b GitHub MCP server (Code)\n" "$BLUE" "$NC"
-  setup_mcp_server "github" "GitHub repository management" || {
-    printf "    │   │   └── %b[WARNING]%b GitHub MCP setup incomplete\n" "$YELLOW" "$NC"
-  }
-
-  # 5. Configure CircleCI MCP server (CI/CD)
-  printf "    │   └── %b[CONFIGURING]%b CircleCI MCP server (CI/CD)\n" "$BLUE" "$NC"
-  setup_mcp_server "circleci" "CircleCI pipeline monitoring" || {
-    printf "    │       └── %b[WARNING]%b CircleCI MCP setup incomplete\n" "$YELLOW" "$NC"
-  }
-
-  # 6. Validate container health (in CI, just check docker-compose validity)
-  printf "    ├── %b[VALIDATING]%b Docker configuration\n" "$BLUE" "$NC"
-  if [[ "${CI:-false}" == "true" ]]; then
-    # In CI, just validate the docker-compose file syntax
-    if docker-compose config > /dev/null 2>&1; then
-      printf "    │   └── %b[SUCCESS]%b Docker Compose configuration valid\n" "$GREEN" "$NC"
-    else
-      printf "    │   └── %b[WARNING]%b Docker Compose configuration issues\n" "$YELLOW" "$NC"
-    fi
-  else
-    # In local environment, try to start services
-    if docker-compose up -d > /dev/null 2>&1; then
-      printf "    │   └── %b[SUCCESS]%b MCP containers started\n" "$GREEN" "$NC"
-    else
-      printf "    │   └── %b[WARNING]%b MCP containers not started (check Docker images)\n" "$YELLOW" "$NC"
-    fi
-  fi
-
-  # 7. Success confirmation with tree output
-  printf "    └── %b[SUCCESS]%b MCP environment ready\n" "$GREEN" "$NC"
-  printf "        ├── %bConfiguration:%b %s\n" "$BLUE" "$NC" "$mcp_config_dir"
-  printf "        ├── %bPhase 1 servers:%b GitHub (Code), CircleCI (CI/CD)\n" "$BLUE" "$NC"
-  printf "        └── %bFuture expansion:%b Design, Quality, Infrastructure, Monitoring, Testing, Project Management\n" "$BLUE" "$NC"
-}
-
-# Template function for individual MCP server setup
-setup_mcp_server() {
-  local server_name="$1"
-  local description="$2"
-  local config_dir="${MCP_CONFIG_PATH:-$HOME/.config/mcp}/$server_name"
-
-  # Create basic configuration file for the server
-  local config_file="$config_dir/config.json"
-  if [[ ! -f "$config_file" ]]; then
-    case "$server_name" in
-      github)
-        cat > "$config_file" << EOF
-{
-  "server_type": "github",
-  "description": "$description",
-  "port": 3001,
-  "healthcheck_path": "/health",
-  "environment_variables": ["GITHUB_TOKEN"]
-}
-EOF
-        ;;
-      circleci)
-        cat > "$config_file" << EOF
-{
-  "server_type": "circleci",
-  "description": "$description",
-  "port": 3002,
-  "healthcheck_path": "/health",
-  "environment_variables": ["CIRCLECI_TOKEN"]
-}
-EOF
-        ;;
-      *)
-        cat > "$config_file" << EOF
-{
-  "server_type": "$server_name",
-  "description": "$description",
-  "port": 3000,
-  "healthcheck_path": "/health"
-}
-EOF
-        ;;
-    esac
-
-    printf "    │       └── %b[SUCCESS]%b %s configuration created\n" "$GREEN" "$NC" "$server_name"
-  else
-    printf "    │       └── %b[EXISTS]%b %s configuration ready\n" "$BLUE" "$NC" "$server_name"
-  fi
-
-  return 0
 }
 
 # Shell configuration
@@ -1329,7 +1204,23 @@ main() {
   setup_ruby_environment || printf "├── %b[WARNING]%b Ruby environment setup incomplete\n" "$YELLOW" "$NC"
   setup_python_environment || printf "├── %b[WARNING]%b Python environment setup incomplete\n" "$YELLOW" "$NC"
   setup_node_environment || printf "├── %b[WARNING]%b Node.js environment setup incomplete\n" "$YELLOW" "$NC"
-  setup_mcp_environment || printf "└── %b[WARNING]%b MCP environment setup incomplete\n" "$YELLOW" "$NC"
+
+  # Call the MCP manager script for MCP environment setup
+  echo -e "\n=== MCP Environment Setup ==="
+  if [[ -f "./mcp_manager.sh" ]]; then
+    if [[ "${SKIP_MCP:-false}" == "true" ]]; then
+      printf "└── %b[SKIPPED]%b MCP setup (SKIP_MCP=true)\n" "$YELLOW" "$NC"
+    else
+      printf "├── %b[DELEGATING]%b MCP setup to mcp_manager.sh\n" "$BLUE" "$NC"
+      if ./mcp_manager.sh setup; then
+        printf "└── %b[SUCCESS]%b MCP environment setup complete via mcp_manager.sh\n" "$GREEN" "$NC"
+      else
+        printf "└── %b[ERROR]%b MCP environment setup failed via mcp_manager.sh\n" "$RED" "$NC"
+      fi
+    fi
+  else
+    printf "└── %b[ERROR]%b mcp_manager.sh not found. Skipping MCP setup.\n" "$RED" "$NC"
+  fi
 
   echo -e "\n=== Setup Complete ==="
   printf "└── %b[SUCCESS]%b All components installed and configured\n" "$GREEN" "$NC"

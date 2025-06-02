@@ -15,7 +15,7 @@ servers:
       - "GITHUB_PERSONAL_ACCESS_TOKEN"
       - "GITHUB_TOKEN"
     health_test:
-      parse_mode: "direct"
+      parse_mode: "filter_json"
       timeout: 30
     capabilities:
       - "repository_management"
