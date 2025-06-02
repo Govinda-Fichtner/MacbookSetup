@@ -1,0 +1,79 @@
+# MCP Server Registry Configuration
+# Centralized configuration for all MCP (Model Context Protocol) servers
+# Supports both registry images and local repository builds
+
+servers:
+  github:
+    name: "GitHub MCP Server"
+    description: "GitHub repository management and code analysis"
+    category: "code"
+    source:
+      type: "registry"
+      image: "mcp/github-mcp-server:latest"
+      registry: "docker.io"
+    environment_variables:
+      - "GITHUB_PERSONAL_ACCESS_TOKEN"
+      - "GITHUB_TOKEN"
+    health_test:
+      parse_mode: "direct"
+      timeout: 30
+    capabilities:
+      - "repository_management"
+      - "issue_tracking"
+      - "pull_requests"
+      - "code_search"
+
+  circleci:
+    name: "CircleCI MCP Server"
+    description: "CircleCI pipeline monitoring and management"
+    category: "cicd"
+    source:
+      type: "build"
+      repository: "https://github.com/CircleCI-Public/mcp-server-circleci.git"
+      image: "local/mcp-server-circleci:latest"
+      build_context: "."
+    environment_variables:
+      - "CIRCLECI_TOKEN"
+      - "CIRCLECI_BASE_URL"
+    health_test:
+      parse_mode: "filter_json"
+      timeout: 30
+    capabilities:
+      - "pipeline_monitoring"
+      - "job_management"
+      - "artifact_access"
+      - "environment_variables"
+
+  # Future servers (commented for future expansion):
+  # figma:
+  #   name: "Figma MCP Server"
+  #   description: "Design collaboration and asset management"
+  #   category: "design"
+  #   source:
+  #     type: "registry"
+  #     image: "mcp/figma-mcp-server:latest"
+  #   environment_variables:
+  #     - "FIGMA_TOKEN"
+  #   health_test:
+  #     parse_mode: "direct"
+  #     timeout: 30
+
+  # linear:
+  #   name: "Linear MCP Server"
+  #   description: "Project management and issue tracking"
+  #   category: "project_management"
+  #   source:
+  #     type: "registry"
+  #     image: "mcp/linear-mcp-server:latest"
+  #   environment_variables:
+  #     - "LINEAR_API_KEY"
+  #   health_test:
+  #     parse_mode: "direct"
+  #     timeout: 30
+
+# Global MCP configuration
+global:
+  build_directory: "./mcp_builds"
+  config_path: "${HOME}/.config/mcp"
+  network_name: "mcp-network"
+  default_timeout: 30
