@@ -170,6 +170,43 @@ The MCP integration follows security best practices:
   - Maintains environment-agnostic configuration files
   - Supports both authenticated and basic protocol testing
 
+#### MCP Inspector Integration
+
+The setup includes a **Docker-based MCP Inspector** for visual testing and debugging of MCP servers:
+
+- **Official MCP Inspector**: `@modelcontextprotocol/inspector` containerized with enhanced resilience
+- **Web Interface**: Accessible at `http://localhost:6274` when running
+- **Dual Architecture**: UI Server (port 6274) + Proxy Server (port 6277)
+- **Auto-Restart**: Built-in health monitoring and automatic crash recovery
+- **Docker Integration**: Full access to host Docker and file system for testing
+
+##### Inspector Commands
+
+```bash
+# Launch visual web interface
+./mcp_manager.sh inspect --ui
+
+# Monitor health with auto-healing
+./mcp_manager.sh inspect --health
+
+# Stop inspector
+./mcp_manager.sh inspect --stop
+
+# Validate client configurations
+./mcp_manager.sh inspect --validate-config
+
+# Debug specific server with logs
+./mcp_manager.sh inspect github --debug
+```
+
+##### Inspector Features
+
+- **✅ Visual Server Testing**: Interactive web UI for testing MCP server tools and capabilities
+- **✅ Real-time Debugging**: View server logs, requests, and responses in real-time
+- **✅ Configuration Export**: Generate client configurations for Cursor and Claude Desktop
+- **✅ Health Monitoring**: Automatic detection and recovery from proxy server crashes
+- **✅ Environment Validation**: Test environment variables and Docker container setup
+
 #### Getting Started with MCP Servers
 
 1. **Generate Initial Configuration**:
@@ -195,7 +232,16 @@ The MCP integration follows security best practices:
    # Will automatically run when real tokens are detected
    ```
 
-4. **Use with AI Tools**:
+4. **Launch MCP Inspector** (Recommended):
+   ```bash
+   # Start visual debugging interface
+   ./mcp_manager.sh inspect --ui
+
+   # Visit http://localhost:6274 in your browser
+   # Use Docker command: docker run --rm -i --env-file .env mcp/github-mcp-server:latest
+   ```
+
+5. **Use with AI Tools**:
    - **Cursor**: Restart Cursor IDE to pick up `~/.cursor/mcp.json`
    - **Claude Desktop**: Restart Claude Desktop to pick up configuration changes
 
@@ -411,7 +457,7 @@ The project implements consistent output formatting across all verification scri
 2. **Environment-Aware Testing**:
    - CI environments automatically skip GUI-dependent tests
    - Container runtime checks adapt to available infrastructure
-   - Completion tests are relaxed for CI environments
+   - Completion tests validate all available tools, only skipping truly unavailable ones
 
 3. **Error Classification**:
    - `[ERROR]`: Critical failures that stop the build

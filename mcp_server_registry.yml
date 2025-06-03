@@ -31,8 +31,10 @@ servers:
     description: "CircleCI pipeline monitoring and management"
     category: "cicd"
     source:
-      type: registry
+      type: build
+      repository: https://github.com/CircleCI-Public/mcp-server-circleci.git
       image: local/mcp-server-circleci:latest
+      build_context: "."
     environment_variables:
       - "CIRCLECI_TOKEN"
       - "CIRCLECI_BASE_URL"
@@ -47,6 +49,35 @@ servers:
       - "job_management"
       - "artifact_access"
       - "environment_variables"
+
+  inspector:
+    name: "MCP Inspector"
+    description: "Official Model Context Protocol visual testing and debugging tool"
+    category: "development"
+    source:
+      type: registry
+      image: "mcp/inspector:latest"  # Official MCP Inspector containerized
+    ports:
+      - "6274:6274"  # MCPI client UI
+      - "6277:6277"  # MCPP proxy server
+    networks:
+      - "mcp-network"
+    environment_variables:
+      - "MCP_AUTO_OPEN_ENABLED"
+      - "CLIENT_PORT"
+      - "SERVER_PORT"
+      - "MCP_SERVER_REQUEST_TIMEOUT"
+    health_test:
+      parse_mode: direct
+      path: "/"
+      expected_status: 200
+      expected_response: "<!DOCTYPE html>"  # HTML response from UI
+    capabilities:
+      - "visual_testing"
+      - "server_debugging"
+      - "protocol_inspection"
+      - "configuration_export"
+      - "cli_mode"
 
   # Future servers (commented for future expansion):
   # figma:

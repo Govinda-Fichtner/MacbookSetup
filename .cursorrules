@@ -347,9 +347,270 @@ When making significant changes to the project, you MUST update the README.md fi
 
 **❌ Anti-Pattern**: Never commit significant functionality changes without corresponding README updates
 
+## 🧪 Test-Driven Development (TDD) & Behavior-Driven Development (BDD) Principles
+
+### **TDD Methodology (Red-Green-Refactor)**
+**MANDATORY**: All new features MUST follow TDD cycle:
+
+1. **🔴 RED**: Write failing tests first
+2. **🟢 GREEN**: Write minimal code to make tests pass
+3. **🔵 REFACTOR**: Improve code while keeping tests green
+
+### **Test-First Development Rules**
+- ❌ **NEVER write production code without a failing test first**
+- ✅ **ALWAYS start with the test that describes the expected behavior**
+- ✅ **Write the smallest possible test that fails**
+- ✅ **Only write enough production code to make the test pass**
+
+### **ShellSpec Testing Standards**
+
+#### **Test Organization**
+```bash
+# File structure for tests
+spec/
+├── spec_helper.sh          # Shared test utilities
+├── mcp_manager_spec.sh     # Core MCP manager functionality
+├── mcp_inspector_spec.sh   # New: Inspector functionality tests
+└── integration_spec.sh     # End-to-end integration tests
+```
+
+#### **Test Writing Patterns**
+```bash
+# Use descriptive test names that explain behavior
+Describe 'mcp_manager.sh inspect command'
+  Describe 'when inspecting all servers'
+    Context 'with no running containers'
+      It 'should display "No MCP servers currently running"'
+        When run ./mcp_manager.sh inspect
+        The output should include "No MCP servers currently running"
+        The status should be success
+      End
+    End
+
+    Context 'with running containers'
+      BeforeEach 'start_test_containers'
+      AfterEach 'cleanup_test_containers'
+
+      It 'should discover and list running servers'
+        When run ./mcp_manager.sh inspect
+        The output should include "Running MCP servers"
+        The output should include "github"
+        The status should be success
+      End
+    End
+  End
+End
+```
+
+#### **Test Categories by Scope**
+1. **Unit Tests**: Test individual functions in isolation
+2. **Integration Tests**: Test component interactions
+3. **System Tests**: Test complete workflows end-to-end
+4. **CI Tests**: Tests that run in CI environment (no Docker dependencies)
+
+### **BDD Behavior Specification**
+
+#### **Feature Definition Template**
+```bash
+# Every new feature starts with behavior specification
+Describe 'MCP Inspector Feature'
+  Describe 'inspect command basic functionality'
+    It 'should show help when no arguments provided'
+    It 'should discover running MCP server containers'
+    It 'should validate environment variables'
+    It 'should test server connectivity'
+  End
+
+  Describe 'inspect command advanced features'
+    It 'should launch web UI on --ui flag'
+    It 'should validate client configurations'
+    It 'should run in CI-friendly mode'
+    It 'should debug specific servers with --debug'
+  End
+End
+```
+
+#### **Given-When-Then Structure**
+```bash
+# Use Context/Setup for Given, When for actions, assertions for Then
+Context 'Given a configured MCP server environment'
+  Setup 'configure_test_environment'
+
+  It 'When inspecting a specific server, Then should show detailed information'
+    When run ./mcp_manager.sh inspect github
+    The output should include "=== MCP Server Inspection: github ==="
+    The output should include "[SERVER] GitHub MCP Server"
+    The status should be success
+  End
+End
+```
+
+### **Test Implementation Workflow**
+
+#### **For New Features (Inspector Example)**
+```bash
+# 1. Define the behavior first (RED)
+It 'should provide UI access to MCP inspector'
+  When run ./mcp_manager.sh inspect --ui
+  The output should include "Inspector UI started"
+  The output should include "http://localhost:6274"
+  The status should be success
+End
+
+# 2. Run test (should fail)
+shellspec spec/mcp_inspector_spec.sh
+
+# 3. Implement minimal code to pass (GREEN)
+# Add basic --ui handling to handle_inspect_command()
+
+# 4. Run test (should pass)
+shellspec spec/mcp_inspector_spec.sh
+
+# 5. Refactor and improve (REFACTOR)
+# Enhance error handling, improve output format
+```
+
+#### **Test Environment Setup Standards**
+```bash
+# Use consistent test helper patterns
+setup_test_environment() {
+  export TEST_HOME="$PWD/test_home"
+  export CI=false
+  mkdir -p "$TEST_HOME/.cursor"
+  mkdir -p "$TEST_HOME/Library/Application Support/Claude"
+}
+
+cleanup_test_environment() {
+  rm -rf "$TEST_HOME"
+  docker container prune -f 2>/dev/null || true
+}
+
+mock_docker_commands() {
+  # Create mock functions for Docker in test environment
+  docker() {
+    case "$1" in
+      "ps") echo "CONTAINER ID   IMAGE                     NAMES"
+            echo "123abc         mcp/github:latest        test-github" ;;
+      "images") echo "mcp/github   latest   123   2 hours ago   100MB" ;;
+    esac
+  }
+}
+```
+
+### **Test Coverage Requirements**
+
+#### **Mandatory Test Coverage**
+- ✅ **All new commands must have tests**
+- ✅ **All error conditions must be tested**
+- ✅ **Both CI and local environments must be tested**
+- ✅ **Edge cases and error handling must be covered**
+
+#### **Test Scenarios Matrix**
+```bash
+# Every new feature needs tests for:
+#
+# Environment Matrix:
+# - Local development (Docker available)
+# - CI environment (CI=true, limited Docker)
+# - Missing dependencies (no Docker, no tools)
+#
+# Input Matrix:
+# - Valid inputs
+# - Invalid inputs
+# - Missing inputs
+# - Edge case inputs
+#
+# State Matrix:
+# - Clean environment
+# - Existing configurations
+# - Partially configured state
+# - Error states
+```
+
+### **Test Quality Standards**
+
+#### **Test Readability Rules**
+- ✅ **Test names should read like documentation**
+- ✅ **Use descriptive Context and Describe blocks**
+- ✅ **One assertion per test when possible**
+- ✅ **Setup and teardown should be clear and isolated**
+
+#### **Test Reliability Rules**
+- ✅ **Tests must be deterministic (no flaky tests)**
+- ✅ **Tests must be isolated (no dependencies between tests)**
+- ✅ **Tests must clean up after themselves**
+- ✅ **Tests must work in both CI and local environments**
+
+### **Debugging Test Failures**
+
+#### **Test Debugging Commands**
+```bash
+# Run specific test with verbose output
+shellspec --format documentation spec/mcp_inspector_spec.sh
+
+# Run single test case
+shellspec --example "should discover running servers" spec/mcp_inspector_spec.sh
+
+# Debug test with trace
+shellspec --trace spec/mcp_inspector_spec.sh
+```
+
+#### **Common Test Failure Patterns**
+- **Environment not isolated**: Tests affecting each other
+- **Missing mocks**: Tests failing due to external dependencies
+- **Race conditions**: Tests depending on timing
+- **Path issues**: Tests not finding required files
+
+### **Test-Driven Refactoring**
+
+#### **Safe Refactoring Process**
+1. ✅ **Ensure all tests pass before refactoring**
+2. ✅ **Add tests for edge cases if missing**
+3. ✅ **Refactor incrementally**
+4. ✅ **Run tests after each small change**
+5. ✅ **Never skip tests because "it's just refactoring"**
+
+### **TDD Anti-Patterns to Avoid**
+
+#### **Development Anti-Patterns**
+- ❌ **Writing production code before writing tests**
+- ❌ **Writing tests that always pass (testing implementation, not behavior)**
+- ❌ **Skipping the RED phase (not seeing tests fail first)**
+- ❌ **Making multiple changes before running tests**
+
+#### **Test Anti-Patterns**
+- ❌ **Tests that depend on external services**
+- ❌ **Tests that require manual setup**
+- ❌ **Tests that test implementation details instead of behavior**
+- ❌ **Giant tests that test multiple behaviors**
+
+### **Integration with Existing Workflow**
+
+#### **Updated Testing Pipeline**
+```bash
+# Enhanced testing pipeline for TDD workflow:
+1. Write failing test first
+2. zsh -n setup.sh && zsh -n verify_setup.sh  # Syntax check
+3. shellspec spec/                            # Run all tests
+4. Write minimal code to pass the test
+5. shellspec spec/                            # Verify test passes
+6. ./verify_setup.sh > /dev/null              # Integration test
+7. pre-commit run --all-files                 # Code quality
+8. git add . && git commit -m "descriptive message"
+9. git push origin main
+```
+
+#### **CI Integration**
+- ✅ **All tests must pass in CI environment**
+- ✅ **Tests should gracefully handle CI limitations (no Docker)**
+- ✅ **Test results should be clearly reported**
+- ✅ **Failed tests should provide actionable error messages**
+
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file
 - Update rules based on what works in practice
 - Keep the "minimal complexity" principle as the north star
 - Review and refine these rules after major changes
 - **Always maintain README.md alongside code changes**
+- **Continuously improve test coverage and quality**
+- **Refactor tests alongside production code**

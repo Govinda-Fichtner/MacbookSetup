@@ -1,14 +1,23 @@
 #!/bin/zsh
 # Shellspec test suite for mcp_manager.sh
 
+# Simple test environment setup
+setup() {
+  export HOME="$PWD/test_home"
+  mkdir -p "$HOME/.cursor"
+  mkdir -p "$HOME/Library/Application Support/Claude"
+  rm -f "$HOME/.cursor/mcp.json"
+  rm -f "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+  rm -f "$PWD/.env_example"
+  # Ensure we have a clean environment for tests
+  unset functrace funcfiletrace funcsourcetrace 2> /dev/null || true
+}
+
+BeforeEach 'setup'
+
 # Helper function to validate JSON
 validate_json() {
   jq . "$1" > /dev/null 2>&1
-}
-
-# Helper function to check for debug output patterns
-has_debug_output() {
-  echo "$1" | grep -E '(container_value=|image=|env_vars=|placeholder=|server_name=)' > /dev/null 2>&1
 }
 
 # Helper function to check if file contains expected servers
@@ -29,24 +38,11 @@ has_expected_servers() {
 }
 
 Describe 'mcp_manager.sh configuration generation'
-setup() {
-  export HOME="$PWD/test_home"
-  mkdir -p "$HOME/.cursor"
-  mkdir -p "$HOME/Library/Application Support/Claude"
-  rm -f "$HOME/.cursor/mcp.json"
-  rm -f "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-  rm -f "$PWD/.env_example"
-  # Ensure we have a clean environment for tests
-  unset functrace funcfiletrace funcsourcetrace 2> /dev/null || true
-}
-
-BeforeEach 'setup'
-
 Describe 'basic configuration generation'
 It 'creates config files successfully'
 When run zsh "$PWD/mcp_manager.sh" config-write
 The status should be success
-The output should include "MCP Client Configuration Generation"
+The output should include "Client configurations written"
 The file "$HOME/.cursor/mcp.json" should be exist
 The file "$HOME/Library/Application Support/Claude/claude_desktop_config.json" should be exist
 End
@@ -121,6 +117,7 @@ The output should not include "image="
 The output should not include "env_vars="
 End
 
+# The problematic test - now with timeouts built into mcp_manager.sh
 It 'does not output debug variables during test command'
 When run zsh "$PWD/mcp_manager.sh" test
 The status should be success
@@ -168,6 +165,7 @@ Describe 'environment file generation'
 It 'creates .env_example file'
 When run zsh "$PWD/mcp_manager.sh" config-write
 The status should be success
+The output should include "Environment example file created"
 The file "$PWD/.env_example" should be exist
 End
 
@@ -243,9 +241,6 @@ It 'handles missing Docker gracefully'
 When run env PATH="/usr/bin:/bin" zsh "$PWD/mcp_manager.sh" config-write
 The status should be success
 The output should include "Client configurations written"
-End
-
-It 'does not write invalid JSON when environment is broken' pending
 End
 End
 End

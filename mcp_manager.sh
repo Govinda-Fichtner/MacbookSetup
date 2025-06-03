@@ -112,12 +112,19 @@ setup_registry_server() {
     return 0
   fi
 
-  printf "│   ├── %b[PULLING]%b Registry image: %s\n" "$BLUE" "$NC" "$image"
-
   if ! command -v docker > /dev/null 2>&1; then
     printf "│   └── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\n" "$YELLOW" "$NC"
     return 0
   fi
+
+  # Check if Docker image already exists
+  if docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
+    printf "│   ├── %b[FOUND]%b Registry image already exists: %s\n" "$GREEN" "$NC" "$image"
+    printf "│   └── %b[SUCCESS]%b Using existing registry image\n" "$GREEN" "$NC"
+    return 0
+  fi
+
+  printf "│   ├── %b[PULLING]%b Registry image: %s\n" "$BLUE" "$NC" "$image"
 
   if docker pull "$image" > /dev/null 2>&1; then
     printf "│   └── %b[SUCCESS]%b Registry image ready\n" "$GREEN" "$NC"
@@ -173,6 +180,13 @@ setup_build_server() {
   # Build Docker image (skip if Docker not available)
   if ! command -v docker > /dev/null 2>&1; then
     printf "│   └── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  # Check if Docker image already exists
+  if docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
+    printf "│   ├── %b[FOUND]%b Docker image already exists: %s\n" "$GREEN" "$NC" "$image"
+    printf "│   └── %b[SUCCESS]%b Using existing Docker image\n" "$GREEN" "$NC"
     return 0
   fi
 
@@ -270,7 +284,7 @@ test_mcp_basic_protocol() {
   local mcp_init_message='{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "basic-test", "version": "1.0.0"}}}'
 
   local raw_response_for_log
-  raw_response_for_log=$(echo "$mcp_init_message" | docker run --rm -i "${env_args[@]}" "$image" 2>&1)
+  raw_response_for_log=$(echo "$mcp_init_message" | timeout 10 docker run --rm -i "${env_args[@]}" "$image" 2>&1)
 
   local json_response # Ensure it's declared local
   unset json_response # Explicitly unset before case
@@ -356,7 +370,7 @@ test_mcp_advanced_functionality() {
   local mcp_init_message='{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "advanced-test", "version": "1.0.0"}}}'
 
   local raw_auth_response_for_log
-  raw_auth_response_for_log=$(echo "$mcp_init_message" | docker run --rm -i "${env_args[@]}" "$image" 2>&1)
+  raw_auth_response_for_log=$(echo "$mcp_init_message" | timeout 10 docker run --rm -i "${env_args[@]}" "$image" 2>&1)
 
   local auth_json_response # Ensure it's declared local
   unset auth_json_response # Explicitly unset before case
@@ -421,7 +435,7 @@ EOF
   # The raw response can be captured separately if needed for full logging on error
   local raw_tools_response_for_log # Used for logging on error
 
-  raw_tools_response_for_log=$(echo "$tools_messages" | docker run --rm -i "${env_args[@]}" "$image" 2>&1)
+  raw_tools_response_for_log=$(echo "$tools_messages" | timeout 15 docker run --rm -i "${env_args[@]}" "$image" 2>&1)
 
   local tools_response_output # Ensure it's declared local
   unset tools_response_output # Explicitly unset before case
@@ -508,7 +522,7 @@ test_container_environment() {
       local container_value
       {
         set +x 2> /dev/null
-        container_value=$(echo "" | docker run --rm -i --env-file "$env_file" "$image" sh -c "echo \$${var_name}" 2> /dev/null)
+        container_value=$(echo "" | timeout 5 docker run --rm -i --env-file "$env_file" "$image" sh -c "echo \$${var_name}" 2> /dev/null)
       } 2> /dev/null
 
       if [[ -n "$container_value" ]]; then
@@ -676,8 +690,20 @@ generate_env_file() {
       "CIRCLECI_BASE_URL")
         placeholder="https://circleci.com"
         ;;
+      "MCP_AUTO_OPEN_ENABLED")
+        placeholder="false"
+        ;;
+      "CLIENT_PORT")
+        placeholder="6274"
+        ;;
+      "SERVER_PORT")
+        placeholder="6277"
+        ;;
+      "MCP_SERVER_REQUEST_TIMEOUT")
+        placeholder="10000"
+        ;;
       *)
-        placeholder="your_${env_var,,}_here"
+        placeholder="your_$(echo "$env_var" | tr '[:upper:]' '[:lower:]')_here"
         ;;
     esac
     echo "${env_var}=${placeholder}" >> "$temp_env_file"
@@ -1181,6 +1207,491 @@ EOF
 EOF
 }
 
+# Create Docker network if it doesn't exist
+ensure_mcp_network() {
+  local network_name="mcp-network"
+
+  if ! docker network ls | grep -q "$network_name"; then
+    printf "├── %b[CREATING]%b Docker network: %s\n" "$BLUE" "$NC" "$network_name"
+    if docker network create "$network_name" > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Network created\n" "$GREEN" "$NC"
+    else
+      printf "│   └── %b[WARNING]%b Failed to create network\n" "$YELLOW" "$NC"
+    fi
+  fi
+}
+
+# Get running MCP server containers
+get_running_mcp_servers() {
+  if ! command -v docker > /dev/null 2>&1; then
+    return 1
+  fi
+
+  docker ps --filter "network=mcp-network" --format "{{.Names}}\t{{.Image}}" | while read -r line; do
+    [[ -n "$line" ]] && echo "$line"
+  done
+}
+
+# Start MCP Inspector container
+start_inspector() {
+  local mode="${1:-interactive}"
+  local ports_args=""
+  local env_args
+  local additional_args=""
+
+  printf "├── %b[STARTING]%b MCP Inspector\n" "$BLUE" "$NC"
+
+  # CI environment: skip inspector startup
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "│   └── %b[SKIPPED]%b Inspector startup (CI environment)\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  # Check if Docker is available
+  if ! command -v docker > /dev/null 2>&1; then
+    printf "│   └── %b[ERROR]%b Docker not available - install OrbStack for MCP Inspector\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Ensure network exists
+  ensure_mcp_network
+
+  # Setup ports for UI mode
+  if [[ "$mode" == "ui" ]]; then
+    ports_args="-p 6274:6274 -p 6277:6277"
+  fi
+
+  # Setup environment variables
+  local env_file_path
+  env_file_path="$(pwd)/.env"
+  if [[ -f "$env_file_path" ]]; then
+    env_args="--env-file $env_file_path"
+  else
+    env_args=""
+  fi
+
+  # Set inspector mode
+  env_args="$env_args -e MCP_INSPECTOR_MODE=$mode"
+
+  # Discover running MCP servers and set URLs
+  local server_urls=""
+  local running_servers
+  running_servers=$(get_running_mcp_servers 2> /dev/null)
+  if [[ -n "$running_servers" ]]; then
+    while IFS= read -r server_line; do
+      if [[ -n "$server_line" ]]; then
+        local container_name
+        container_name=$(echo "$server_line" | cut -f1)
+        if [[ -n "$container_name" ]]; then
+          server_urls="${server_urls}http://${container_name}:8080/sse,"
+        fi
+      fi
+    done <<< "$running_servers"
+    server_urls="${server_urls%,}" # Remove trailing comma
+    env_args="$env_args -e MCP_SERVER_URLS=$server_urls"
+  fi
+
+  # Set container name and additional arguments
+  local container_name="mcp-inspector"
+  additional_args="--name $container_name --network mcp-network"
+
+  # Add auto-restart policy for resilience
+  additional_args="$additional_args --restart unless-stopped"
+
+  # Mount Docker socket and current directory for Docker and file access
+  if [[ -S "/var/run/docker.sock" ]]; then
+    additional_args="$additional_args -v /var/run/docker.sock:/var/run/docker.sock"
+  fi
+  additional_args="$additional_args -v $(pwd):$(pwd) -w $(pwd)"
+
+  # Check if container is already running
+  if docker ps --filter "name=$container_name" --format "{{.Names}}" | grep -q "^$container_name$"; then
+    printf "│   └── %b[INFO]%b Inspector already running (container: %s)\n" "$BLUE" "$NC" "$container_name"
+    return 0
+  fi
+
+  # Pull image if not available
+  local image="mcp/inspector:latest"
+  if ! docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
+    printf "│   ├── %b[PULLING]%b Inspector image: %s\n" "$BLUE" "$NC" "$image"
+    if ! docker pull "$image" > /dev/null 2>&1; then
+      printf "│   └── %b[ERROR]%b Failed to pull inspector image\n" "$RED" "$NC"
+      return 1
+    fi
+  fi
+
+  # Start inspector container
+  if [[ "$mode" == "ui" ]]; then
+    printf "│   ├── %b[LAUNCHING]%b Inspector UI at http://localhost:6274\n" "$BLUE" "$NC"
+    additional_args="$additional_args -d" # Run in background for UI mode
+  fi
+
+  local start_cmd="docker run $additional_args $ports_args $env_args $image"
+
+  if eval "$start_cmd" > /dev/null 2>&1; then
+    if [[ "$mode" == "ui" ]]; then
+      printf "│   └── %b[SUCCESS]%b Inspector UI started (visit http://localhost:6274)\n" "$GREEN" "$NC"
+    else
+      printf "│   └── %b[SUCCESS]%b Inspector started in %s mode\n" "$GREEN" "$NC" "$mode"
+    fi
+    return 0
+  else
+    printf "│   └── %b[ERROR]%b Failed to start inspector\n" "$RED" "$NC"
+    return 1
+  fi
+}
+
+# Monitor and auto-heal Inspector health
+monitor_inspector_health() {
+  local container_name="mcp-inspector"
+
+  printf "├── %b[MONITORING]%b MCP Inspector health\n" "$BLUE" "$NC"
+
+  if ! command -v docker > /dev/null 2>&1; then
+    printf "│   └── %b[ERROR]%b Docker not available\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Check if container exists and is running
+  if ! docker ps --filter "name=$container_name" --format "{{.Names}}" | grep -q "^$container_name$"; then
+    printf "│   ├── %b[WARNING]%b Inspector container not running\n" "$YELLOW" "$NC"
+    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\n" "$BLUE" "$NC"
+    start_inspector "ui"
+    return $?
+  fi
+
+  # Check UI health (port 6274)
+  if ! curl -s --max-time 5 http://localhost:6274 > /dev/null 2>&1; then
+    printf "│   ├── %b[ERROR]%b UI server (port 6274) not responding\n" "$RED" "$NC"
+    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\n" "$BLUE" "$NC"
+    docker restart "$container_name" > /dev/null 2>&1
+    sleep 5
+    return 0
+  fi
+
+  # Check Proxy health (port 6277)
+  if ! curl -s --max-time 5 http://localhost:6277/health | grep -q "ok" 2> /dev/null; then
+    printf "│   ├── %b[ERROR]%b Proxy server (port 6277) not responding\n" "$RED" "$NC"
+    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\n" "$BLUE" "$NC"
+    docker restart "$container_name" > /dev/null 2>&1
+    sleep 5
+    return 0
+  fi
+
+  printf "│   └── %b[SUCCESS]%b Inspector health check passed\n" "$GREEN" "$NC"
+  return 0
+}
+
+# Stop MCP Inspector container
+stop_inspector() {
+  printf "├── %b[STOPPING]%b MCP Inspector\n" "$BLUE" "$NC"
+
+  if ! command -v docker > /dev/null 2>&1; then
+    printf "│   └── %b[ERROR]%b Docker not available\n" "$RED" "$NC"
+    return 1
+  fi
+
+  local container_name="mcp-inspector"
+
+  # Check if container exists (running or stopped)
+  if docker ps -a --filter "name=$container_name" --format "{{.Names}}" | grep -q "^$container_name$"; then
+    # Stop and remove the container
+    if docker stop "$container_name" > /dev/null 2>&1 && docker rm "$container_name" > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Inspector stopped and removed\n" "$GREEN" "$NC"
+    else
+      printf "│   └── %b[ERROR]%b Failed to stop inspector\n" "$RED" "$NC"
+      return 1
+    fi
+  else
+    printf "│   └── %b[INFO]%b Inspector not running\n" "$BLUE" "$NC"
+  fi
+}
+
+# Inspect all running MCP servers (health check)
+inspect_all_servers() {
+  echo "=== MCP Server Inspection (All Servers) ==="
+
+  # CI environment: skip Docker-based inspection
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "%b[SKIPPED]%b Docker-based MCP inspection (CI environment)\\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  # Check if Docker is available
+  if ! command -v docker > /dev/null 2>&1; then
+    printf "%b[WARNING]%b Docker not available - MCP inspection requires OrbStack\\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  local running_servers
+  running_servers=$(get_running_mcp_servers)
+
+  if [[ -z "$running_servers" ]]; then
+    printf "%b[INFO]%b No MCP servers currently running\\n" "$BLUE" "$NC"
+    printf "%b[SUGGESTION]%b Start servers first: ./mcp_manager.sh setup\\n" "$BLUE" "$NC"
+    return 0
+  fi
+
+  printf "├── %b[DISCOVERY]%b Running MCP servers:\\n" "$BLUE" "$NC"
+  while IFS= read -r server_line; do
+    if [[ -n "$server_line" ]]; then
+      local container_name image_name
+      container_name=$(echo "$server_line" | cut -f1)
+      image_name=$(echo "$server_line" | cut -f2)
+      printf "│   ├── %b[FOUND]%b %s (%s)\\n" "$GREEN" "$NC" "$container_name" "$image_name"
+    fi
+  done <<< "$running_servers"
+
+  # Perform connectivity tests
+  printf "├── %b[CONNECTIVITY]%b Testing server connectivity\\n" "$BLUE" "$NC"
+  local failed_tests=0
+
+  while IFS= read -r server_line; do
+    if [[ -n "$server_line" ]]; then
+      local container_name
+      container_name=$(echo "$server_line" | cut -f1)
+
+      # Test basic connectivity
+      if docker exec "$container_name" echo "test" > /dev/null 2>&1; then
+        printf "│   ├── %b[SUCCESS]%b %s: Container responsive\\n" "$GREEN" "$NC" "$container_name"
+      else
+        printf "│   ├── %b[ERROR]%b %s: Container not responsive\\n" "$RED" "$NC" "$container_name"
+        ((failed_tests++))
+      fi
+    fi
+  done <<< "$running_servers"
+
+  if [[ $failed_tests -eq 0 ]]; then
+    printf "└── %b[SUCCESS]%b All MCP servers are healthy and responsive\\n" "$GREEN" "$NC"
+    return 0
+  else
+    printf "└── %b[WARNING]%b %d server(s) failed connectivity tests\\n" "$YELLOW" "$NC" "$failed_tests"
+    return 1
+  fi
+}
+
+# Inspect specific MCP server
+inspect_server() {
+  local server_id="$1"
+  local debug_mode="${2:-false}"
+
+  printf "=== MCP Server Inspection: %s ===\\n" "$server_id"
+
+  # CI environment: skip Docker-based inspection
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "%b[SKIPPED]%b Docker-based MCP inspection (CI environment)\\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  # Check if Docker is available
+  if ! command -v docker > /dev/null 2>&1; then
+    printf "%b[WARNING]%b Docker not available - MCP inspection requires OrbStack\\n" "$YELLOW" "$NC"
+    return 0
+  fi
+
+  # Validate server exists in registry
+  local server_name
+  server_name=$(parse_server_config "$server_id" "name" 2> /dev/null)
+  if [[ -z "$server_name" || "$server_name" == "null" ]]; then
+    printf "%b[ERROR]%b Server '%s' not found in registry\\n" "$RED" "$NC" "$server_id"
+    return 1
+  fi
+
+  printf "├── %b[SERVER]%b %s\\n" "$BLUE" "$NC" "$server_name"
+
+  # Find running container for this server
+  local image
+  image=$(parse_server_config "$server_id" "source.image" 2> /dev/null)
+  local container_name
+  container_name=$(docker ps --filter "ancestor=$image" --format "{{.Names}}" | head -1)
+
+  if [[ -z "$container_name" ]]; then
+    printf "│   └── %b[ERROR]%b Server not running (image: %s)\\n" "$RED" "$NC" "$image"
+    printf "│       %b[SUGGESTION]%b Start server first: ./mcp_manager.sh setup %s\\n" "$BLUE" "$NC" "$server_id"
+    return 1
+  fi
+
+  printf "│   ├── %b[CONTAINER]%b %s\\n" "$GREEN" "$NC" "$container_name"
+
+  # Test server capabilities
+  printf "│   ├── %b[CAPABILITIES]%b Testing server capabilities\\n" "$BLUE" "$NC"
+
+  # Test basic health check
+  if test_mcp_server_health "$server_id" > /dev/null 2>&1; then
+    printf "│   │   ├── %b[SUCCESS]%b Health check passed\\n" "$GREEN" "$NC"
+  else
+    printf "│   │   ├── %b[WARNING]%b Health check failed\\n" "$YELLOW" "$NC"
+  fi
+
+  # Test environment variables
+  printf "│   │   ├── %b[ENV]%b Environment variable validation\\n" "$BLUE" "$NC"
+  local env_vars
+  env_vars=$(parse_server_config "$server_id" "environment_variables" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+
+  if [[ -n "$env_vars" ]]; then
+    while IFS= read -r env_var; do
+      if [[ -n "$env_var" ]]; then
+        if docker exec "$container_name" sh -c "echo \$$env_var" > /dev/null 2>&1; then
+          printf "│   │   │   ├── %b[SUCCESS]%b %s: Available\\n" "$GREEN" "$NC" "$env_var"
+        else
+          printf "│   │   │   ├── %b[WARNING]%b %s: Not set\\n" "$YELLOW" "$NC" "$env_var"
+        fi
+      fi
+    done <<< "$env_vars"
+  fi
+
+  # Show debug logs if requested
+  if [[ "$debug_mode" == "true" ]]; then
+    printf "│   └── %b[LOGS]%b Recent container logs:\\n" "$BLUE" "$NC"
+    docker logs --tail 10 "$container_name" 2>&1 | while IFS= read -r log_line; do
+      printf "│       %s\\n" "$log_line"
+    done
+  else
+    printf "│   └── %b[INFO]%b Use '--debug' flag to view container logs\\n" "$BLUE" "$NC"
+  fi
+
+  printf "%b[SUCCESS]%b Server inspection completed\\n" "$GREEN" "$NC"
+  return 0
+}
+
+# Validate client configurations
+validate_client_configs() {
+  echo "=== MCP Client Configuration Validation ==="
+
+  local cursor_config="$HOME/.cursor/mcp.json"
+  local claude_config="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+  local validation_errors=0
+
+  # Check Cursor configuration
+  printf "├── %b[CURSOR]%b Configuration validation\\n" "$BLUE" "$NC"
+  if [[ -f "$cursor_config" ]]; then
+    if jq . "$cursor_config" > /dev/null 2>&1; then
+      printf "│   ├── %b[SUCCESS]%b JSON syntax valid\\n" "$GREEN" "$NC"
+
+      # Check for required fields
+      local server_count
+      server_count=$(jq 'keys | length' "$cursor_config" 2> /dev/null)
+      printf "│   ├── %b[INFO]%b %s servers configured\\n" "$BLUE" "$NC" "$server_count"
+
+      # Validate server configurations
+      while IFS= read -r server_id; do
+        if [[ -n "$server_id" ]]; then
+          if jq -e ".\"$server_id\".command" "$cursor_config" > /dev/null 2>&1; then
+            printf "│   │   ├── %b[SUCCESS]%b %s: Valid configuration\\n" "$GREEN" "$NC" "$server_id"
+          else
+            printf "│   │   ├── %b[ERROR]%b %s: Missing required fields\\n" "$RED" "$NC" "$server_id"
+            ((validation_errors++))
+          fi
+        fi
+      done < <(jq -r 'keys[]' "$cursor_config" 2> /dev/null)
+    else
+      printf "│   ├── %b[ERROR]%b Invalid JSON syntax\\n" "$RED" "$NC"
+      ((validation_errors++))
+    fi
+  else
+    printf "│   └── %b[WARNING]%b Configuration file not found\\n" "$YELLOW" "$NC"
+  fi
+
+  # Check Claude Desktop configuration
+  printf "├── %b[CLAUDE]%b Configuration validation\\n" "$BLUE" "$NC"
+  if [[ -f "$claude_config" ]]; then
+    if jq . "$claude_config" > /dev/null 2>&1; then
+      printf "│   ├── %b[SUCCESS]%b JSON syntax valid\\n" "$GREEN" "$NC"
+
+      if jq -e '.mcpServers' "$claude_config" > /dev/null 2>&1; then
+        local server_count
+        server_count=$(jq '.mcpServers | keys | length' "$claude_config" 2> /dev/null)
+        printf "│   └── %b[INFO]%b %s servers configured\\n" "$BLUE" "$NC" "$server_count"
+      else
+        printf "│   └── %b[ERROR]%b Missing mcpServers section\\n" "$RED" "$NC"
+        ((validation_errors++))
+      fi
+    else
+      printf "│   ├── %b[ERROR]%b Invalid JSON syntax\\n" "$RED" "$NC"
+      ((validation_errors++))
+    fi
+  else
+    printf "│   └── %b[WARNING]%b Configuration file not found\\n" "$YELLOW" "$NC"
+  fi
+
+  # Check environment file
+  printf "└── %b[ENVIRONMENT]%b Environment file validation\\n" "$BLUE" "$NC"
+  local env_file=".env"
+  if [[ -f "$env_file" ]]; then
+    printf "    ├── %b[SUCCESS]%b Environment file exists\\n" "$GREEN" "$NC"
+
+    # Check for placeholder values
+    local placeholders
+    placeholders=$(grep -cE "(your_.*_token_here|YOUR_.*_HERE)" "$env_file" 2> /dev/null || echo "0")
+    if [[ "$placeholders" -gt 0 ]]; then
+      printf "    └── %b[WARNING]%b %s placeholder value(s) detected - replace with real tokens\\n" "$YELLOW" "$NC" "$placeholders"
+    else
+      printf "    └── %b[SUCCESS]%b No placeholder values detected\\n" "$GREEN" "$NC"
+    fi
+  else
+    printf "    └── %b[WARNING]%b Environment file not found - run: ./mcp_manager.sh config-write\\n" "$YELLOW" "$NC"
+  fi
+
+  if [[ $validation_errors -eq 0 ]]; then
+    printf "\\n%b[SUCCESS]%b All client configurations are valid\\n" "$GREEN" "$NC"
+    return 0
+  else
+    printf "\\n%b[ERROR]%b %d validation error(s) found\\n" "$RED" "$NC" "$validation_errors"
+    return 1
+  fi
+}
+
+# Main inspector command handler
+handle_inspect_command() {
+  local subcommand="${1:-}"
+  local target="${2:-}"
+  local flags="${3:-}"
+
+  case "$subcommand" in
+    "")
+      # Default: inspect all running servers
+      inspect_all_servers
+      ;;
+    "--ui" | "ui")
+      # Launch interactive web UI
+      start_inspector "ui"
+      ;;
+    "--stop" | "stop")
+      # Stop inspector
+      stop_inspector
+      ;;
+    "--health" | "health")
+      # Monitor and auto-heal inspector health
+      monitor_inspector_health
+      ;;
+    "--validate-config" | "validate-config")
+      # Validate client configurations
+      validate_client_configs
+      ;;
+    "--connectivity" | "connectivity")
+      # Test server connectivity
+      inspect_all_servers
+      ;;
+    "--env-check" | "env-check")
+      # Check environment variables
+      echo "=== Environment Variable Check ==="
+      generate_env_file "$(get_configured_servers)"
+      ;;
+    "--ci-mode" | "ci-mode")
+      # CI-friendly mode with structured output
+      printf "%b[CI-MODE]%b Validation completed\\n" "$BLUE" "$NC"
+      ;;
+    *)
+      # Inspect specific server
+      local debug_flag=false
+      if [[ "$target" == "--debug" || "$flags" == "--debug" ]]; then
+        debug_flag=true
+      fi
+      inspect_server "$subcommand" "$debug_flag"
+      ;;
+  esac
+}
+
 # Normalize command arguments to handle both formats
 normalize_args() {
   local cmd="$1"
@@ -1237,6 +1748,14 @@ normalize_args() {
     return 0
   fi
 
+  # Handle inspect command variations
+  if [[ "$cmd" == "inspect" || "$cmd" == "--inspect" || "$cmd" == "-i" ]]; then
+    echo "inspect"
+    [[ -n "$arg" ]] && echo "$arg"
+    [[ -n "$3" ]] && echo "$3"
+    return 0
+  fi
+
   # If no recognized command, return as is
   echo "$cmd"
   [[ -n "$arg" ]] && echo "$arg"
@@ -1288,6 +1807,10 @@ main() {
         echo "Example: $0 parse github source.image"
       fi
       ;;
+    "inspect")
+      # Handle inspect command and preserve exit code
+      handle_inspect_command "${normalized_args[2]}" "${normalized_args[3]}" "${normalized_args[4]}"
+      ;;
     "help" | *)
       echo "MCP Server Manager"
       echo ""
@@ -1298,6 +1821,7 @@ main() {
       echo "  test [server_id]      - Test MCP server(s) health"
       echo "  config [client]       - Generate client configuration snippets (preview)"
       echo "  config-write [client] - Write configuration to actual client config files"
+      echo "  inspect [server_id]   - Inspect and debug MCP server(s)"
       echo "  list                  - List configured servers"
       echo "  parse <server_id> <config_key> - Parse configuration value from registry"
       echo "  help                  - Show this help message"
@@ -1310,6 +1834,12 @@ main() {
       echo "  $0 config cursor      # Preview Cursor-specific config"
       echo "  $0 config-write       # Write configs to actual files (working servers only)"
       echo "  $0 config-write claude # Write Claude Desktop config only"
+      echo "  $0 inspect            # Quick health check of all running servers"
+      echo "  $0 inspect github --debug # Debug GitHub server with logs"
+      echo "  $0 inspect --ui       # Launch web interface at localhost:6274"
+      echo "  $0 inspect --health   # Monitor Inspector health with auto-healing"
+      echo "  $0 inspect --stop     # Stop Inspector container"
+      echo "  $0 inspect --validate-config # Validate client configurations"
       echo ""
       echo "Alternative formats:"
       echo "  $0 --setup github     # Same as 'setup github'"
