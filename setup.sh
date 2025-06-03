@@ -284,10 +284,10 @@ setup_containerization_and_mcp() {
   # Setup Colima
   printf "├── %b[CHECKING]%b Colima status\n" "$BLUE" "$NC"
 
-  # Ensure QEMU and Lima are installed before Colima
-  local colima_deps=(qemu lima)
+  # Ensure QEMU, Lima, and lima-additional-guestagents are installed before Colima
+  local colima_deps=(qemu lima lima-additional-guestagents)
   for dep in "${colima_deps[@]}"; do
-    if ! check_command "$dep"; then
+    if ! check_command "$dep" && ! brew list --formula | grep -q "^$dep$"; then
       printf "│   ├── %b[INSTALLING]%b %s (required for Colima)\n" "$BLUE" "$NC" "$dep"
       if check_command brew; then
         if brew install "$dep" > "/tmp/brew_install_${dep}.log" 2>&1; then
