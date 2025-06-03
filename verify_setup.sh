@@ -647,11 +647,6 @@ check_completion() {
   if command -v "$tool" > /dev/null 2>&1; then
     case "$tool" in
       git)
-        # In CI, git completion issues are not critical
-        if [[ "${CI:-false}" == "true" ]]; then
-          printf "│   └── %b[SKIPPED]%b %s completion (CI environment)\n" "$YELLOW" "$RESET" "$tool"
-          return 0
-        fi
         if git completion zsh > "$completion_dir/$completion_file" 2> /dev/null; then
           printf "│   └── %b[GENERATED]%b %s completion\n" "$GREEN" "$RESET" "$tool"
           return 0
@@ -679,11 +674,58 @@ check_completion() {
           fi
         fi
         ;;
+      kubectl)
+        if kubectl completion zsh > "$completion_dir/$completion_file" 2> /dev/null; then
+          printf "│   └── %b[GENERATED]%b %s completion\n" "$GREEN" "$RESET" "$tool"
+          return 0
+        fi
+        ;;
+      helm)
+        if helm completion zsh > "$completion_dir/$completion_file" 2> /dev/null; then
+          printf "│   └── %b[GENERATED]%b %s completion\n" "$GREEN" "$RESET" "$tool"
+          return 0
+        fi
+        ;;
+      terraform)
+        # Use HashiCorp's built-in completion system
+        if complete -o nospace -C terraform terraform 2> /dev/null; then
+          printf "│   └── %b[CONFIGURED]%b %s completion (built-in)\n" "$GREEN" "$RESET" "$tool"
+          return 0
+        fi
+        ;;
+      packer)
+        # Use HashiCorp's built-in completion system
+        if complete -o nospace -C packer packer 2> /dev/null; then
+          printf "│   └── %b[CONFIGURED]%b %s completion (built-in)\n" "$GREEN" "$RESET" "$tool"
+          return 0
+        fi
+        ;;
+      nvm)
+        # nvm completion is handled by sourcing, check if it's working
+        if [[ -s "$(brew --prefix)/opt/nvm/etc/bash_completion.d/nvm" ]]; then
+          printf "│   └── %b[AVAILABLE]%b %s completion (via brew nvm)\n" "$GREEN" "$RESET" "$tool"
+          return 0
+        fi
+        ;;
+      direnv)
+        if direnv hook zsh > "$completion_dir/$completion_file" 2> /dev/null; then
+          printf "│   └── %b[GENERATED]%b %s completion\n" "$GREEN" "$RESET" "$tool"
+          return 0
+        fi
+        ;;
+      docker | orb | orbctl)
+        # These tools may not be available in CI - skip gracefully
+        if [[ "${CI:-false}" == "true" ]]; then
+          printf "│   └── %b[SKIPPED]%b %s completion (CI environment)\n" "$YELLOW" "$RESET" "$tool"
+          return 0
+        fi
+        ;;
     esac
   fi
 
-  # In CI, completion issues are less critical
-  if [[ "${CI:-false}" == "true" ]]; then
+  # Only skip in CI for specific tools that truly can't work there
+  local ci_skip_tools=("docker" "orb" "orbctl")
+  if [[ "${CI:-false}" == "true" ]] && printf '%s\n' "${ci_skip_tools[@]}" | grep -Fxq "$tool"; then
     printf "│   └── %b[SKIPPED]%b %s completion (CI environment)\n" "$YELLOW" "$RESET" "$tool"
     return 0
   fi
