@@ -108,7 +108,7 @@ setup_registry_server() {
 
   # CI environment: skip Docker operations
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[CI MODE]%b Skipping Docker pull for %s (no containerization in CI)\n" "$YELLOW" "$NC" "$image"
+    printf "│   └── %b[SKIPPED]%b Docker pull for %s (CI environment)\n" "$YELLOW" "$NC" "$image"
     return 0
   fi
 
@@ -138,7 +138,7 @@ setup_build_server() {
 
   # CI environment: skip Docker operations, just validate repository access
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   ├── %b[CI MODE]%b Validating repository access: %s\n" "$BLUE" "$NC" "$(basename "$repository" .git)"
+    printf "│   ├── %b[INFO]%b Validating repository access: %s (CI environment)\n" "$BLUE" "$NC" "$(basename "$repository" .git)"
     if git ls-remote --heads "$repository" > /dev/null 2>&1; then
       printf "│   └── %b[SUCCESS]%b Repository accessible (skipping Docker build in CI)\n" "$GREEN" "$NC"
       return 0
@@ -566,7 +566,7 @@ test_all_mcp_servers() {
 
   # CI environment: skip Docker-based testing
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "%b[CI MODE]%b Skipping Docker-based MCP testing (no containerization in CI)\\n" "$YELLOW" "$NC"
+    printf "%b[SKIPPED]%b Docker-based MCP testing (CI environment)\\n" "$YELLOW" "$NC"
     printf "%b[INFO]%b Configuration validation completed successfully\\n" "$BLUE" "$NC"
     return 0
   fi

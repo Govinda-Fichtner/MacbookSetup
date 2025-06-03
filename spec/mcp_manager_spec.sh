@@ -248,3 +248,4 @@ End
 It 'does not write invalid JSON when environment is broken' pending
 End
 End
+End

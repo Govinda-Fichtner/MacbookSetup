@@ -319,8 +319,37 @@ case $line[1] in
 esac
 ```
 
+## 📖 Documentation Maintenance Requirements
+
+### **README.md Update Mandate**
+When making significant changes to the project, you MUST update the README.md file to reflect:
+
+**Required Updates For:**
+- **New features or tools**: Add to appropriate sections, update examples
+- **Script behavior changes**: Update testing strategy, CI behavior descriptions
+- **Error handling improvements**: Update troubleshooting section
+- **Configuration changes**: Update MCP server documentation, environment setup
+- **Testing methodology changes**: Update CI testing strategy section
+- **Output format changes**: Update examples and expected behavior
+
+**Documentation Standards:**
+- ✅ **Update examples** to reflect actual current behavior
+- ✅ **Maintain consistency** between code behavior and documentation
+- ✅ **Add new troubleshooting entries** for newly discovered issues
+- ✅ **Update version numbers** and tool lists when dependencies change
+- ✅ **Validate all links** and commands in documentation still work
+
+**Process:**
+1. Make code changes
+2. Test functionality
+3. Update README.md accordingly
+4. Commit both code AND documentation changes together
+
+**❌ Anti-Pattern**: Never commit significant functionality changes without corresponding README updates
+
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file
 - Update rules based on what works in practice
 - Keep the "minimal complexity" principle as the north star
 - Review and refine these rules after major changes
+- **Always maintain README.md alongside code changes**

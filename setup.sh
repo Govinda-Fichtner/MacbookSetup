@@ -283,19 +283,13 @@ setup_containerization_and_mcp() {
   echo -e "\n=== MCP Configuration Setup ==="
   local mcp_base_config_dir="${HOME}/.config/mcp"
 
-  # Ensure base MCP config directory exists
-  printf "├── %b[CONFIG]%b Ensuring base MCP config directory (%s)\n" "$BLUE" "$NC" "$mcp_base_config_dir"
-  if ! ensure_dir "$mcp_base_config_dir"; then
-    printf "│   └── %b[ERROR]%b Failed to create base MCP config directory. MCP setup will be incomplete.\n" "$RED" "$NC"
-    # Do not return 1 here, let other checks proceed, but this is a critical warning.
-    log_warning "Base MCP directory ${mcp_base_config_dir} could not be created."
-  else
-    printf "│   └── %b[SUCCESS]%b Base MCP config directory ensured.\n" "$GREEN" "$NC"
-  fi
+  # MCP uses --env-file approach, no individual config directories needed
+  printf "├── %b[CONFIG]%b MCP configuration uses --env-file approach (no individual config dirs needed)\n" "$BLUE" "$NC"
+  printf "│   └── %b[INFO]%b Client configurations generated via mcp_manager.sh\n" "$BLUE" "$NC"
 
   # Environment-aware MCP setup
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "├── %b[CI ENVIRONMENT]%b Skipping containerization - MCP config only\n" "$BLUE" "$NC"
+    printf "├── %b[SKIPPED]%b Containerization checks (CI environment)\n" "$YELLOW" "$NC"
     printf "│   └── %b[INFO]%b CI detected - focusing on configuration validation\n" "$BLUE" "$NC"
     return 0
   fi
@@ -313,63 +307,12 @@ setup_containerization_and_mcp() {
     printf "│   └── %b[INFO]%b OrbStack not found - install for full MCP functionality\n" "$YELLOW" "$NC"
   fi
 
-  # MCP Configuration Setup (directory structure only)
-  printf "└── %b[CONFIG]%b Setting up MCP configuration structure\n" "$BLUE" "$NC"
-
-  # Ensure MCP configuration directories exist
-  printf "├── %b[CONFIG]%b Ensuring base MCP config directory (%s/.config/mcp)\n" "$BLUE" "$NC" "$HOME"
-  if mkdir -p "${HOME}/.config/mcp/github-mcp-server" "${HOME}/.config/mcp/circleci-mcp-server" 2> /dev/null; then
-    printf "│   └── %b[SUCCESS]%b Base MCP config directory ensured.\n" "$GREEN" "$NC"
-  else
-    printf "│   └── %b[ERROR]%b Failed to create MCP config directories\n" "$RED" "$NC"
-    return 1
-  fi
-
-  # Create default MCP config files if they don't exist
-  local github_config="${HOME}/.config/mcp/github-mcp-server/config.json"
-  local circleci_config="${HOME}/.config/mcp/circleci-mcp-server/config.json"
-
-  # Create GitHub MCP config if missing
-  if [[ ! -f "$github_config" ]]; then
-    printf "├── %b[CONFIG]%b Creating GitHub MCP config\n" "$BLUE" "$NC"
-    if echo '{
-      "server": {
-        "name": "github-mcp-server",
-        "version": "1.0.0"
-      },
-      "auth": {
-        "type": "token",
-        "token": "${GITHUB_TOKEN:-}"
-      }
-    }' > "$github_config" 2> /dev/null; then
-      printf "│   └── %b[SUCCESS]%b GitHub MCP config created\n" "$GREEN" "$NC"
-    else
-      printf "│   └── %b[ERROR]%b Failed to create GitHub MCP config\n" "$RED" "$NC"
-      return 1
-    fi
-  fi
-
-  # Create CircleCI MCP config if missing
-  if [[ ! -f "$circleci_config" ]]; then
-    printf "├── %b[CONFIG]%b Creating CircleCI MCP config\n" "$BLUE" "$NC"
-    if echo '{
-      "server": {
-        "name": "circleci-mcp-server",
-        "version": "1.0.0"
-      },
-      "auth": {
-        "type": "token",
-        "token": "${CIRCLECI_TOKEN:-}"
-      }
-    }' > "$circleci_config" 2> /dev/null; then
-      printf "│   └── %b[SUCCESS]%b CircleCI MCP config created\n" "$GREEN" "$NC"
-    else
-      printf "│   └── %b[ERROR]%b Failed to create CircleCI MCP config\n" "$RED" "$NC"
-      return 1
-    fi
-  fi
-
-  printf "    └── %b[SUCCESS]%b MCP configuration structure ready\n" "$GREEN" "$NC"
+  # MCP Configuration Info
+  printf "└── %b[CONFIG]%b MCP configuration managed via mcp_manager.sh\n" "$BLUE" "$NC"
+  printf "    ├── %b[INFO]%b MCP servers use secure --env-file approach\n" "$BLUE" "$NC"
+  printf "    ├── %b[INFO]%b Configuration files: ~/.cursor/mcp.json, ~/Library/Application Support/Claude/claude_desktop_config.json\n" "$BLUE" "$NC"
+  printf "    ├── %b[INFO]%b Environment variables: .env file (created from .env_example)\n" "$BLUE" "$NC"
+  printf "    └── %b[INFO]%b Run './mcp_manager.sh config-write' after setup to generate client configurations\n" "$BLUE" "$NC"
 
   return 0
 }
@@ -431,7 +374,7 @@ install_packages() {
 
   # CI environment note
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "├── %b[CI ENVIRONMENT]%b No containerization - MCP configuration validation only\n" "$BLUE" "$NC"
+    printf "├── %b[SKIPPED]%b Containerization checks (CI environment)\n" "$YELLOW" "$NC"
   fi
 
   # Log file for bundle output

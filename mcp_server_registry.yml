@@ -78,6 +78,6 @@ servers:
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"
-  config_path: "${HOME}/.config/mcp"
+  # config_path: Legacy - now using --env-file approach
   network_name: "mcp-network"
   default_timeout: 30

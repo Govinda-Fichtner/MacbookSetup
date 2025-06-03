@@ -399,6 +399,33 @@ The setup includes a comprehensive completion testing framework that verifies:
 
 This completion testing ensures that developers have full access to command-line completions, improving productivity and reducing errors.
 
+#### CI Output Standardization
+
+The project implements consistent output formatting across all verification scripts:
+
+1. **Standardized Skip Messages**:
+   - Format: `[SKIPPED] <what was skipped> (<reason>)`
+   - Examples: `[SKIPPED] Terminal font verification (CI environment)`
+   - Color-coded with yellow for easy identification
+
+2. **Environment-Aware Testing**:
+   - CI environments automatically skip GUI-dependent tests
+   - Container runtime checks adapt to available infrastructure
+   - Completion tests are relaxed for CI environments
+
+3. **Error Classification**:
+   - `[ERROR]`: Critical failures that stop the build
+   - `[WARNING]`: Issues that don't prevent continuation
+   - `[SKIPPED]`: Intentionally bypassed checks (environment-specific)
+   - `[INFO]`: Informational messages for context
+
+4. **Clean Output**:
+   - No debug variable contamination in logs
+   - Consistent tree-structure formatting
+   - Clear separation between test categories
+
+This standardization ensures CI logs are readable and maintainable, making it easier to identify actual issues versus expected environment limitations.
+
 ## 📄 License
 
 This project is licensed under the MIT License - see below for details:
