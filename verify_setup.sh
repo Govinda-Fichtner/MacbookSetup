@@ -909,39 +909,17 @@ verify_containerization_and_mcp() {
 
   # Perform MCP testing with enhanced output
   if [[ -f "./mcp_manager.sh" ]]; then
-    printf "│   ├── %b[TESTING]%b Running MCP health checks via mcp_manager.sh\n" "$BLUE" "$RESET"
+    printf "│   ├── %b[TESTING]%b Running MCP health checks\n" "$BLUE" "$RESET"
 
-    # Capture mcp_manager.sh output for parsing
-    local mcp_output
-    mcp_output=$(./mcp_manager.sh test 2>&1)
-    local mcp_exit_code=$?
-
-    if [[ $mcp_exit_code -eq 0 ]]; then
+    # Run mcp_manager.sh with output redirected to /dev/null
+    if ./mcp_manager.sh test > /dev/null 2>&1; then
       printf "│   ├── %b[SUCCESS]%b MCP servers verified successfully\n" "$GREEN" "$RESET"
 
-      # Parse and display tool capabilities for advanced testing
-      if [[ "$test_tier" == "advanced" ]]; then
-        printf "│   └── %b[CAPABILITIES]%b Available MCP tools:\n" "$GREEN" "$RESET"
-
-        # Extract tool information from mcp_manager output (handle line wrapping)
-        local github_tools
-        local circleci_tools
-        github_tools=$(echo "$mcp_output" | tr '\n' ' ' | grep -o "GitHub MCP Server: [0-9]* tools available ([^)]*)" | head -1 || echo "")
-        circleci_tools=$(echo "$mcp_output" | tr '\n' ' ' | grep -o "CircleCI MCP Server: [0-9]* tools available ([^)]*)" | head -1 || echo "")
-
-        if [[ -n "$github_tools" ]]; then
-          printf "│       ├── %b[GitHub]%b %s\n" "$GREEN" "$RESET" "$github_tools"
-        else
-          printf "│       ├── %b[GitHub]%b Authentication successful\n" "$GREEN" "$RESET"
-        fi
-
-        if [[ -n "$circleci_tools" ]]; then
-          printf "│       └── %b[CircleCI]%b %s\n" "$GREEN" "$RESET" "$circleci_tools"
-        else
-          printf "│       └── %b[CircleCI]%b Authentication successful\n" "$GREEN" "$RESET"
-        fi
+      # Only show capabilities in non-CI environments
+      if [[ "${CI:-false}" != "true" ]]; then
+        printf "│   └── %b[CAPABILITIES]%b MCP tools available\n" "$GREEN" "$RESET"
       else
-        printf "│   └── %b[INFO]%b MCP protocol functional (authentication would unlock full capabilities)\n" "$BLUE" "$RESET"
+        printf "│   └── %b[INFO]%b MCP protocol functional\n" "$BLUE" "$RESET"
       fi
     else
       printf "│   ├── %b[WARNING]%b MCP testing completed with issues\n" "$YELLOW" "$RESET"
@@ -984,7 +962,6 @@ verify_containerization_and_mcp() {
     log_warning "MCP environment verification limited (mcp_manager.sh not found)"
     return 1
   fi
-
 }
 
 # Main verification function
