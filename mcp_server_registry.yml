@@ -1,22 +1,25 @@
+---
 # MCP Server Registry Configuration
 # Centralized configuration for all MCP (Model Context Protocol) servers
 # Supports both registry images and local repository builds
 
 servers:
   github:
-    name: "GitHub MCP Server"
+    name: GitHub MCP Server
     description: "GitHub repository management and code analysis"
     category: "code"
     source:
-      type: "registry"
-      image: "mcp/github-mcp-server:latest"
-      registry: "docker.io"
+      type: docker
+      image: mcp/github-mcp-server:latest
     environment_variables:
-      - "GITHUB_PERSONAL_ACCESS_TOKEN"
       - "GITHUB_TOKEN"
+      - "GITHUB_PERSONAL_ACCESS_TOKEN"
     health_test:
-      parse_mode: "filter_json"
-      timeout: 30
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "ok"
     capabilities:
       - "repository_management"
       - "issue_tracking"
@@ -24,20 +27,21 @@ servers:
       - "code_search"
 
   circleci:
-    name: "CircleCI MCP Server"
+    name: CircleCI MCP Server
     description: "CircleCI pipeline monitoring and management"
     category: "cicd"
     source:
-      type: "build"
-      repository: "https://github.com/CircleCI-Public/mcp-server-circleci.git"
-      image: "local/mcp-server-circleci:latest"
-      build_context: "."
+      type: docker
+      image: local/mcp-server-circleci:latest
     environment_variables:
       - "CIRCLECI_TOKEN"
       - "CIRCLECI_BASE_URL"
     health_test:
-      parse_mode: "filter_json"
-      timeout: 30
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "ok"
     capabilities:
       - "pipeline_monitoring"
       - "job_management"

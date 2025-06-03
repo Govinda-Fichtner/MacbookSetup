@@ -266,9 +266,9 @@ install_hashicorp_tools() {
   install_hashicorp_tool "packer" "1.12.0" "└──" || printf "└── %b[WARNING]%b Packer installation skipped\n" "$YELLOW" "$NC"
 }
 
-# Docker, Colima and MCP Setup
+# MCP Configuration Setup
 setup_containerization_and_mcp() {
-  echo -e "\n=== Docker, Colima & MCP Server Setup ==="
+  echo -e "\n=== MCP Configuration Setup ==="
   local mcp_base_config_dir="${HOME}/.config/mcp"
 
   # Ensure base MCP config directory exists
@@ -281,212 +281,34 @@ setup_containerization_and_mcp() {
     printf "│   └── %b[SUCCESS]%b Base MCP config directory ensured.\n" "$GREEN" "$NC"
   fi
 
-  # Prefer Orbstack if available and working
-  printf "├── %b[CHECKING]%b Orbstack status\n" "$BLUE" "$NC"
+  # Environment-aware MCP setup
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "├── %b[CI ENVIRONMENT]%b Skipping containerization - MCP config only\n" "$BLUE" "$NC"
+    printf "│   └── %b[INFO]%b CI detected - focusing on configuration validation\n" "$BLUE" "$NC"
+    return 0
+  fi
+
+  # Local environment: prefer OrbStack if available
+  printf "├── %b[LOCAL ENVIRONMENT]%b Checking OrbStack status\n" "$BLUE" "$NC"
   if check_command orbctl; then
     if orbctl status > /dev/null 2>&1; then
-      printf "│   └── %b[SUCCESS]%b Orbstack is installed and running. Using Orbstack for containerization.\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b OrbStack is running - MCP servers ready for local testing\n" "$GREEN" "$NC"
       export CONTAINER_RUNTIME=orbstack
-      return 0
     else
-      printf "│   └── %b[WARNING]%b Orbstack is installed but not running. Attempting to start...\n" "$YELLOW" "$NC"
-      if orbctl start > /tmp/orbstack_start.log 2>&1 && orbctl status > /dev/null 2>&1; then
-        printf "│   └── %b[SUCCESS]%b Orbstack started successfully. Using Orbstack.\n" "$GREEN" "$NC"
-        export CONTAINER_RUNTIME=orbstack
-        return 0
-      else
-        printf "│   └── %b[WARNING]%b Failed to start Orbstack. Falling back to Colima. See /tmp/orbstack_start.log\n" "$YELLOW" "$NC"
-      fi
+      printf "│   └── %b[INFO]%b OrbStack installed but not running - start manually for MCP testing\n" "$YELLOW" "$NC"
     fi
   else
-    printf "│   └── %b[INFO]%b Orbstack not found. Will try Colima.\n" "$BLUE" "$NC"
+    printf "│   └── %b[INFO]%b OrbStack not found - install for full MCP functionality\n" "$YELLOW" "$NC"
   fi
 
-  # Only install Colima and dependencies if Orbstack is not available/working
-  # Ensure QEMU, Lima, and lima-additional-guestagents are installed before Colima
-  local colima_deps=(qemu lima lima-additional-guestagents)
-  for dep in "${colima_deps[@]}"; do
-    if ! check_command "$dep" && ! brew list --formula | grep -q "^$dep$"; then
-      printf "│   ├── %b[INSTALLING]%b %s (required for Colima)\n" "$BLUE" "$NC" "$dep"
-      if check_command brew; then
-        if brew install "$dep" > "/tmp/brew_install_${dep}.log" 2>&1; then
-          printf "│   │   └── %b[SUCCESS]%b %s installed\n" "$GREEN" "$NC" "$dep"
-        else
-          printf "│   │   └── %b[ERROR]%b Failed to install %s. See /tmp/brew_install_%s.log\n" "$RED" "$NC" "$dep" "$dep"
-        fi
-      else
-        printf "│   │   └── %b[ERROR]%b Homebrew not found. Cannot install %s.\n" "$RED" "$NC" "$dep"
-      fi
-    else
-      printf "│   ├── %b[EXISTS]%b %s already installed\n" "$GREEN" "$NC" "$dep"
-    fi
-  done
+  # MCP Configuration Setup (directory structure only)
+  printf "└── %b[CONFIG]%b Setting up MCP configuration structure\n" "$BLUE" "$NC"
 
-  # Setup Colima
-  printf "├── %b[CHECKING]%b Colima status\n" "$BLUE" "$NC"
-  if ! check_command colima; then
-    printf "│   ├── %b[INFO]%b Colima not found. It should be installed via Brewfile.\n" "$YELLOW" "$NC"
-    printf "│   └── %b[WARNING]%b Colima setup skipped. Install it via Homebrew if needed.\n" "$YELLOW" "$NC"
-    return 0
-  fi
+  # Ensure MCP configuration directories exist
+  ensure_mcp_server_config "github-mcp-server" "    "
+  ensure_mcp_server_config "circleci-mcp-server" "    "
 
-  # Start Colima with QEMU first in CI, fallback to VZ, otherwise use default
-  local colima_started=false
-  if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   ├── %b[INFO]%b CI detected. Trying Colima with --vm-type=qemu...\n" "$BLUE" "$NC"
-    if colima start --vm-type=qemu > /tmp/colima_start_qemu.log 2>&1; then
-      printf "│   │   └── %b[SUCCESS]%b Colima started with QEMU.\n" "$GREEN" "$NC"
-      colima_started=true
-    else
-      printf "│   │   └── %b[WARNING]%b Failed to start Colima with QEMU. See /tmp/colima_start_qemu.log\n" "$YELLOW" "$NC"
-      printf "│   ├── %b[INFO]%b Trying Colima with --vm-type=vz...\n" "$BLUE" "$NC"
-      if colima start --vm-type=vz > /tmp/colima_start_vz.log 2>&1; then
-        printf "│   │   └── %b[SUCCESS]%b Colima started with VZ.\n" "$GREEN" "$NC"
-        colima_started=true
-      else
-        printf "│   │   └── %b[ERROR]%b Failed to start Colima with both QEMU and VZ. See /tmp/colima_start_vz.log\n" "$RED" "$NC"
-      fi
-    fi
-  else
-    # Local: use default Colima logic
-    if colima status > /dev/null 2>&1; then
-      printf "│   └── %b[SUCCESS]%b Colima is installed and running\n" "$GREEN" "$NC"
-      colima_started=true
-    else
-      printf "│   ├── %b[INFO]%b Colima is installed but not running. Attempting to start...\n" "$BLUE" "$NC"
-      if colima start > /tmp/colima_start_local.log 2>&1; then
-        printf "│   └── %b[SUCCESS]%b Colima started successfully.\n" "$GREEN" "$NC"
-        colima_started=true
-      else
-        printf "│   └── %b[ERROR]%b Failed to start Colima. See /tmp/colima_start_local.log\n" "$RED" "$NC"
-      fi
-    fi
-  fi
-
-  if [[ "$colima_started" != true ]]; then
-    printf "│   └── %b[WARNING]%b Failed to start any container runtime. MCP testing will be limited to configuration validation.\n" "$YELLOW" "$NC"
-    return 0
-  fi
-  export CONTAINER_RUNTIME=colima
-
-  # Check Docker
-  printf "├── %b[CHECKING]%b Docker command-line tool\n" "$BLUE" "$NC"
-  if check_command docker; then
-    printf "│   └── %b[SUCCESS]%b Docker CLI is available\n" "$GREEN" "$NC"
-    # Nested check for Docker daemon connectivity
-    printf "    ├── %b[CHECKING]%b Docker daemon connectivity\n" "$BLUE" "$NC"
-    if docker info > /dev/null 2>&1; then
-      printf "    │   └── %b[SUCCESS]%b Docker daemon is responsive\n" "$GREEN" "$NC"
-    else
-      printf "    │   └── %b[ERROR]%b Docker daemon is not responsive. Ensure Colima (or other Docker provider) is running correctly and 'docker context' is set appropriately.\n" "$RED" "$NC"
-    fi
-  else
-    printf "│   └── %b[ERROR]%b Docker CLI not found. Install Docker Desktop or ensure colima/lima provides it and it's in PATH.\n" "$RED" "$NC"
-  fi
-
-  # MCP GitHub Server Image
-  printf "├── %b[DOCKER]%b Setting up GitHub MCP Server image\n" "$BLUE" "$NC"
-  printf "│   ├── %b[PULLING]%b mcp/github-mcp-server:latest\n" "$BLUE" "$NC"
-  if docker pull mcp/github-mcp-server:latest > /tmp/docker_pull_github_mcp.log 2>&1; then
-    printf "│   └── %b[SUCCESS]%b Pulled mcp/github-mcp-server:latest\n" "$GREEN" "$NC"
-  else
-    printf "│   └── %b[ERROR]%b Failed to pull mcp/github-mcp-server:latest. Check /tmp/docker_pull_github_mcp.log\n" "$RED" "$NC"
-  fi
-  ensure_mcp_server_config "github-mcp-server" "│  "
-
-  # MCP CircleCI Server Image
-  local circleci_mcp_repo_url="https://github.com/CircleCI-Public/mcp-server-circleci.git"
-  local circleci_mcp_repo_path="/tmp/mcp-server-circleci"
-  printf "├── %b[DOCKER]%b Setting up CircleCI MCP Server image\n" "$BLUE" "$NC"
-
-  if docker images local/mcp-server-circleci:latest --format "{{.Repository}}" | grep -q "local/mcp-server-circleci"; then
-    printf "│   ├── %b[EXISTS]%b Image local/mcp-server-circleci:latest already exists.\n" "$GREEN" "$NC"
-    printf "│   │   %b[INFO]%b To rebuild, delete the image and re-run setup, or use a force rebuild flag (not implemented).\n" "$BLUE" "$NC"
-  else
-    printf "│   ├── %b[CLONING]%b CircleCI MCP server from %s to %s\n" "$BLUE" "$NC" "$circleci_mcp_repo_url" "$circleci_mcp_repo_path"
-    if [[ -d "$circleci_mcp_repo_path" ]]; then
-      printf "│   │   ├── %b[INFO]%b Repository already exists at %s. Pulling latest changes...\n" "$BLUE" "$NC" "$circleci_mcp_repo_path"
-      (cd "$circleci_mcp_repo_path" && git pull) > /tmp/git_pull_circleci_mcp.log 2>&1 || {
-        printf "│   │   └── %b[WARNING]%b Failed to pull latest changes for CircleCI MCP server. Using existing local version for build. Check /tmp/git_pull_circleci_mcp.log\n" "$YELLOW" "$NC"
-      }
-      printf "│   │   └── %b[SUCCESS]%b Updated CircleCI MCP server repository.\n" "$GREEN" "$NC"
-    else
-      git clone "$circleci_mcp_repo_url" "$circleci_mcp_repo_path" > /tmp/git_clone_circleci_mcp.log 2>&1 || {
-        printf "│   │   └── %b[ERROR]%b Failed to clone CircleCI MCP server repository. Check /tmp/git_clone_circleci_mcp.log\n" "$RED" "$NC"
-        printf "│   └── %b[SKIPPED]%b CircleCI MCP server image build skipped due to clone failure.\n" "$YELLOW" "$NC"
-        ensure_mcp_server_config "circleci-mcp-server" "│  " # Still ensure config dir
-        # Decide if this is a fatal error for the whole MCP setup section or just for this server
-        # For now, let it continue to create the docker-compose.yml, which might then fail at runtime if image is missing.
-        # Or, return 1 to mark this section as problematic.
-      }
-      if [ -d "$circleci_mcp_repo_path/.git" ]; then # Check if clone was successful before saying so
-        printf "│   │   └── %b[SUCCESS]%b Cloned CircleCI MCP server repository.\n" "$GREEN" "$NC"
-      fi
-    fi
-
-    # Proceed to build only if the repo path exists (clone or previous existence succeeded)
-    if [[ -d "$circleci_mcp_repo_path" ]]; then
-      printf "│   ├── %b[BUILDING]%b local/mcp-server-circleci:latest from %s\n" "$BLUE" "$NC" "$circleci_mcp_repo_path"
-      if (cd "$circleci_mcp_repo_path" && docker build -t local/mcp-server-circleci:latest .) > /tmp/docker_build_circleci_mcp.log 2>&1; then
-        printf "│   └── %b[SUCCESS]%b Built local/mcp-server-circleci:latest\n" "$GREEN" "$NC"
-      else
-        printf "│   └── %b[ERROR]%b Failed to build local/mcp-server-circleci:latest. Check /tmp/docker_build_circleci_mcp.log\n" "$RED" "$NC"
-      fi
-    else
-      printf "│   └── %b[SKIPPED]%b CircleCI MCP server image build skipped as repository directory %s does not exist.\n" "$YELLOW" "$NC" "$circleci_mcp_repo_path"
-    fi
-  fi
-  ensure_mcp_server_config "circleci-mcp-server" "│  "
-
-  # Create/Update MCP Docker Compose file
-  local mcp_docker_compose_file="${mcp_base_config_dir}/docker-compose.yml"
-  printf "└── %b[CONFIG]%b Ensuring MCP docker-compose.yml at %s\n" "$BLUE" "$NC" "$mcp_docker_compose_file"
-
-  # Using a heredoc for the docker-compose.yml content
-  # Note: Backslashes are needed before $ in environment variables within the heredoc
-  # to prevent them from being expanded by the current shell.
-  cat << EOF > "$mcp_docker_compose_file"
-version: '3.8'
-services:
-  github-mcp:
-    image: mcp/github-mcp-server:latest
-    container_name: github-mcp
-    environment:
-      - GITHUB_TOKEN=\${GITHUB_TOKEN:-your_github_token_here}
-    volumes:
-      - ~/.config/mcp/github-mcp-server:/root/.config/mcp/server
-    stdin_open: true
-    tty: false
-
-  circleci-mcp:
-    image: local/mcp-server-circleci:latest
-    container_name: circleci-mcp
-    environment:
-      - CIRCLECI_TOKEN=\${CIRCLECI_TOKEN:-your_circleci_token_here}
-      - CIRCLECI_BASE_URL=\${CIRCLECI_BASE_URL:-https://circleci.com}
-    volumes:
-      - ~/.config/mcp/circleci-mcp-server:/root/.config/mcp/server
-    stdin_open: true
-    tty: false
-EOF
-
-  if [ -f "$mcp_docker_compose_file" ]; then
-    printf "    └── %b[SUCCESS]%b MCP docker-compose.yml created/updated.\n" "$GREEN" "$NC"
-    # Validate the docker-compose file syntax if docker-compose is available
-    if check_command docker-compose; then
-      printf "        ├── %b[VALIDATING]%b MCP docker-compose.yml syntax\n" "$BLUE" "$NC"
-      # Use a subshell and cd to ensure docker-compose resolves paths correctly if any relative paths were used
-      if (cd "$mcp_base_config_dir" && docker-compose -f "$mcp_docker_compose_file" config -q) > /dev/null 2>&1; then
-        printf "        │   └── %b[SUCCESS]%b MCP docker-compose.yml is valid.\n" "$GREEN" "$NC"
-      else
-        printf "        │   └── %b[ERROR]%b MCP docker-compose.yml is invalid. Check the file or run 'docker-compose -f %s config' in %s\n" "$RED" "$NC" "$mcp_docker_compose_file" "$mcp_base_config_dir"
-      fi
-    else
-      printf "        └── %b[WARNING]%b docker-compose not found. Cannot validate MCP docker-compose.yml syntax.\n" "$YELLOW" "$NC"
-    fi
-  else
-    printf "    └── %b[ERROR]%b Failed to create/update MCP docker-compose.yml.\n" "$RED" "$NC"
-  fi
+  printf "    └── %b[SUCCESS]%b MCP configuration structure ready\n" "$GREEN" "$NC"
 
   return 0
 }
@@ -535,104 +357,7 @@ install_homebrew() {
   printf "• Containerization and MCP setup: %s\n" "$GREEN"
 }
 
-setup_container_environment() {
-  echo -e "\n=== Container Environment ==="
-
-  # Handle different container environments based on CI vs local
-  if [[ "${CI:-false}" == "true" ]]; then
-    printf "├── %b[CI ENVIRONMENT]%b Setting up lightweight Docker with Colima\n" "$BLUE" "$NC"
-
-    # In CI, verify Docker CLI is available (should be installed via Brewfile)
-    if ! check_command "docker"; then
-      printf "│   └── %b[ERROR]%b Docker CLI not available in CI\n" "$RED" "$NC"
-      return 1
-    fi
-
-    # Check if Docker daemon is available, if not start Colima
-    if ! docker info > /dev/null 2>&1; then
-      printf "│   ├── %b[INFO]%b Docker daemon not running - starting Colima\n" "$BLUE" "$NC"
-
-      # Start Docker daemon via Colima (optimized for CI)
-      if check_command "colima"; then
-        printf "│   ├── %b[STARTING]%b Colima (lightweight Docker runtime)\n" "$BLUE" "$NC"
-
-        local colima_arch
-        if [[ "$(uname -m)" == "arm64" ]]; then
-          colima_arch="aarch64"
-        else
-          colima_arch="x86_64"
-        fi
-
-        if colima start --cpu 2 --memory 4 --vm-type=vz --arch "$colima_arch"; then
-          printf "│   ├── %b[SUCCESS]%b Colima started successfully\n" "$GREEN" "$NC"
-        else
-          printf "│   ├── %b[WARNING]%b Failed to start Colima\n" "$YELLOW" "$NC"
-          printf "│   └── %b[INFO]%b MCP testing will be limited to configuration validation\n" "$BLUE" "$NC"
-          return 0
-        fi
-      else
-        printf "│   ├── %b[ERROR]%b Colima not available in CI environment\n" "$RED" "$NC"
-        printf "│   └── %b[INFO]%b Configuration validation will still proceed\n" "$BLUE" "$NC"
-        return 0
-      fi
-    else
-      printf "│   └── %b[SUCCESS]%b Docker daemon already available\n" "$GREEN" "$NC"
-    fi
-
-    printf "└── %b[SUCCESS]%b CI container environment ready (Colima)\n" "$GREEN" "$NC"
-    return 0
-  fi
-
-  # Local environment - handle OrbStack setup
-  if [[ "${SKIP_ORBSTACK:-false}" == "true" ]]; then
-    printf "└── %b[SKIPPED]%b OrbStack setup (SKIP_ORBSTACK=true)\n" "$YELLOW" "$NC"
-    return 0
-  fi
-
-  printf "├── %b[LOCAL ENVIRONMENT]%b Setting up OrbStack (full Docker experience)\n" "$BLUE" "$NC"
-  if ! check_command orbctl; then
-    printf "└── %b[ERROR]%b OrbStack not installed - please install first\n" "$RED" "$NC"
-    return 1
-  fi
-
-  # Ensure OrbStack is in PATH
-  if [[ -d "/Applications/OrbStack.app" ]]; then
-    printf "├── %b[CONFIGURING]%b Adding OrbStack to PATH\n" "$BLUE" "$NC"
-    # shellcheck disable=SC2016
-    echo 'export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"' >> "$ZSHRC_PATH"
-    export PATH="/Applications/OrbStack.app/Contents/MacOS:$PATH"
-  fi
-
-  # Start OrbStack if it's not running
-  printf "├── %b[CHECKING]%b OrbStack status\n" "$BLUE" "$NC"
-  if ! orbctl status > /dev/null 2>&1; then
-    printf "│   ├── %b[STARTING]%b OrbStack service\n" "$BLUE" "$NC"
-    if ! orbctl start; then
-      printf "│   └── %b[ERROR]%b Failed to start OrbStack\n" "$RED" "$NC"
-      return 1
-    fi
-
-    # Wait for OrbStack to be fully initialized
-    printf "│   └── %b[WAITING]%b Initializing OrbStack\n" "$BLUE" "$NC"
-    local retries=30
-    while [[ $retries -gt 0 ]]; do
-      if orbctl status > /dev/null 2>&1; then
-        break
-      fi
-      sleep 1
-      ((retries--))
-    done
-
-    if [[ $retries -eq 0 ]]; then
-      printf "└── %b[ERROR]%b OrbStack failed to initialize\n" "$RED" "$NC"
-      return 1
-    fi
-  else
-    printf "│   └── %b[SUCCESS]%b OrbStack already running\n" "$GREEN" "$NC"
-  fi
-
-  printf "└── %b[SUCCESS]%b Local container environment ready (OrbStack)\n" "$GREEN" "$NC"
-}
+# Container environment setup removed - now using local MCP testing only
 
 install_packages() {
   echo -e "\n=== Installing Packages ==="
@@ -643,28 +368,9 @@ install_packages() {
     return 1
   fi
 
-  # Handle Docker installation strategy based on environment
+  # CI environment note
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "├── %b[CI ENVIRONMENT]%b Installing Docker CLI + Colima for lightweight MCP testing\n" "$BLUE" "$NC"
-    # In CI, explicitly install Docker CLI, Docker Compose, and Colima
-    # These are needed for the lightweight MCP testing environment.
-    # The main Brewfile might not contain them if OrbStack is used locally.
-    if ! brew install docker docker-compose colima; then
-      printf "│   └── %b[ERROR]%b Failed to install Docker/Colima via Homebrew. MCP tests may fail.\n" "$RED" "$NC"
-      # Optionally, return 1 here if this is a critical failure for CI
-    else
-      printf "│   └── %b[SUCCESS]%b Docker CLI, Docker Compose, and Colima installed/updated for CI.\n" "$GREEN" "$NC"
-    fi
-    # The comment below is aspirational if Brewfile was the sole source,
-    # but direct install is more robust for CI when Brewfile is variable.
-    # # In CI, keep Docker packages in Brewfile: docker, docker-compose, colima
-  else
-    # Remove Docker packages from Brewfile since OrbStack provides full Docker functionality
-    if grep -q '^brew "docker"' "Brewfile"; then
-      printf "├── %b[LOCAL ENVIRONMENT]%b Removing Docker packages (OrbStack provides full Docker)\n" "$YELLOW" "$NC"
-      sed -i.bak '/^brew "docker"/d; /^brew "docker-compose"/d; /^brew "colima"/d' "Brewfile"
-      rm -f "Brewfile.bak"
-    fi
+    printf "├── %b[CI ENVIRONMENT]%b No containerization - MCP configuration validation only\n" "$BLUE" "$NC"
   fi
 
   # Log file for bundle output
@@ -1469,8 +1175,7 @@ main() {
   validate_system || exit 1
   install_homebrew || exit 1
   install_packages || exit 1
-  setup_containerization_and_mcp || printf "├── %b[WARNING]%b Containerization and MCP setup incomplete\n" "$YELLOW" "$NC"
-  setup_container_environment || printf "├── %b[WARNING]%b Container environment setup incomplete\n" "$YELLOW" "$NC"
+  setup_containerization_and_mcp || printf "├── %b[WARNING]%b MCP configuration setup incomplete\n" "$YELLOW" "$NC"
   install_hashicorp_tools || printf "├── %b[WARNING]%b Some HashiCorp tools may not be installed\n" "$YELLOW" "$NC"
   configure_terminal_fonts || printf "├── %b[WARNING]%b Terminal font configuration incomplete\n" "$YELLOW" "$NC"
   configure_shell || exit 1

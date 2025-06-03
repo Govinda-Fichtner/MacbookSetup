@@ -1,3 +1,4 @@
+---
 version: 2.1
 
 # Define reusable commands
@@ -114,9 +115,4 @@ jobs:
       - store_artifacts:
           path: /tmp/circleci-build.log
           destination: build_log
-      - store_artifacts:
-          path: /tmp/colima_start_qemu.log
-          destination: colima_start_qemu.log
-      - store_artifacts:
-          path: /tmp/colima_start_vz.log
-          destination: colima_start_vz.log
+      # Colima logs removed - no longer using containerization in CI
