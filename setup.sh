@@ -16,8 +16,8 @@ set -e
 readonly SCRIPT_VERSION="1.0.0"
 readonly ZSHRC_PATH="${HOME}/.zshrc"
 ZDOTDIR="${ZDOTDIR:-$HOME}"
-readonly COMPLETION_DIR="${HOME}/.zsh/completions"
-readonly ZCOMPCACHE_DIR="${HOME}/.zcompcache"
+readonly COMPLETION_DIR="${ZDOTDIR}/.zsh/completions"
+readonly ZCOMPCACHE_DIR="${ZDOTDIR}/.zcompcache"
 readonly ANTIDOTE_PLUGINS_FILE="${ZDOTDIR}/.zsh_plugins.txt"
 # shellcheck disable=SC2155
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -127,14 +127,26 @@ check_command() {
   command -v "$1" > /dev/null 2>&1
 }
 
+# Function to ensure directory exists
 ensure_dir() {
   local dir="$1"
   if [[ ! -d "$dir" ]]; then
-    mkdir -p "$dir" || {
-      printf "│   └── %b[ERROR]%b Failed to create directory: %s\n" "$RED" "$NC" "$dir"
+    mkdir -p "$dir" 2> /dev/null || {
+      log_warning "Failed to create directory: $dir"
       return 1
     }
   fi
+  return 0
+}
+
+# Function to ensure completion directory exists
+ensure_completion_dir() {
+  ensure_dir "$COMPLETION_DIR" || return 1
+  # Add completion directory to fpath if not already there
+  if [[ ":${fpath}:" != *":${COMPLETION_DIR}:"* ]]; then
+    fpath=("$COMPLETION_DIR" "${fpath[@]}")
+  fi
+  return 0
 }
 
 backup_file() {
@@ -693,68 +705,8 @@ antidote load \${ZDOTDIR:-\$HOME}/.zsh_plugins.txt"
 }
 
 generate_completion_files() {
-  echo -e "\n=== Generating Completion Files ==="
-
-  # macOS-compatible timeout function
-  run_with_timeout() {
-    local timeout_duration=$1
-    shift
-    local cmd="$*"
-
-    # Try to use gtimeout if available (from brew install coreutils)
-    if command -v gtimeout > /dev/null 2>&1; then
-      gtimeout "$timeout_duration" bash -c "$cmd"
-    # Fallback to using background process with timeout
-    else
-      (
-        eval "$cmd" &
-        local pid=$!
-        (
-          sleep "$timeout_duration"
-          kill "$pid" 2> /dev/null
-        ) &
-        local timeout_pid=$!
-        wait "$pid" 2> /dev/null
-        local exit_code=$?
-        kill "$timeout_pid" 2> /dev/null
-        exit "$exit_code"
-      )
-    fi
-  }
-
-  # Generate static completion files for tools that support it
-  echo "├── Container Tools"
-  local container_tools=(
-    "docker:docker completion zsh"
-    "kubectl:kubectl completion zsh"
-    "helm:helm completion zsh"
-    "orb:orb completion zsh"
-    "orbctl:orbctl completion zsh"
-  )
-
-  local i=0
-  for tool_config in "${container_tools[@]}"; do
-    local tool="${tool_config%%:*}"
-    local completion_cmd="${tool_config#*:}"
-    local completion_file="${COMPLETION_DIR}/_${tool}"
-    local prefix="│   "
-    local connector="├──"
-    if [[ $i -eq $((${#container_tools[@]} - 1)) ]]; then
-      connector="└──"
-    fi
-
-    if command -v "$tool" > /dev/null 2>&1; then
-      if run_with_timeout 10 "$completion_cmd" > "$completion_file" 2> /dev/null; then
-        printf "%s%s %b[SUCCESS]%b %s completion generated\n" "$prefix" "$connector" "$GREEN" "$NC" "$tool"
-      else
-        printf "%s%s %b[WARNING]%b %s completion failed (timeout or error)\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
-        rm -f "$completion_file"
-      fi
-    else
-      printf "%s%s %b[WARNING]%b %s not found, skipping\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
-    fi
-    ((i++))
-  done
+  # Ensure completion directory exists
+  ensure_completion_dir || return 1
 
   # Generate completions for development environment tools
   echo "├── Development Tools"
@@ -762,9 +714,6 @@ generate_completion_files() {
     "rbenv:rbenv completions zsh"
     "mcp_manager:cp _mcp_manager ${COMPLETION_DIR}/_mcp_manager"
   )
-
-  # Note: direnv doesn't provide official completions
-  # Available via third-party: zsh-users/zsh-completions
 
   local i=0
   for tool_config in "${dev_tools[@]}"; do
@@ -804,39 +753,6 @@ generate_completion_files() {
   else
     printf "│   └── %b[WARNING]%b pyenv not found, skipping\n" "$YELLOW" "$NC"
   fi
-
-  # Set up HashiCorp tool completions (they use different mechanisms)
-  echo "└── Infrastructure Tools"
-  local infra_tools=("terraform" "packer")
-  local i=0
-  for tool in "${infra_tools[@]}"; do
-    local prefix="    "
-    local connector="├──"
-    if [[ $i -eq $((${#infra_tools[@]} - 1)) ]]; then
-      connector="└──"
-    fi
-
-    if command -v "$tool" > /dev/null 2>&1; then
-      if [[ "$tool" == "terraform" ]]; then
-        if terraform -install-autocomplete 2> /dev/null; then
-          printf "%s%s %b[SUCCESS]%b %s autocomplete installed\n" "$prefix" "$connector" "$GREEN" "$NC" "$tool"
-        else
-          printf "%s%s %b[INFO]%b %s autocomplete already installed\n" "$prefix" "$connector" "$BLUE" "$NC" "$tool"
-        fi
-      elif [[ "$tool" == "packer" ]]; then
-        if packer -autocomplete-install 2> /dev/null; then
-          printf "%s%s %b[SUCCESS]%b %s autocomplete installed\n" "$prefix" "$connector" "$GREEN" "$NC" "$tool"
-        else
-          printf "%s%s %b[INFO]%b %s autocomplete already installed\n" "$prefix" "$connector" "$BLUE" "$NC" "$tool"
-        fi
-      fi
-    else
-      printf "%s%s %b[WARNING]%b %s not found, skipping\n" "$prefix" "$connector" "$YELLOW" "$NC" "$tool"
-    fi
-    ((i++))
-  done
-
-  printf "└── %b[SUCCESS]%b Completion file generation completed\n" "$GREEN" "$NC"
 }
 
 setup_shell_completions() {
@@ -1083,6 +999,15 @@ configure_shell() {
     printf "│   ├── %b[BACKED UP]%b Existing .zshrc\n" "$BLUE" "$NC"
   fi
 
+  # Ensure .zprofile exists and sources .zshrc
+  local zprofile_path="${ZDOTDIR}/.zprofile"
+  if [[ ! -f "$zprofile_path" ]] || ! grep -q "source.*\.zshrc" "$zprofile_path"; then
+    echo '[[ -f ~/.zshrc ]] && source ~/.zshrc' >> "$zprofile_path"
+    printf "│   ├── %b[CREATED]%b .zprofile to source .zshrc\n" "$GREEN" "$NC"
+  else
+    printf "│   ├── %b[EXISTS]%b .zprofile already sources .zshrc\n" "$BLUE" "$NC"
+  fi
+
   # Setup Antidote plugin manager
   printf "│   ├── %b[SETTING UP]%b Antidote plugin manager\n" "$BLUE" "$NC"
   if setup_antidote > /dev/null 2>&1; then
@@ -1216,5 +1141,8 @@ main() {
 
   printf "\n%bNext steps:%b Please restart your terminal or run: source %s\n" "$YELLOW" "$NC" "$ZSHRC_PATH"
 }
+
+# Call ensure_completion_dir early in the script
+ensure_completion_dir || log_warning "Failed to set up completion directory"
 
 main "$@"
