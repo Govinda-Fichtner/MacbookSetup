@@ -101,6 +101,13 @@ extract_version() {
       # Docker version is already clean from --format
       echo "$version_string"
       ;;
+    mcp_manager)
+      # Check if mcp_manager.sh exists and completion file is present
+      if [[ -f "./mcp_manager.sh" && -f "${completion_dir}/_mcp_manager" ]]; then
+        return 0 # mcp_manager.sh and its completion exist
+      fi
+      return 1
+      ;;
     *)
       # For other tools, try to extract the first version-like pattern
       echo "$version_string" | sed -n 's/.*\([0-9][0-9.]*[0-9]\).*/\1/p' | head -1
@@ -362,7 +369,7 @@ verify_shell_completions() {
 
   # Core completions
   echo "├── Core Completions"
-  local core_comps=(git rbenv pyenv nvm direnv)
+  local core_comps=(git rbenv pyenv nvm direnv mcp_manager)
   local i=0
   for tool in "${core_comps[@]}"; do
     local prefix="│   "
@@ -685,6 +692,13 @@ check_completion() {
       # HashiCorp tools use built-in completion system, check if command exists and works
       if command -v "$tool" > /dev/null 2>&1 && "$tool" --version > /dev/null 2>&1; then
         return 0 # tool is working, built-in completion should work
+      fi
+      return 1
+      ;;
+    mcp_manager)
+      # Check if mcp_manager.sh exists and completion file is present
+      if [[ -f "./mcp_manager.sh" && -f "${completion_dir}/_mcp_manager" ]]; then
+        return 0 # mcp_manager.sh and its completion exist
       fi
       return 1
       ;;

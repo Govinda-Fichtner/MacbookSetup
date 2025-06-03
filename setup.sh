@@ -760,6 +760,7 @@ generate_completion_files() {
   echo "├── Development Tools"
   local dev_tools=(
     "rbenv:rbenv completions zsh"
+    "mcp_manager:cp _mcp_manager ${COMPLETION_DIR}/_mcp_manager"
   )
 
   # Note: direnv doesn't provide official completions

@@ -1047,28 +1047,94 @@ EOF
 EOF
 }
 
+# Normalize command arguments to handle both formats
+normalize_args() {
+  local cmd="$1"
+  local arg="$2"
+
+  # If no arguments provided, return as is
+  [[ -z "$cmd" ]] && return 0
+
+  # Handle help command variations
+  if [[ "$cmd" == "help" || "$cmd" == "--help" || "$cmd" == "-h" ]]; then
+    echo "help"
+    return 0
+  fi
+
+  # Handle setup command variations
+  if [[ "$cmd" == "setup" || "$cmd" == "--setup" || "$cmd" == "-s" ]]; then
+    echo "setup"
+    [[ -n "$arg" ]] && echo "$arg"
+    return 0
+  fi
+
+  # Handle test command variations
+  if [[ "$cmd" == "test" || "$cmd" == "--test" || "$cmd" == "-t" ]]; then
+    echo "test"
+    [[ -n "$arg" ]] && echo "$arg"
+    return 0
+  fi
+
+  # Handle config command variations
+  if [[ "$cmd" == "config" || "$cmd" == "--config" || "$cmd" == "-c" ]]; then
+    echo "config"
+    [[ -n "$arg" ]] && echo "$arg"
+    return 0
+  fi
+
+  # Handle config-write command variations
+  if [[ "$cmd" == "config-write" || "$cmd" == "--config-write" || "$cmd" == "-w" ]]; then
+    echo "config-write"
+    [[ -n "$arg" ]] && echo "$arg"
+    return 0
+  fi
+
+  # Handle list command variations
+  if [[ "$cmd" == "list" || "$cmd" == "--list" || "$cmd" == "-l" ]]; then
+    echo "list"
+    return 0
+  fi
+
+  # Handle parse command variations
+  if [[ "$cmd" == "parse" || "$cmd" == "--parse" || "$cmd" == "-p" ]]; then
+    echo "parse"
+    [[ -n "$arg" ]] && echo "$arg"
+    [[ -n "$3" ]] && echo "$3"
+    return 0
+  fi
+
+  # If no recognized command, return as is
+  echo "$cmd"
+  [[ -n "$arg" ]] && echo "$arg"
+  return 0
+}
+
 # Command-line interface
 main() {
-  case "${1:-help}" in
+  # Normalize arguments to handle both formats
+  local normalized_args
+  normalized_args=($(normalize_args "$1" "$2" "$3"))
+
+  case "${normalized_args[0]:-help}" in
     "setup")
-      if [[ -n "$2" ]]; then
-        setup_mcp_server "$2"
+      if [[ -n "${normalized_args[1]}" ]]; then
+        setup_mcp_server "${normalized_args[1]}"
       else
         setup_all_mcp_servers
       fi
       ;;
     "test")
-      if [[ -n "$2" ]]; then
-        test_mcp_server_health "$2"
+      if [[ -n "${normalized_args[1]}" ]]; then
+        test_mcp_server_health "${normalized_args[1]}"
       else
         test_all_mcp_servers
       fi
       ;;
     "config")
-      generate_client_configs "${2:-all}" "preview"
+      generate_client_configs "${normalized_args[1]:-all}" "preview"
       ;;
     "config-write")
-      generate_client_configs "${2:-all}" "write"
+      generate_client_configs "${normalized_args[1]:-all}" "write"
       ;;
     "list")
       echo "Configured MCP servers:"
@@ -1077,8 +1143,8 @@ main() {
       done
       ;;
     "parse")
-      if [[ -n "$2" ]] && [[ -n "$3" ]]; then
-        parse_server_config "$2" "$3"
+      if [[ -n "${normalized_args[1]}" ]] && [[ -n "${normalized_args[2]}" ]]; then
+        parse_server_config "${normalized_args[1]}" "${normalized_args[2]}"
       else
         echo "Usage: $0 parse <server_id> <config_key>"
         echo "Example: $0 parse github source.image"
@@ -1095,6 +1161,7 @@ main() {
       echo "  config [client]       - Generate client configuration snippets (preview)"
       echo "  config-write [client] - Write configuration to actual client config files"
       echo "  list                  - List configured servers"
+      echo "  parse <server_id> <config_key> - Parse configuration value from registry"
       echo "  help                  - Show this help message"
       echo ""
       echo "Examples:"
@@ -1105,6 +1172,20 @@ main() {
       echo "  $0 config cursor      # Preview Cursor-specific config"
       echo "  $0 config-write       # Write configs to actual files (working servers only)"
       echo "  $0 config-write claude # Write Claude Desktop config only"
+      echo ""
+      echo "Alternative formats:"
+      echo "  $0 --setup github     # Same as 'setup github'"
+      echo "  $0 -s github          # Same as 'setup github'"
+      echo "  $0 --test             # Same as 'test'"
+      echo "  $0 -t github          # Same as 'test github'"
+      echo "  $0 --config cursor    # Same as 'config cursor'"
+      echo "  $0 -c cursor          # Same as 'config cursor'"
+      echo "  $0 --config-write     # Same as 'config-write'"
+      echo "  $0 -w claude          # Same as 'config-write claude'"
+      echo "  $0 --list             # Same as 'list'"
+      echo "  $0 -l                 # Same as 'list'"
+      echo "  $0 --parse github source.image  # Same as 'parse github source.image'"
+      echo "  $0 -p github source.image       # Same as 'parse github source.image'"
       ;;
   esac
 }
