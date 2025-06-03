@@ -25,6 +25,7 @@ This setup automates the installation and configuration of:
 ### Development Environments
 - **Ruby** (via rbenv): Ruby version manager with latest stable Ruby
 - **Python** (via pyenv): Python version manager with latest stable Python
+- **Node.js** (via nvm): Node.js version manager with latest LTS Node.js
 
 ### Containerization and Infrastructure
 - **OrbStack**: Fast Docker & Linux VM manager with Kubernetes support
