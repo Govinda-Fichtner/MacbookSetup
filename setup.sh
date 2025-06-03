@@ -150,6 +150,42 @@ backup_file() {
   fi
 }
 
+# Function to ensure MCP server config files exist
+ensure_mcp_server_config() {
+  local server_name="$1"
+  local connector="$2" # For tree structure (e.g., "│  ")
+  local mcp_config_dir="${HOME}/.config/mcp/${server_name}"
+  local mcp_config_file="${mcp_config_dir}/config.json"
+
+  printf "%s %b[CONFIG]%b Ensuring MCP server config for %s\n" "$connector" "$BLUE" "$NC" "$server_name"
+
+  if ! ensure_dir "$mcp_config_dir"; then
+    printf "│   └── %b[ERROR]%b Failed to create MCP config directory for %s\n" "$RED" "$NC" "$server_name"
+    return 1
+  fi
+
+  if [[ ! -f "$mcp_config_file" ]]; then
+    printf "│   ├── %b[CREATING]%b Default config.json for %s\n" "$BLUE" "$NC" "$server_name"
+    # Create a minimal valid JSON config with placeholder token
+    if [[ "$server_name" == "github-mcp-server" ]]; then
+      echo '{ "token": "your_github_token_here" }' > "$mcp_config_file"
+    elif [[ "$server_name" == "circleci-mcp-server" ]]; then
+      echo '{ "token": "your_circleci_token_here", "host": "https://circleci.com" }' > "$mcp_config_file"
+    else
+      echo "{}" > "$mcp_config_file"
+    fi
+
+    if [[ $? -ne 0 ]]; then
+      printf "│   │   └── %b[ERROR]%b Failed to create default config.json for %s\n" "$RED" "$NC" "$server_name"
+      return 1
+    fi
+    printf "│   └── %b[SUCCESS]%b Created default config.json for %s\n" "$GREEN" "$NC" "$server_name"
+  else
+    printf "│   └── %b[EXISTS]%b config.json found for %s\n" "$GREEN" "$NC" "$server_name"
+  fi
+  return 0
+}
+
 # System validation
 validate_system() {
   echo -e "\n=== System Validation ==="
@@ -230,6 +266,209 @@ install_hashicorp_tools() {
   install_hashicorp_tool "packer" "1.12.0" "└──" || printf "└── %b[WARNING]%b Packer installation skipped\n" "$YELLOW" "$NC"
 }
 
+# Docker, Colima and MCP Setup
+setup_containerization_and_mcp() {
+  echo -e "\n=== Docker, Colima & MCP Server Setup ==="
+  local mcp_base_config_dir="${HOME}/.config/mcp"
+
+  # Ensure base MCP config directory exists
+  printf "├── %b[CONFIG]%b Ensuring base MCP config directory (%s)\n" "$BLUE" "$NC" "$mcp_base_config_dir"
+  if ! ensure_dir "$mcp_base_config_dir"; then
+    printf "│   └── %b[ERROR]%b Failed to create base MCP config directory. MCP setup will be incomplete.\n" "$RED" "$NC"
+    # Do not return 1 here, let other checks proceed, but this is a critical warning.
+    log_warning "Base MCP directory ${mcp_base_config_dir} could not be created."
+  else
+    printf "│   └── %b[SUCCESS]%b Base MCP config directory ensured.\n" "$GREEN" "$NC"
+  fi
+
+  # Setup Colima
+  printf "├── %b[CHECKING]%b Colima status\n" "$BLUE" "$NC"
+
+  # Ensure QEMU and Lima are installed before Colima
+  local colima_deps=(qemu lima)
+  for dep in "${colima_deps[@]}"; do
+    if ! check_command "$dep"; then
+      printf "│   ├── %b[INSTALLING]%b %s (required for Colima)\n" "$BLUE" "$NC" "$dep"
+      if check_command brew; then
+        if brew install "$dep" > "/tmp/brew_install_${dep}.log" 2>&1; then
+          printf "│   │   └── %b[SUCCESS]%b %s installed\n" "$GREEN" "$NC" "$dep"
+        else
+          printf "│   │   └── %b[ERROR]%b Failed to install %s. See /tmp/brew_install_%s.log\n" "$RED" "$NC" "$dep" "$dep"
+        fi
+      else
+        printf "│   │   └── %b[ERROR]%b Homebrew not found. Cannot install %s.\n" "$RED" "$NC" "$dep"
+      fi
+    else
+      printf "│   ├── %b[SUCCESS]%b %s already installed\n" "$GREEN" "$NC" "$dep"
+    fi
+  done
+
+  if ! check_command colima; then
+    printf "│   ├── %b[INFO]%b Colima not found. It should be installed via Brewfile.\n" "$YELLOW" "$NC"
+    printf "│   └── %b[WARNING]%b Colima setup skipped. Install it via Homebrew if needed.\n" "$YELLOW" "$NC"
+  elif colima status > /dev/null 2>&1; then
+    printf "│   └── %b[SUCCESS]%b Colima is running\n" "$GREEN" "$NC"
+  else
+    printf "│   ├── %b[INFO]%b Colima is not running. Attempting to start...\n" "$BLUE" "$NC"
+    local colima_started=false
+    if [[ "${CI:-false}" == "true" ]]; then
+      # In CI, try qemu first, then vz
+      printf "│   │   ├── %b[INFO]%b Trying Colima with --vm-type=qemu\n" "$BLUE" "$NC"
+      colima start --runtime docker --vm-type=qemu --arch "$(uname -m)" --memory 2 --disk 20 --cpu 1 &> /tmp/colima_start.log
+      if colima status > /dev/null 2>&1; then
+        printf "│   │   └── %b[SUCCESS]%b Colima started with qemu\n" "$GREEN" "$NC"
+        colima_started=true
+      else
+        printf "│   │   ├── %b[WARNING]%b Colima qemu start failed. Trying --vm-type=vz\n" "$YELLOW" "$NC"
+        colima start --runtime docker --vm-type=vz --arch "$(uname -m)" --memory 2 --disk 20 --cpu 1 &>> /tmp/colima_start.log
+        if colima status > /dev/null 2>&1; then
+          printf "│   │   └── %b[SUCCESS]%b Colima started with vz\n" "$GREEN" "$NC"
+          colima_started=true
+        else
+          printf "│   │   └── %b[ERROR]%b Colima failed to start with both qemu and vz.\n" "$RED" "$NC"
+          printf "│   │   Last 20 lines of Colima log:\n"
+          tail -20 /tmp/colima_start.log
+          printf "│   └── %b[WARNING]%b Colima could not start in CI. Skipping Docker-based MCP tests.\n" "$YELLOW" "$NC"
+        fi
+      fi
+    else
+      # Local: use default (vz or user default)
+      colima start --runtime docker --arch "$(uname -m)" --memory 4 --disk 100 --cpu 2 &> /tmp/colima_start.log &
+      show_progress "│   │" "Starting Colima" "$!"
+      wait "$!"
+      if colima status > /dev/null 2>&1; then
+        printf "│   └── %b[SUCCESS]%b Colima started successfully\n" "$GREEN" "$NC"
+        colima_started=true
+      else
+        printf "│   └── %b[ERROR]%b Failed to start Colima. Check /tmp/colima_start.log. You may need to run 'colima start' manually.\n" "$RED" "$NC"
+        printf "│   │   Last 20 lines of Colima log:\n"
+        tail -20 /tmp/colima_start.log
+      fi
+    fi
+  fi
+
+  # Check Docker
+  printf "├── %b[CHECKING]%b Docker command-line tool\n" "$BLUE" "$NC"
+  if check_command docker; then
+    printf "│   └── %b[SUCCESS]%b Docker CLI is available\n" "$GREEN" "$NC"
+    # Nested check for Docker daemon connectivity
+    printf "    ├── %b[CHECKING]%b Docker daemon connectivity\n" "$BLUE" "$NC"
+    if docker info > /dev/null 2>&1; then
+      printf "    │   └── %b[SUCCESS]%b Docker daemon is responsive\n" "$GREEN" "$NC"
+    else
+      printf "    │   └── %b[ERROR]%b Docker daemon is not responsive. Ensure Colima (or other Docker provider) is running correctly and 'docker context' is set appropriately.\n" "$RED" "$NC"
+    fi
+  else
+    printf "│   └── %b[ERROR]%b Docker CLI not found. Install Docker Desktop or ensure colima/lima provides it and it's in PATH.\n" "$RED" "$NC"
+  fi
+
+  # MCP GitHub Server Image
+  printf "├── %b[DOCKER]%b Setting up GitHub MCP Server image\n" "$BLUE" "$NC"
+  printf "│   ├── %b[PULLING]%b mcp/github-mcp-server:latest\n" "$BLUE" "$NC"
+  if docker pull mcp/github-mcp-server:latest > /tmp/docker_pull_github_mcp.log 2>&1; then
+    printf "│   └── %b[SUCCESS]%b Pulled mcp/github-mcp-server:latest\n" "$GREEN" "$NC"
+  else
+    printf "│   └── %b[ERROR]%b Failed to pull mcp/github-mcp-server:latest. Check /tmp/docker_pull_github_mcp.log\n" "$RED" "$NC"
+  fi
+  ensure_mcp_server_config "github-mcp-server" "│  "
+
+  # MCP CircleCI Server Image
+  local circleci_mcp_repo_url="https://github.com/CircleCI-Public/mcp-server-circleci.git"
+  local circleci_mcp_repo_path="/tmp/mcp-server-circleci"
+  printf "├── %b[DOCKER]%b Setting up CircleCI MCP Server image\n" "$BLUE" "$NC"
+
+  if docker images local/mcp-server-circleci:latest --format "{{.Repository}}" | grep -q "local/mcp-server-circleci"; then
+    printf "│   ├── %b[EXISTS]%b Image local/mcp-server-circleci:latest already exists.\n" "$GREEN" "$NC"
+    printf "│   │   %b[INFO]%b To rebuild, delete the image and re-run setup, or use a force rebuild flag (not implemented).\n" "$BLUE" "$NC"
+  else
+    printf "│   ├── %b[CLONING]%b CircleCI MCP server from %s to %s\n" "$BLUE" "$NC" "$circleci_mcp_repo_url" "$circleci_mcp_repo_path"
+    if [[ -d "$circleci_mcp_repo_path" ]]; then
+      printf "│   │   ├── %b[INFO]%b Repository already exists at %s. Pulling latest changes...\n" "$BLUE" "$NC" "$circleci_mcp_repo_path"
+      (cd "$circleci_mcp_repo_path" && git pull) > /tmp/git_pull_circleci_mcp.log 2>&1 || {
+        printf "│   │   └── %b[WARNING]%b Failed to pull latest changes for CircleCI MCP server. Using existing local version for build. Check /tmp/git_pull_circleci_mcp.log\n" "$YELLOW" "$NC"
+      }
+      printf "│   │   └── %b[SUCCESS]%b Updated CircleCI MCP server repository.\n" "$GREEN" "$NC"
+    else
+      git clone "$circleci_mcp_repo_url" "$circleci_mcp_repo_path" > /tmp/git_clone_circleci_mcp.log 2>&1 || {
+        printf "│   │   └── %b[ERROR]%b Failed to clone CircleCI MCP server repository. Check /tmp/git_clone_circleci_mcp.log\n" "$RED" "$NC"
+        printf "│   └── %b[SKIPPED]%b CircleCI MCP server image build skipped due to clone failure.\n" "$YELLOW" "$NC"
+        ensure_mcp_server_config "circleci-mcp-server" "│  " # Still ensure config dir
+        # Decide if this is a fatal error for the whole MCP setup section or just for this server
+        # For now, let it continue to create the docker-compose.yml, which might then fail at runtime if image is missing.
+        # Or, return 1 to mark this section as problematic.
+      }
+      if [[ $? -eq 0 ]]; then # Check if clone was successful before saying so
+        printf "│   │   └── %b[SUCCESS]%b Cloned CircleCI MCP server repository.\n" "$GREEN" "$NC"
+      fi
+    fi
+
+    # Proceed to build only if the repo path exists (clone or previous existence succeeded)
+    if [[ -d "$circleci_mcp_repo_path" ]]; then
+      printf "│   ├── %b[BUILDING]%b local/mcp-server-circleci:latest from %s\n" "$BLUE" "$NC" "$circleci_mcp_repo_path"
+      if (cd "$circleci_mcp_repo_path" && docker build -t local/mcp-server-circleci:latest .) > /tmp/docker_build_circleci_mcp.log 2>&1; then
+        printf "│   └── %b[SUCCESS]%b Built local/mcp-server-circleci:latest\n" "$GREEN" "$NC"
+      else
+        printf "│   └── %b[ERROR]%b Failed to build local/mcp-server-circleci:latest. Check /tmp/docker_build_circleci_mcp.log\n" "$RED" "$NC"
+      fi
+    else
+      printf "│   └── %b[SKIPPED]%b CircleCI MCP server image build skipped as repository directory %s does not exist.\n" "$YELLOW" "$NC" "$circleci_mcp_repo_path"
+    fi
+  fi
+  ensure_mcp_server_config "circleci-mcp-server" "│  "
+
+  # Create/Update MCP Docker Compose file
+  local mcp_docker_compose_file="${mcp_base_config_dir}/docker-compose.yml"
+  printf "└── %b[CONFIG]%b Ensuring MCP docker-compose.yml at %s\n" "$BLUE" "$NC" "$mcp_docker_compose_file"
+
+  # Using a heredoc for the docker-compose.yml content
+  # Note: Backslashes are needed before $ in environment variables within the heredoc
+  # to prevent them from being expanded by the current shell.
+  cat << EOF > "$mcp_docker_compose_file"
+version: '3.8'
+services:
+  github-mcp:
+    image: mcp/github-mcp-server:latest
+    container_name: github-mcp
+    environment:
+      - GITHUB_TOKEN=\${GITHUB_TOKEN:-your_github_token_here}
+    volumes:
+      - ~/.config/mcp/github-mcp-server:/root/.config/mcp/server
+    stdin_open: true
+    tty: false
+
+  circleci-mcp:
+    image: local/mcp-server-circleci:latest
+    container_name: circleci-mcp
+    environment:
+      - CIRCLECI_TOKEN=\${CIRCLECI_TOKEN:-your_circleci_token_here}
+      - CIRCLECI_BASE_URL=\${CIRCLECI_BASE_URL:-https://circleci.com}
+    volumes:
+      - ~/.config/mcp/circleci-mcp-server:/root/.config/mcp/server
+    stdin_open: true
+    tty: false
+EOF
+
+  if [[ $? -eq 0 ]]; then
+    printf "    └── %b[SUCCESS]%b MCP docker-compose.yml created/updated.\n" "$GREEN" "$NC"
+    # Validate the docker-compose file syntax if docker-compose is available
+    if check_command docker-compose; then
+      printf "        ├── %b[VALIDATING]%b MCP docker-compose.yml syntax\n" "$BLUE" "$NC"
+      # Use a subshell and cd to ensure docker-compose resolves paths correctly if any relative paths were used
+      if (cd "$mcp_base_config_dir" && docker-compose -f "$mcp_docker_compose_file" config -q) > /dev/null 2>&1; then
+        printf "        │   └── %b[SUCCESS]%b MCP docker-compose.yml is valid.\n" "$GREEN" "$NC"
+      else
+        printf "        │   └── %b[ERROR]%b MCP docker-compose.yml is invalid. Check the file or run 'docker-compose -f %s config' in %s\n" "$RED" "$NC" "$mcp_docker_compose_file" "$mcp_base_config_dir"
+      fi
+    else
+      printf "        └── %b[WARNING]%b docker-compose not found. Cannot validate MCP docker-compose.yml syntax.\n" "$YELLOW" "$NC"
+    fi
+  else
+    printf "    └── %b[ERROR]%b Failed to create/update MCP docker-compose.yml.\n" "$RED" "$NC"
+  fi
+
+  return 0
+}
+
 # Homebrew installation and package management
 install_homebrew() {
   echo -e "\n=== System Dependencies ==="
@@ -261,6 +500,17 @@ install_homebrew() {
   fi
 
   printf "└── %b[SUCCESS]%b Homebrew installation complete\n" "$GREEN" "$NC"
+
+  # Ensure .config directory exists for subsequent MCP setup steps
+  ensure_dir "${HOME}/.config"
+
+  # Call containerization and MCP setup after brew bundle
+  setup_containerization_and_mcp || log_warning "Containerization and MCP setup had issues."
+
+  # Display overall summary
+  echo -e "\n${BLUE}=== Setup Summary ===${NC}"
+  printf "• Homebrew: Installed\n"
+  printf "• Containerization and MCP setup: %s\n" "$GREEN"
 }
 
 setup_container_environment() {

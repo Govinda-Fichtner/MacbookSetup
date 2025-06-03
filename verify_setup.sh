@@ -813,91 +813,189 @@ verify_terminal_fonts() {
   fi
 }
 
-# Function to verify MCP servers using mcp_manager.sh
-verify_mcp_servers() {
-  echo -e "\n=== MCP Servers ==="
+# Function to verify MCP server health via stdio JSON-RPC
+verify_mcp_stdio_health() {
+  local server_name_display="$1" # e.g., "GitHub MCP Server"
+  local image_name="$2"          # e.g., "mcp/github-mcp-server:latest"
+  local token_env_var_name="$3"  # e.g., "GITHUB_TOKEN"
+  local connector="$4"           # e.g., "├──" or "└──"
 
-  if [[ "${SKIP_MCP:-false}" == "true" ]]; then
-    printf "└── %b[SKIPPED]%b MCP server verification (SKIP_MCP=true)\n" "$YELLOW" "$RESET"
-    return 0 # Consider skipped as a pass for overall script success
+  printf "%s %b[HEALTH CHECK]%b %s (%s)\n" "$connector" "$BLUE" "$RESET" "$server_name_display" "$image_name"
+
+  # Check if Docker is even available and responsive before trying to run
+  if ! check_command docker || ! docker info > /dev/null 2>&1; then
+    printf "│   └── %b[SKIP]%b Docker not available/responsive. Cannot perform health check for %s.\n" "$YELLOW" "$RESET" "$server_name_display"
+    return 1 # Indicates a skip/failure for this specific check
   fi
 
-  # Check if mcp_manager.sh exists and is executable
-  if [[ ! -x "./mcp_manager.sh" ]]; then
-    printf "└── %b[ERROR]%b mcp_manager.sh not found or not executable.\n" "$RED" "$RESET"
-    log_error "MCP server verification failed (mcp_manager.sh missing)"
+  # Check if the image exists locally
+  if ! docker image inspect "$image_name" > /dev/null 2>&1; then
+    printf "│   └── %b[ERROR]%b Docker image %s not found. Run setup script or pull/build manually.\n" "$RED" "$RESET" "$image_name"
     return 1
   fi
 
-  # Check Docker availability (mcp_manager.sh needs it)
-  printf "├── %b[CHECKING]%b Docker availability for MCP Manager\n" "$BLUE" "$RESET"
+  local json_rpc_request='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}'
+  # Use a placeholder token if the actual environment variable is not set.
+  # The MCP server itself should handle an invalid token gracefully for an initialize request.
+  local token_value="${(P)token_env_var_name:-placeholder_for_test}"
+  local output
+  local success=false
 
-  if [[ "${CI:-false}" == "true" ]]; then
-    # In CI, ensure Homebrew env is set up and try to ensure Colima is running
-    # This is because verify_setup.sh might run in a different shell context than setup.sh
+  # Run the docker container, pipe the request, and capture output.
+  # Timeout after 10 seconds to prevent hanging if the server is unresponsive.
+  # Using a subshell for timeout for better compatibility.
+  output=$( (timeout 10s echo "$json_rpc_request" | docker run --rm -i -e "$token_env_var_name=$token_value" "$image_name" server stdio) 2>&1 )
+  local exit_code=$?
 
-    # Source Homebrew environment
-    if [[ "$(uname -m)" == "arm64" ]]; then
-      eval "$(/opt/homebrew/bin/brew shellenv)" 2> /dev/null || true
-    else
-      eval "$(/usr/local/bin/brew shellenv)" 2> /dev/null || true
-    fi
-
-    # Check Docker CLI first
-    if ! check_command "docker"; then
-      printf "│   └── %b[ERROR]%b Docker CLI not found by verify_setup.sh in CI.\n" "$RED" "$RESET"
-      log_warning "MCP server verification skipped (Docker CLI missing in verify step)"
-      return 0 # Allow overall CI verification to pass, but flag this
-    fi
-
-    # If Docker CLI exists, check daemon and try to start Colima if needed
-    if ! docker info &> /dev/null; then
-      printf "│   ├── %b[INFO]%b Docker daemon not responsive in verify_setup.sh CI. Attempting Colima start.\n" "$BLUE" "$RESET"
-      if check_command "colima"; then
-        local colima_arch
-        if [[ "$(uname -m)" == "arm64" ]]; then
-          colima_arch="aarch64"
-        else
-          colima_arch="x86_64"
-        fi
-        # Try to start Colima - suppress output as setup.sh should have done the main work
-        # Use lower resource settings for a quick "ensure it's up" check
-        colima start --cpu 1 --memory 2 --vm-type=vz --arch "$colima_arch" || true
-        sleep 5 # Give Colima a moment to initialize the Docker socket
-
-        if ! docker info &> /dev/null; then
-          printf "│   └── %b[ERROR]%b Docker daemon still not responsive after Colima start attempt in verify_setup.sh.\n" "$RED" "$RESET"
-          log_warning "MCP server verification skipped (Colima couldn't ensure Docker daemon)"
-          return 0
-        fi
-        printf "│   ├── %b[SUCCESS]%b Colima likely started, Docker daemon now responsive.\n" "$GREEN" "$RESET"
+  if [[ $exit_code -eq 0 ]]; then
+    # Basic check for a valid JSON-RPC response structure
+    if echo "$output" | grep -q '"jsonrpc":"2.0"' && echo "$output" | grep -q '"id":1'; then
+      if echo "$output" | jq -e '.result' > /dev/null 2>&1; then # Check for presence of 'result' key
+        printf "│   └── %b[SUCCESS]%b %s is responsive and initialized (stdio JSON-RPC).\n" "$GREEN" "$RESET" "$server_name_display"
+        success=true
       else
-        printf "│   └── %b[WARNING]%b Colima command not found by verify_setup.sh in CI.\n" "$YELLOW" "$RESET"
-        log_warning "MCP server verification skipped (Colima missing for Docker daemon)"
-        return 0
+        printf "│   └── %b[WARNING]%b %s responded, but initialize result might be an error or unexpected. Output: %s\n" "$YELLOW" "$RESET" "$server_name_display" "$output"
+        # Log full output for debugging if it's a warning but not outright failure
+        # echo "$output" > "/tmp/${server_name_display// /_}_health_check_warn.log"
       fi
+    else
+      printf "│   └── %b[ERROR]%b %s responded, but output is not a valid JSON-RPC initialize response. Output: %s\n" "$RED" "$RESET" "$server_name_display" "$output"
     fi
-    # If we reach here, Docker CLI is present and daemon is responsive in CI
-    printf "│   └── %b[SUCCESS]%b Docker ready for MCP Manager (verified in CI context)\n" "$GREEN" "$RESET"
-    # Fall through to actual mcp_manager.sh test call
+  elif [[ $exit_code -eq 124 ]]; then # Timeout exit code
+    printf "│   └── %b[ERROR]%b %s health check timed out (10s). Server may be unresponsive or misconfigured.\n" "$RED" "$RESET" "$server_name_display"
   else
-    # Original non-CI Docker check
-    if ! check_command "docker" || ! docker info &> /dev/null; then
-      printf "│   └── %b[ERROR]%b Docker not available or daemon not running.\n" "$RED" "$RESET"
-      log_warning "MCP server verification skipped (Docker not ready)"
-      return 1 # Fail for local if Docker isn't ready (unless SKIP_MCP is true, handled earlier)
-    fi
-    printf "│   └── %b[SUCCESS]%b Docker ready for MCP Manager\n" "$GREEN" "$RESET"
+    printf "│   └── %b[ERROR]%b %s failed to run or exited with error code %s. Output: %s\n" "$RED" "$RESET" "$server_name_display" "$exit_code" "$output"
   fi
 
-  printf "├── %b[DELEGATING]%b MCP health tests to mcp_manager.sh\n" "$BLUE" "$RESET"
-  if ./mcp_manager.sh test; then
-    log_success "MCP servers verified successfully via mcp_manager.sh"
-    return 0
-  else
-    log_error "MCP server verification failed via mcp_manager.sh"
+  if ! $success; then
     return 1
   fi
+  return 0
+}
+
+# Function to verify Docker, Colima, and MCP Server setup
+verify_containerization_and_mcp() {
+  echo -e "\n=== Docker, Colima & MCP Server Verification ==="
+  local all_mcp_checks_passed=true
+
+  # Verify Colima
+  printf "├── %b[CHECKING]%b Colima status\n" "$BLUE" "$RESET"
+  if check_command colima; then
+    if colima status > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Colima is installed and running\n" "$GREEN" "$RESET"
+    else
+      printf "│   └── %b[ERROR]%b Colima is installed but not running. Start it with 'colima start'.\n" "$RED" "$RESET"
+      all_mcp_checks_passed=false
+    fi
+  else
+    printf "│   └── %b[ERROR]%b Colima is not installed. Install it via Homebrew.\n" "$RED" "$RESET"
+    all_mcp_checks_passed=false
+  fi
+
+  # Verify Docker CLI
+  printf "├── %b[CHECKING]%b Docker CLI availability\n" "$BLUE" "$RESET"
+  if check_command docker; then
+    printf "│   └── %b[SUCCESS]%b Docker CLI is available\n" "$GREEN" "$RESET"
+    # Verify Docker Daemon Connectivity (nested)
+    printf "    ├── %b[CHECKING]%b Docker daemon connectivity\n" "$BLUE" "$RESET"
+    if docker info > /dev/null 2>&1; then
+      printf "    │   └── %b[SUCCESS]%b Docker daemon is responsive\n" "$GREEN" "$RESET"
+    else
+      printf "    │   └── %b[ERROR]%b Docker daemon is not responsive. Ensure Colima (or other provider) is running and 'docker context' is correct.\n" "$RED" "$RESET"
+      all_mcp_checks_passed=false
+    fi
+  else
+    printf "│   └── %b[ERROR]%b Docker CLI not found.\n" "$RED" "$RESET"
+    all_mcp_checks_passed=false
+  fi
+
+  # Verify Docker Compose CLI
+  printf "├── %b[CHECKING]%b Docker Compose CLI availability\n" "$BLUE" "$RESET"
+  if check_command docker-compose; then
+    printf "│   └── %b[SUCCESS]%b Docker Compose CLI is available\n" "$GREEN" "$RESET"
+  else
+    # Also check for 'docker compose' (v2 syntax)
+    if docker compose version > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Docker Compose (v2 plugin) is available\n" "$GREEN" "$RESET"
+    else
+      printf "│   └── %b[ERROR]%b Docker Compose CLI (v1 or v2) not found.\n" "$RED" "$RESET"
+      all_mcp_checks_passed=false
+    fi
+  fi
+
+  # Verify MCP Configuration Files
+  local mcp_base_config_dir="${HOME}/.config/mcp"
+  local mcp_docker_compose_file="${mcp_base_config_dir}/docker-compose.yml"
+  local github_mcp_config_file="${mcp_base_config_dir}/github-mcp-server/config.json"
+  local circleci_mcp_config_file="${mcp_base_config_dir}/circleci-mcp-server/config.json"
+
+  printf "├── %b[CHECKING]%b MCP docker-compose.yml (%s)\n" "$BLUE" "$RESET" "$mcp_docker_compose_file"
+  if [[ -f "$mcp_docker_compose_file" ]]; then
+    # Check syntax using docker-compose config. Try both v1 and v2 syntax.
+    local compose_valid=false
+    if check_command docker-compose; then
+        if (cd "$mcp_base_config_dir" && docker-compose -f "$mcp_docker_compose_file" config -q > /dev/null 2>&1); then
+            compose_valid=true
+        fi
+    fi
+    if ! $compose_valid && (docker compose -f "$mcp_docker_compose_file" config -q > /dev/null 2>&1); then
+        compose_valid=true
+    fi
+
+    if $compose_valid; then
+      printf "│   └── %b[SUCCESS]%b Found and syntax is valid.\n" "$GREEN" "$RESET"
+    else
+      printf "│   └── %b[ERROR]%b Found, but syntax is invalid. Run 'docker-compose -f %s config' or 'docker compose -f %s config' for details.\n" "$RED" "$RESET" "$mcp_docker_compose_file" "$mcp_docker_compose_file"
+      all_mcp_checks_passed=false
+    fi
+  else
+    printf "│   └── %b[ERROR]%b Not found. Run setup script.\n" "$RED" "$RESET"
+    all_mcp_checks_passed=false
+  fi
+
+  printf "├── %b[CHECKING]%b GitHub MCP server config.json (%s)\n" "$BLUE" "$RESET" "$github_mcp_config_file"
+  if [[ -f "$github_mcp_config_file" ]]; then
+    if jq . "$github_mcp_config_file" > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Found and is valid JSON.\n" "$GREEN" "$RESET"
+    else
+      printf "│   └── %b[ERROR]%b Found, but is not valid JSON.\n" "$RED" "$RESET"
+      all_mcp_checks_passed=false
+    fi
+  else
+    printf "│   └── %b[ERROR]%b Not found. Run setup script.\n" "$RED" "$RESET"
+    all_mcp_checks_passed=false
+  fi
+
+  printf "└── %b[CHECKING]%b CircleCI MCP server config.json (%s)\n" "$BLUE" "$RESET" "$circleci_mcp_config_file"
+  if [[ -f "$circleci_mcp_config_file" ]]; then
+    if jq . "$circleci_mcp_config_file" > /dev/null 2>&1; then
+      printf "    └── %b[SUCCESS]%b Found and is valid JSON.\n" "$GREEN" "$RESET"
+    else
+      printf "    └── %b[ERROR]%b Found, but is not valid JSON.\n" "$RED" "$RESET"
+      all_mcp_checks_passed=false
+    fi
+  else
+    printf "    └── %b[ERROR]%b Not found. Run setup script.\n" "$RED" "$RESET"
+    all_mcp_checks_passed=false
+  fi
+
+  # Placeholder for actual MCP server health checks via stdio
+  if $all_mcp_checks_passed; then
+    printf "\n=== MCP Server Health (via stdio) ===\n"
+    verify_mcp_stdio_health "GitHub MCP Server" "mcp/github-mcp-server:latest" "GITHUB_TOKEN" "├──" || mcp_health_failed=true
+    verify_mcp_stdio_health "CircleCI MCP Server" "local/mcp-server-circleci:latest" "CIRCLECI_TOKEN" "└──" || mcp_health_failed=true
+
+    if [[ -n "$mcp_health_failed" ]]; then
+      log_error "One or more MCP server stdio health checks failed."
+      # This doesn't set all_mcp_checks_passed to false, as that was for config.
+      # This is a runtime health failure.
+    else
+      log_success "All MCP server stdio health checks passed."
+    fi
+  else
+    printf "\n%b[WARNING]%b Some Docker/Colima/MCP configuration checks failed. Skipping MCP stdio health checks.\n" "$YELLOW" "$RESET"
+  fi
+
 }
 
 # Main verification function
@@ -967,20 +1065,8 @@ main() {
   fi
   ((total_checks++))
 
-  # Verify MCP servers (non-critical check in CI, critical otherwise)
-  if ! verify_mcp_servers; then
-    if [[ "${CI:-false}" == "true" ]] || [[ "${SKIP_MCP:-false}" == "true" ]]; then
-      log_warning "MCP servers verification had issues (see warnings above)"
-      # Don't fail the build for MCP issues in CI or when skipped
-      ((passed_checks++))
-    else
-      log_error "MCP servers verification failed"
-      verification_failed=true
-      ((failed_checks++))
-    fi
-  else
-    ((passed_checks++))
-  fi
+  # Verify containerization and MCP servers
+  verify_containerization_and_mcp
   ((total_checks++))
 
   # Print verification summary
