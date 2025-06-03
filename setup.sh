@@ -1469,6 +1469,7 @@ main() {
   validate_system || exit 1
   install_homebrew || exit 1
   install_packages || exit 1
+  setup_containerization_and_mcp || printf "├── %b[WARNING]%b Containerization and MCP setup incomplete\n" "$YELLOW" "$NC"
   setup_container_environment || printf "├── %b[WARNING]%b Container environment setup incomplete\n" "$YELLOW" "$NC"
   install_hashicorp_tools || printf "├── %b[WARNING]%b Some HashiCorp tools may not be installed\n" "$YELLOW" "$NC"
   configure_terminal_fonts || printf "├── %b[WARNING]%b Terminal font configuration incomplete\n" "$YELLOW" "$NC"
