@@ -317,8 +317,57 @@ setup_containerization_and_mcp() {
   printf "└── %b[CONFIG]%b Setting up MCP configuration structure\n" "$BLUE" "$NC"
 
   # Ensure MCP configuration directories exist
-  ensure_mcp_server_config "github-mcp-server" "    "
-  ensure_mcp_server_config "circleci-mcp-server" "    "
+  printf "├── %b[CONFIG]%b Ensuring base MCP config directory (%s/.config/mcp)\n" "$BLUE" "$NC" "$HOME"
+  if mkdir -p "${HOME}/.config/mcp/github-mcp-server" "${HOME}/.config/mcp/circleci-mcp-server" 2> /dev/null; then
+    printf "│   └── %b[SUCCESS]%b Base MCP config directory ensured.\n" "$GREEN" "$NC"
+  else
+    printf "│   └── %b[ERROR]%b Failed to create MCP config directories\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Create default MCP config files if they don't exist
+  local github_config="${HOME}/.config/mcp/github-mcp-server/config.json"
+  local circleci_config="${HOME}/.config/mcp/circleci-mcp-server/config.json"
+
+  # Create GitHub MCP config if missing
+  if [[ ! -f "$github_config" ]]; then
+    printf "├── %b[CONFIG]%b Creating GitHub MCP config\n" "$BLUE" "$NC"
+    if echo '{
+      "server": {
+        "name": "github-mcp-server",
+        "version": "1.0.0"
+      },
+      "auth": {
+        "type": "token",
+        "token": "${GITHUB_TOKEN:-}"
+      }
+    }' > "$github_config" 2> /dev/null; then
+      printf "│   └── %b[SUCCESS]%b GitHub MCP config created\n" "$GREEN" "$NC"
+    else
+      printf "│   └── %b[ERROR]%b Failed to create GitHub MCP config\n" "$RED" "$NC"
+      return 1
+    fi
+  fi
+
+  # Create CircleCI MCP config if missing
+  if [[ ! -f "$circleci_config" ]]; then
+    printf "├── %b[CONFIG]%b Creating CircleCI MCP config\n" "$BLUE" "$NC"
+    if echo '{
+      "server": {
+        "name": "circleci-mcp-server",
+        "version": "1.0.0"
+      },
+      "auth": {
+        "type": "token",
+        "token": "${CIRCLECI_TOKEN:-}"
+      }
+    }' > "$circleci_config" 2> /dev/null; then
+      printf "│   └── %b[SUCCESS]%b CircleCI MCP config created\n" "$GREEN" "$NC"
+    else
+      printf "│   └── %b[ERROR]%b Failed to create CircleCI MCP config\n" "$RED" "$NC"
+      return 1
+    fi
+  fi
 
   printf "    └── %b[SUCCESS]%b MCP configuration structure ready\n" "$GREEN" "$NC"
 

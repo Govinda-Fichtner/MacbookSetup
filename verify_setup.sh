@@ -243,12 +243,16 @@ verify_shell_config() {
   if [[ ! -d "$completion_dir" ]]; then
     if mkdir -p "$completion_dir" 2> /dev/null; then
       printf "│   │   ├── %b[CREATED]%b Completion directory\n" "$GREEN" "$NC"
+      # Ensure the directory is writable
+      chmod 755 "$completion_dir" 2> /dev/null || true
     else
       printf "│   │   ├── %b[ERROR]%b Failed to create completion directory\n" "$RED" "$NC"
       return 1
     fi
   else
     printf "│   │   ├── %b[EXISTS]%b Completion directory\n" "$GREEN" "$NC"
+    # Ensure the directory is writable
+    chmod 755 "$completion_dir" 2> /dev/null || true
   fi
 
   # Add completion directory to fpath if not already there
