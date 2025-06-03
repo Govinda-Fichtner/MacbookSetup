@@ -176,73 +176,94 @@ verify_antidote() {
 
 # Function to verify shell configuration
 verify_shell_config() {
-  # Verify shell is zsh
+  echo -e "\n=== Shell Configuration Verification ==="
+
+  # Check if we're running in zsh
   if [[ "$SHELL" != *"zsh"* ]]; then
-    log_error "Current shell is not zsh: $SHELL"
+    printf "├── %b[WARNING]%b Not running in zsh shell\n" "$YELLOW" "$NC"
     return 1
   fi
 
-  # Check for essential shell files - create them if missing instead of failing
-  # Ensure HOME is set and directory exists
-  if [[ -z "$HOME" ]]; then
-    HOME="/tmp/ci_home"
-    export HOME
-  fi
-
-  # Ensure home directory exists
-  [[ ! -d "$HOME" ]] && mkdir -p "$HOME"
-
+  # Create essential files if they don't exist (especially important in CI)
   local zshrc_path="${ZDOTDIR:-$HOME}/.zshrc"
   local zprofile_path="${ZDOTDIR:-$HOME}/.zprofile"
   local plugins_path="${ZDOTDIR:-$HOME}/.zsh_plugins.txt"
 
-  # Create .zshrc if missing
+  printf "├── %b[CHECKING]%b Essential shell files\n" "$BLUE" "$NC"
+
+  # Create minimal .zshrc if missing
   if [[ ! -f "$zshrc_path" ]]; then
-    log_warning "Creating missing .zshrc file"
-    touch "$zshrc_path" 2> /dev/null || {
-      log_warning "Cannot create .zshrc file - continuing anyway"
-    }
+    if echo '# Minimal .zshrc for CI environment' > "$zshrc_path" 2> /dev/null; then
+      printf "│   ├── %b[CREATED]%b Minimal .zshrc\n" "$GREEN" "$NC"
+    else
+      printf "│   ├── %b[ERROR]%b Failed to create .zshrc\n" "$RED" "$NC"
+      return 1
+    fi
+  else
+    printf "│   ├── %b[EXISTS]%b .zshrc file\n" "$GREEN" "$NC"
   fi
 
   # Create .zprofile if missing
   if [[ ! -f "$zprofile_path" ]]; then
-    log_warning "Creating missing .zprofile file"
-    echo '[[ -f ~/.zshrc ]] && source ~/.zshrc' > "$zprofile_path" 2> /dev/null || {
-      log_warning "Cannot create .zprofile file - continuing anyway"
-    }
+    if echo '[[ -f ~/.zshrc ]] && source ~/.zshrc' > "$zprofile_path" 2> /dev/null; then
+      printf "│   ├── %b[CREATED]%b .zprofile\n" "$GREEN" "$NC"
+    else
+      printf "│   ├── %b[ERROR]%b Failed to create .zprofile\n" "$RED" "$NC"
+      return 1
+    fi
+  else
+    printf "│   ├── %b[EXISTS]%b .zprofile file\n" "$GREEN" "$NC"
   fi
 
   # Create .zsh_plugins.txt if missing
   if [[ ! -f "$plugins_path" ]]; then
-    log_warning "Creating missing .zsh_plugins.txt file"
-    {
-      echo "# Core functionality"
-      echo "zsh-users/zsh-completions"
-      echo "zsh-users/zsh-autosuggestions"
-      echo "zsh-users/zsh-syntax-highlighting"
-      echo ""
-      echo "# Git integration"
-      echo "ohmyzsh/ohmyzsh path:plugins/git"
-      echo ""
-      echo "# Kubernetes tools"
-      echo "ohmyzsh/ohmyzsh path:plugins/kubectl"
-    } > "$plugins_path" 2> /dev/null || {
-      log_warning "Cannot create .zsh_plugins.txt file - continuing anyway"
-    }
+    if echo 'zsh-users/zsh-autocomplete' > "$plugins_path" 2> /dev/null; then
+      printf "│   ├── %b[CREATED]%b .zsh_plugins.txt\n" "$GREEN" "$NC"
+    else
+      printf "│   ├── %b[ERROR]%b Failed to create .zsh_plugins.txt\n" "$RED" "$NC"
+      return 1
+    fi
+  else
+    printf "│   ├── %b[EXISTS]%b .zsh_plugins.txt\n" "$GREEN" "$NC"
   fi
 
-  # Initialize completion system before verifying Antidote
+  # Initialize completion system
+  printf "│   ├── %b[INITIALIZING]%b Completion system\n" "$BLUE" "$NC"
   autoload -Uz compinit
-  mkdir -p "${HOME}/.zcompcache" 2> /dev/null || true
-  compinit -d "${HOME}/.zcompcache/zcompdump" 2> /dev/null
+  if [[ -f ~/.zcompdump && $(find ~/.zcompdump -mtime +1) ]]; then
+    compinit -i
+  else
+    compinit -C -i
+  fi
+  printf "│   │   └── %b[SUCCESS]%b Completion system initialized\n" "$GREEN" "$NC"
 
-  # Verify Antidote setup (silently)
-  if ! verify_antidote 2> /dev/null; then
-    log_warning "Antidote not fully configured - some features may be limited"
-    # Don't return 1 here, just warn and continue
+  # Check completion directory
+  local completion_dir="${ZDOTDIR:-$HOME}/.zsh/completions"
+  printf "│   ├── %b[CHECKING]%b Completion directory\n" "$BLUE" "$NC"
+  if [[ ! -d "$completion_dir" ]]; then
+    if mkdir -p "$completion_dir" 2> /dev/null; then
+      printf "│   │   ├── %b[CREATED]%b Completion directory\n" "$GREEN" "$NC"
+    else
+      printf "│   │   ├── %b[ERROR]%b Failed to create completion directory\n" "$RED" "$NC"
+      return 1
+    fi
+  else
+    printf "│   │   ├── %b[EXISTS]%b Completion directory\n" "$GREEN" "$NC"
   fi
 
-  return 0
+  # Add completion directory to fpath if not already there
+  if ! printf '%s\n' "${fpath[@]}" | grep -q "$completion_dir"; then
+    if echo "fpath=($completion_dir \$fpath)" >> "$zshrc_path" 2> /dev/null; then
+      printf "│   │   └── %b[ADDED]%b Completion directory to fpath\n" "$GREEN" "$NC"
+    else
+      printf "│   │   └── %b[ERROR]%b Failed to add completion directory to fpath\n" "$RED" "$NC"
+      return 1
+    fi
+  else
+    printf "│   │   └── %b[EXISTS]%b Completion directory in fpath\n" "$GREEN" "$NC"
+  fi
+
+  printf "└── %b[SUCCESS]%b Shell configuration verified\n" "$GREEN" "$NC"
 }
 
 # Function to verify software tools
@@ -588,151 +609,60 @@ completion_in_fpath() {
 
 # Function to check if a completion exists or can be indirectly verified
 check_completion() {
-  local tool=$1
+  local tool="$1"
+  local completion_file="_$2"
   local completion_dir="${ZDOTDIR:-$HOME}/.zsh/completions"
-  local compfile="_$tool"
 
-  # 1. Check if completion is already in fpath
-  if completion_in_fpath "$tool"; then
+  printf "├── %b[CHECKING]%b %s completion\n" "$BLUE" "$NC" "$tool"
+
+  # Special handling for mcp_manager in CI
+  if [[ "$tool" == "mcp_manager" && "${CI:-false}" == "true" ]]; then
+    printf "│   └── %b[SKIPPED]%b mcp_manager completion check in CI\n" "$YELLOW" "$NC"
     return 0
   fi
 
-  # 2. Check if completion exists in completion directory (should be generated during setup)
-  if [[ -f "${completion_dir}/${compfile}" && -s "${completion_dir}/${compfile}" ]]; then
+  # Check if completion file exists
+  if [[ -f "$completion_dir/$completion_file" ]]; then
+    printf "│   └── %b[SUCCESS]%b %s completion found\n" "$GREEN" "$NC" "$tool"
     return 0
   fi
 
-  # 3. For tools that use built-in completion systems, check if they're properly configured
-  case "$tool" in
-    git)
-      # Git completion is usually provided by system or homebrew
-      for loc in \
-        "/usr/share/zsh/functions/Completion/Unix/_git" \
-        "/usr/local/share/zsh/site-functions/_git" \
-        "/opt/homebrew/share/zsh/site-functions/_git"; do
-        if [[ -f "$loc" ]]; then
+  # Try to generate completion if tool is available
+  if command -v "$tool" > /dev/null 2>&1; then
+    case "$tool" in
+      git)
+        if git completion zsh > "$completion_dir/$completion_file" 2> /dev/null; then
+          printf "│   └── %b[GENERATED]%b %s completion\n" "$GREEN" "$NC" "$tool"
           return 0
         fi
-      done
-      # Indirect verification: if git exists and is properly installed
-      if command -v git > /dev/null 2>&1 && git --version > /dev/null 2>&1; then
-        return 0 # Git completion should work via system/homebrew
-      fi
-      return 1
-      ;;
-    rbenv)
-      # Indirect verification: check if rbenv is properly initialized and can list versions
-      if command -v rbenv > /dev/null 2>&1 && rbenv versions > /dev/null 2>&1; then
-        return 0 # rbenv is working, completion would likely work
-      fi
-      return 1
-      ;;
-    pyenv)
-      # Indirect verification: check if pyenv is properly initialized and can list versions
-      if command -v pyenv > /dev/null 2>&1 && pyenv versions > /dev/null 2>&1; then
-        return 0 # pyenv is working, completion would likely work
-      fi
-      return 1
-      ;;
-    nvm)
-      # Indirect verification: check if nvm is properly initialized and available
-      if [[ -s "$(brew --prefix)/opt/nvm/nvm.sh" ]]; then
-        # Also check if nvm command works when sourced
-        if (source "$(brew --prefix)/opt/nvm/nvm.sh" && nvm --version > /dev/null 2>&1); then
-          return 0 # nvm is working
+        ;;
+      rbenv)
+        if rbenv completions > "$completion_dir/$completion_file" 2> /dev/null; then
+          printf "│   └── %b[GENERATED]%b %s completion\n" "$GREEN" "$NC" "$tool"
+          return 0
         fi
-      fi
-      return 1
-      ;;
-    direnv)
-      # Indirect verification: check if direnv can show help
-      if command -v direnv > /dev/null 2>&1 && direnv help > /dev/null 2>&1; then
-        return 0 # direnv is working, completion would likely work
-      fi
-      return 1
-      ;;
-    kubectl)
-      # Indirect verification: check if kubectl can connect or show version
-      if command -v kubectl > /dev/null 2>&1 && kubectl version --client > /dev/null 2>&1; then
-        return 0 # kubectl is working, completion would likely work
-      fi
-      return 1
-      ;;
-    helm)
-      # Indirect verification: check if helm can show version
-      if command -v helm > /dev/null 2>&1 && helm version > /dev/null 2>&1; then
-        return 0 # helm is working, completion would likely work
-      fi
-      return 1
-      ;;
-    docker)
-      # Enhanced Docker verification for CI environments
-      # First check if docker CLI exists and works
-      if command -v docker > /dev/null 2>&1 && docker --version > /dev/null 2>&1; then
-        return 0 # docker cli is working, completion would likely work
-      fi
-
-      # Fallback: check if we have a standalone Docker completion file
-      # This handles CI environments where OrbStack initialization may fail
-      if [[ -f "${completion_dir}/${compfile}" && -s "${completion_dir}/${compfile}" ]]; then
-        # Verify it's a proper completion file (not empty)
-        if grep -q "compdef.*docker" "${completion_dir}/${compfile}" && grep -q "_docker" "${completion_dir}/${compfile}"; then
-          return 0 # Valid standalone Docker completion exists
+        ;;
+      pyenv)
+        if [[ -f "$(brew --prefix)/opt/pyenv/completions/pyenv.zsh" ]]; then
+          if cp "$(brew --prefix)/opt/pyenv/completions/pyenv.zsh" "$completion_dir/$completion_file" 2> /dev/null; then
+            printf "│   └── %b[COPIED]%b %s completion\n" "$GREEN" "$NC" "$tool"
+            return 0
+          fi
         fi
-      fi
-
-      # In CI environments, Docker/OrbStack may not be available - this is expected
-      if [[ "${CI:-false}" == "true" ]]; then
-        log_warning "Docker completion not available (expected in CI environment)"
-        return 0 # Don't fail the CI pipeline for expected Docker unavailability
-      fi
-
-      return 1
-      ;;
-    orb | orbctl)
-      # Indirect verification: check if orb tools exist and have completion subcommand
-      if command -v "$tool" > /dev/null 2>&1; then
-        # Try to verify completion subcommand exists (more reliable than --version for orb)
-        if "$tool" completion --help > /dev/null 2>&1 || [[ "$("$tool" --help 2> /dev/null)" == *"completion"* ]]; then
-          return 0 # orb tool has completion support, completion would likely work
+        ;;
+      mcp_manager)
+        if [[ -f "$(brew --prefix)/etc/bash_completion.d/mcp_manager" ]]; then
+          if cp "$(brew --prefix)/etc/bash_completion.d/mcp_manager" "$completion_dir/$completion_file" 2> /dev/null; then
+            printf "│   └── %b[COPIED]%b %s completion\n" "$GREEN" "$NC" "$tool"
+            return 0
+          fi
         fi
-        # Fallback: if the tool exists and shows help, assume completion works
-        if "$tool" --help > /dev/null 2>&1; then
-          return 0 # orb tool is working, completion would likely work
-        fi
-      fi
+        ;;
+    esac
+  fi
 
-      # In CI environments, OrbStack tools may not be available - this is expected
-      if [[ "${CI:-false}" == "true" ]]; then
-        log_warning "$tool completion not available (expected in CI environment)"
-        return 0 # Don't fail the CI pipeline for expected OrbStack unavailability
-      fi
-
-      return 1
-      ;;
-    terraform | packer)
-      # HashiCorp tools use built-in completion system, check if command exists and works
-      if command -v "$tool" > /dev/null 2>&1 && "$tool" --version > /dev/null 2>&1; then
-        return 0 # tool is working, built-in completion should work
-      fi
-      return 1
-      ;;
-    mcp_manager)
-      # For mcp_manager, we only check if the script exists in CI
-      if [[ "${CI:-false}" == "true" ]]; then
-        return 0 # Skip mcp_manager completion check in CI
-      fi
-      # In non-CI environment, check if the completion file exists
-      if [[ -f "${completion_dir}/${compfile}" ]]; then
-        return 0
-      fi
-      return 1
-      ;;
-    *)
-      # For other tools, try to extract the first version-like pattern
-      echo "$version_string" | sed -n 's/.*\([0-9][0-9.]*[0-9]\).*/\1/p' | head -1
-      ;;
-  esac
+  printf "│   └── %b[WARNING]%b %s completion not found\n" "$YELLOW" "$NC" "$tool"
+  return 1
 }
 
 # Function to verify terminal fonts

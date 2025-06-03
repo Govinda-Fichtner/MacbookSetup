@@ -366,7 +366,7 @@ install_homebrew() {
   # Display overall summary
   echo -e "\n${BLUE}=== Setup Summary ===${NC}"
   printf "• Homebrew: Installed\n"
-  printf "• Containerization and MCP setup: %s\n" "$GREEN"
+  printf "• Containerization and MCP setup: %b%s%b\n" "$GREEN" "Ready" "$NC"
 }
 
 # Container environment setup removed - now using local MCP testing only
@@ -480,8 +480,6 @@ install_packages() {
         printf "│   └── %b[SUCCESS]%b Package installation completed\n" "$GREEN" "$NC"
       fi
     fi
-
-    printf "└── %b[SUCCESS]%b Homebrew bundle complete\n" "$GREEN" "$NC"
 
     # Clean up temporary file
     rm -f "$bundle_output"
@@ -992,8 +990,12 @@ configure_shell() {
   # Create or backup .zshrc
   printf "├── %b[CONFIGURING]%b Shell environment\n" "$BLUE" "$NC"
   if [[ ! -f "$ZSHRC_PATH" ]]; then
-    touch "$ZSHRC_PATH"
-    printf "│   ├── %b[CREATED]%b .zshrc file\n" "$GREEN" "$NC"
+    if touch "$ZSHRC_PATH" 2> /dev/null; then
+      printf "│   ├── %b[CREATED]%b .zshrc file\n" "$GREEN" "$NC"
+    else
+      printf "│   ├── %b[ERROR]%b Failed to create .zshrc file\n" "$RED" "$NC"
+      return 1
+    fi
   else
     backup_file "$ZSHRC_PATH" > /dev/null 2>&1
     printf "│   ├── %b[BACKED UP]%b Existing .zshrc\n" "$BLUE" "$NC"
@@ -1001,12 +1003,31 @@ configure_shell() {
 
   # Ensure .zprofile exists and sources .zshrc
   local zprofile_path="${ZDOTDIR}/.zprofile"
-  if [[ ! -f "$zprofile_path" ]] || ! grep -q "source.*\.zshrc" "$zprofile_path"; then
-    echo '[[ -f ~/.zshrc ]] && source ~/.zshrc' >> "$zprofile_path"
-    printf "│   ├── %b[CREATED]%b .zprofile to source .zshrc\n" "$GREEN" "$NC"
+  if [[ ! -f "$zprofile_path" ]]; then
+    if echo '[[ -f ~/.zshrc ]] && source ~/.zshrc' > "$zprofile_path" 2> /dev/null; then
+      printf "│   ├── %b[CREATED]%b .zprofile to source .zshrc\n" "$GREEN" "$NC"
+    else
+      printf "│   ├── %b[ERROR]%b Failed to create .zprofile\n" "$RED" "$NC"
+      return 1
+    fi
+  elif ! grep -q "source.*\.zshrc" "$zprofile_path"; then
+    if echo '[[ -f ~/.zshrc ]] && source ~/.zshrc' >> "$zprofile_path" 2> /dev/null; then
+      printf "│   ├── %b[UPDATED]%b .zprofile to source .zshrc\n" "$GREEN" "$NC"
+    else
+      printf "│   ├── %b[ERROR]%b Failed to update .zprofile\n" "$RED" "$NC"
+      return 1
+    fi
   else
     printf "│   ├── %b[EXISTS]%b .zprofile already sources .zshrc\n" "$BLUE" "$NC"
   fi
+
+  # Ensure completion directory exists
+  printf "│   ├── %b[CONFIGURING]%b Completion directory\n" "$BLUE" "$NC"
+  if ! ensure_completion_dir; then
+    printf "│   │   └── %b[ERROR]%b Failed to set up completion directory\n" "$RED" "$NC"
+    return 1
+  fi
+  printf "│   │   └── %b[SUCCESS]%b Completion directory configured\n" "$GREEN" "$NC"
 
   # Setup Antidote plugin manager
   printf "│   ├── %b[SETTING UP]%b Antidote plugin manager\n" "$BLUE" "$NC"
@@ -1081,8 +1102,12 @@ configure_shell() {
 
     if check_command "$tool"; then
       if ! grep -q "$tool" "$ZSHRC_PATH"; then
-        echo -e "\n# Initialize $tool\neval \"\$($init_cmd)\"" >> "$ZSHRC_PATH"
-        printf "│       ├── %b[ADDED]%b %s integration\n" "$GREEN" "$NC" "$tool"
+        if echo -e "\n# Initialize $tool\neval \"\$($init_cmd)\"" >> "$ZSHRC_PATH" 2> /dev/null; then
+          printf "│       ├── %b[ADDED]%b %s integration\n" "$GREEN" "$NC" "$tool"
+        else
+          printf "│       ├── %b[ERROR]%b Failed to add %s integration\n" "$RED" "$NC" "$tool"
+          return 1
+        fi
       else
         printf "│       ├── %b[EXISTS]%b %s integration\n" "$BLUE" "$NC" "$tool"
       fi
