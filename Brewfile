@@ -14,6 +14,7 @@ brew "direnv"
 brew "starship"         # Cross-shell customizable prompt
 brew "fzf"              # Command-line fuzzy finder
 brew "terminal-notifier" # macOS notification system integration
+brew "shellspec"
 
 # Kubernetes and Container Tools
 brew "kubectl"          # Kubernetes command-line tool

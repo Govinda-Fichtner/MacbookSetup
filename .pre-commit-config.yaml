@@ -29,3 +29,13 @@ repos:
     hooks:
       - id: yamllint
         args: ["-c", ".yamllint.yaml"]
+
+  - repo: local
+    hooks:
+      - id: shellspec-tests
+        name: Run Shellspec tests
+        entry: bash -c 'shellspec spec/mcp_manager_spec.sh'
+        language: system
+        files: ^(mcp_manager\.sh|spec/.*_spec\.sh)$
+        pass_filenames: false
+        require_serial: true

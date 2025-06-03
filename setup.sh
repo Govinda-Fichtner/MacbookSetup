@@ -1190,7 +1190,7 @@ main() {
       printf "└── %b[SKIPPED]%b MCP setup (SKIP_MCP=true)\n" "$YELLOW" "$NC"
     else
       printf "├── %b[DELEGATING]%b MCP setup to mcp_manager.sh\n" "$BLUE" "$NC"
-      if ./mcp_manager.sh setup; then
+      if ./mcp_manager.sh setup > /dev/null 2>&1; then
         printf "└── %b[SUCCESS]%b MCP environment setup complete via mcp_manager.sh\n" "$GREEN" "$NC"
       else
         printf "└── %b[ERROR]%b MCP environment setup failed via mcp_manager.sh\n" "$RED" "$NC"

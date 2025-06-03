@@ -2,6 +2,24 @@
 # MCP Server Manager - Generalized management for MCP servers
 # Supports both registry images and local repository builds
 
+# Disable shell debugging/tracing to prevent debug output
+set +x +v
+# Note: functrace/funcfiletrace/funcsourcetrace are read-only in some shells
+[[ -n "${ZSH_VERSION:-}" ]] && setopt NO_XTRACE NO_VERBOSE
+# Force disable any inherited debugging options
+export PS4=""
+
+# Clean execution function to avoid debug output
+clean_exec() {
+  (
+    # Create a subshell with clean environment
+    unset PS4
+    set +x +v
+    [[ -n "${ZSH_VERSION:-}" ]] && setopt NO_XTRACE NO_VERBOSE
+    "$@"
+  )
+}
+
 # Color definitions
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
@@ -232,14 +250,20 @@ test_mcp_basic_protocol() {
 
   # Use test tokens for basic protocol validation (CI pipeline doesn't need real tokens)
   local env_args=()
-  case "$server_id" in
-    "github")
-      env_args+=(-e "GITHUB_PERSONAL_ACCESS_TOKEN=test_token")
-      ;;
-    "circleci")
-      env_args+=(-e "CIRCLECI_TOKEN=test_token")
-      ;;
-  esac
+  if [[ -f ".env" ]]; then
+    # Use existing .env file if available
+    env_args=(--env-file ".env")
+  else
+    # Fallback to test tokens for CI environments
+    case "$server_id" in
+      "github")
+        env_args+=(-e "GITHUB_PERSONAL_ACCESS_TOKEN=test_token")
+        ;;
+      "circleci")
+        env_args+=(-e "CIRCLECI_TOKEN=test_token")
+        ;;
+    esac
+  fi
 
   # Test MCP initialization with basic protocol check
   printf "│   │   ├── %b[TESTING]%b Protocol handshake\n" "$BLUE" "$NC"
@@ -266,6 +290,10 @@ test_mcp_basic_protocol() {
           break
         fi
       done
+      ;;
+    "json")
+      # Extract JSON from mixed output (like GitHub server with startup message)
+      json_response=$(echo "$raw_response_for_log" | grep -o '{"jsonrpc":"2.0","id":1,"result":.*}' | head -1)
       ;;
     "direct")
       json_response="$raw_response_for_log"
@@ -313,22 +341,15 @@ test_mcp_advanced_functionality() {
 
   printf "│   ├── %b[ADVANCED]%b MCP functionality with authentication\n" "$BLUE" "$NC"
 
-  # Build environment variables with real tokens
-  local env_args=()
-  case "$server_id" in
-    "github")
-      if [[ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" && "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" != "test_token" ]]; then
-        env_args+=(-e "GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}")
-        printf "│   │   ├── %b[INFO]%b Using GITHUB_PERSONAL_ACCESS_TOKEN for authentication\n" "$BLUE" "$NC"
-      elif [[ -n "${GITHUB_TOKEN:-}" && "${GITHUB_TOKEN:-}" != "test_token" ]]; then
-        env_args+=(-e "GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_TOKEN}") # Pass GITHUB_TOKEN as GITHUB_PERSONAL_ACCESS_TOKEN
-        printf "│   │   ├── %b[INFO]%b Using GITHUB_TOKEN (as GITHUB_PERSONAL_ACCESS_TOKEN) for authentication\n" "$BLUE" "$NC"
-      fi
-      ;;
-    "circleci")
-      env_args+=(-e "CIRCLECI_TOKEN=${CIRCLECI_TOKEN}")
-      ;;
-  esac
+  # Test container environment variables visibility
+  printf "│   │   ├── %b[TESTING]%b Container environment variables\n" "$BLUE" "$NC"
+  if ! test_container_environment "$server_id" "$image"; then
+    printf "│   │   │   └── %b[ERROR]%b Environment variables not visible in container\n" "$RED" "$NC"
+    return 1
+  fi
+
+  # Build environment variables - now using --env-file approach
+  local env_args=(--env-file ".env")
 
   # Test authenticated MCP initialization
   printf "│   │   ├── %b[TESTING]%b Authenticated initialization\n" "$BLUE" "$NC"
@@ -355,6 +376,10 @@ test_mcp_advanced_functionality() {
           break
         fi
       done
+      ;;
+    "json")
+      # Extract JSON from mixed output (like GitHub server with startup message)
+      auth_json_response=$(echo "$raw_auth_response_for_log" | grep -o '{"jsonrpc":"2.0","id":1,"result":.*}' | head -1)
       ;;
     "direct")
       auth_json_response="$raw_auth_response_for_log"
@@ -411,19 +436,17 @@ EOF
         fi
       fi
 
-      # printf "│   │   DEBUG_DIRECT_JQ_SELECT: Cleaned response for %s (before final jq select) is:\\n" "$server_name"
-      # echo "$cleaned_response" | od -c
-      # printf "│   │   END DEBUG_DIRECT_JQ_SELECT for %s\\n" "$server_name"
-
       tools_response_output=$(jq -c '. | select(.id == 2 and .result.tools?)' <<< "$cleaned_response" 2> /dev/null)
 
       if [[ -n "$tools_response_output" && "$tools_response_output" != "null" ]]; then
-        # printf "│   │   DEBUG_DIRECT_JQ_SELECT: Successfully captured tools_response_output for %s (first 100 chars): %s\\n" "$server_name" "${tools_response_output:0:100}"
-        true # Placeholder for successful capture, no specific debug print needed here now
+        true # Placeholder for successful capture
       else
-        # printf "│   │   DEBUG_DIRECT_JQ_SELECT: Failed to select/extract id:2 JSON object for %s. JQ output was: [%s]\\n" "$server_name" "$tools_response_output"
         tools_response_output=""
       fi
+      ;;
+    "json")
+      # Extract tools response JSON from mixed output
+      tools_response_output=$(echo "$raw_tools_response_for_log" | grep -o '{"jsonrpc":"2.0","id":2,"result":.*}' | head -1)
       ;;
     "direct")
       tools_response_output="$raw_tools_response_for_log"
@@ -451,6 +474,61 @@ EOF
 
   printf "│   │   └── %b[SUCCESS]%b Advanced functionality test passed\n" "$GREEN" "$NC"
   return 0
+}
+
+# Test that environment variables are visible inside the container
+test_container_environment() {
+  local server_id="$1"
+  local image="$2"
+  local env_file=".env"
+
+  # Skip if no .env file exists
+  [[ ! -f "$env_file" ]] && {
+    printf "│   │   │   └── %b[WARNING]%b No .env file found\n" "$YELLOW" "$NC"
+    return 0
+  }
+
+  # Get expected environment variables for this server
+  local -a expected_vars=()
+  case "$server_id" in
+    "github")
+      expected_vars=("GITHUB_TOKEN" "GITHUB_PERSONAL_ACCESS_TOKEN")
+      ;;
+    "circleci")
+      expected_vars=("CIRCLECI_TOKEN" "CIRCLECI_BASE_URL")
+      ;;
+  esac
+
+  # Test each expected environment variable
+  local failed_vars=0
+  for var_name in "${expected_vars[@]}"; do
+    # Check if variable exists in .env file
+    if grep -q "^${var_name}=" "$env_file" 2> /dev/null; then
+      # Test if variable is visible in container
+      local container_value
+      {
+        set +x 2> /dev/null
+        container_value=$(echo "" | docker run --rm -i --env-file "$env_file" "$image" sh -c "echo \$${var_name}" 2> /dev/null)
+      } 2> /dev/null
+
+      if [[ -n "$container_value" ]]; then
+        printf "│   │   │   ├── %b[SUCCESS]%b %s visible in container\n" "$GREEN" "$NC" "$var_name"
+      else
+        printf "│   │   │   ├── %b[ERROR]%b %s not visible in container\n" "$RED" "$NC" "$var_name"
+        ((failed_vars++))
+      fi
+    else
+      printf "│   │   │   ├── %b[WARNING]%b %s not defined in .env\n" "$YELLOW" "$NC" "$var_name"
+    fi
+  done
+
+  if [[ $failed_vars -eq 0 ]]; then
+    printf "│   │   │   └── %b[SUCCESS]%b All environment variables visible\n" "$GREEN" "$NC"
+    return 0
+  else
+    printf "│   │   │   └── %b[ERROR]%b %d environment variable(s) failed\n" "$RED" "$NC" "$failed_vars"
+    return 1
+  fi
 }
 
 # Setup all configured MCP servers
@@ -513,7 +591,10 @@ test_all_mcp_servers() {
 
     # Check if image exists before testing
     local image
-    image=$(parse_server_config "$server_id" "source.image")
+    {
+      set +x 2> /dev/null
+      image=$(parse_server_config "$server_id" "source.image")
+    } 2> /dev/null
 
     if docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
       if ! test_mcp_server_health "$server_id"; then
@@ -534,6 +615,88 @@ test_all_mcp_servers() {
     printf "%b[ERROR]%b %d MCP server health test(s) failed\\n" "$RED" "$NC" "$failed_tests"
     return 1
   fi
+}
+
+# Generate .env_example file with environment variables for MCP servers
+generate_env_file() {
+  local server_ids=("$@")
+  local env_example_file=".env_example"
+  local env_file=".env"
+
+  printf "├── %b[GENERATING]%b Environment example file: %s\n" "$BLUE" "$NC" "$env_example_file"
+
+  # Create the example file with all required environment variables
+  local temp_env_file
+  temp_env_file=$(mktemp)
+
+  {
+    echo "# MCP Server Environment Variables"
+    echo "# Generated by mcp_manager.sh - $(date)"
+    echo "#"
+    echo "# Copy this file to .env and replace placeholder values with real API tokens"
+    echo "# Example: cp .env_example .env"
+    echo ""
+  } > "$temp_env_file"
+
+  # Collect all environment variables needed by configured servers
+  local -a all_env_vars=()
+  for server_id in "${server_ids[@]}"; do
+    [[ -z "$server_id" ]] && continue
+
+    local env_vars
+    env_vars=$(parse_server_config "$server_id" "environment_variables" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+
+    if [[ -n "$env_vars" ]]; then
+      while IFS= read -r env_var; do
+        [[ -n "$env_var" ]] && all_env_vars+=("$env_var")
+      done <<< "$env_vars"
+    fi
+  done
+
+  # Remove duplicates and sort
+  local -a unique_env_vars
+  while IFS= read -r var; do
+    [[ -n "$var" ]] && unique_env_vars+=("$var")
+  done < <(printf '%s\n' "${all_env_vars[@]}" | sort -u)
+
+  # Add all environment variables with placeholders
+  for env_var in "${unique_env_vars[@]}"; do
+    echo "" >> "$temp_env_file"
+    echo "# ${env_var} for MCP server authentication" >> "$temp_env_file"
+
+    # Always use placeholders in the example file
+    local placeholder
+    case "$env_var" in
+      "GITHUB_PERSONAL_ACCESS_TOKEN" | "GITHUB_TOKEN")
+        placeholder="your_github_token_here"
+        ;;
+      "CIRCLECI_TOKEN")
+        placeholder="your_circleci_token_here"
+        ;;
+      "CIRCLECI_BASE_URL")
+        placeholder="https://circleci.com"
+        ;;
+      *)
+        placeholder="your_${env_var,,}_here"
+        ;;
+    esac
+    echo "${env_var}=${placeholder}" >> "$temp_env_file"
+    printf "│   ├── %b[PLACEHOLDER]%b %s\n" "$YELLOW" "$NC" "$env_var"
+  done
+
+  # Replace the .env_example file
+  mv "$temp_env_file" "$env_example_file"
+  printf "│   ├── %b[SUCCESS]%b Environment example file created\n" "$GREEN" "$NC"
+
+  # Check if .env exists and provide guidance
+  if [[ -f "$env_file" ]]; then
+    printf "│   ├── %b[INFO]%b Existing %s file found (keeping as-is)\n" "$BLUE" "$NC" "$env_file"
+  else
+    printf "│   ├── %b[NEXT STEP]%b Copy example to create your environment file:\n" "$YELLOW" "$NC"
+    printf "│   │   cp %s %s\n" "$env_example_file" "$env_file"
+  fi
+
+  printf "│   └── %b[REMINDER]%b Update %s with your real API tokens\n" "$BLUE" "$NC" "$env_file"
 }
 
 # Generate client configuration snippets for Cursor and Claude Desktop
@@ -575,6 +738,11 @@ generate_client_configs() {
     return 1
   fi
 
+  # Generate/update .env file first (use working servers only - those that successfully set up)
+  if [[ "$write_mode" == "write" ]]; then
+    generate_env_file "${working_servers[@]}"
+  fi
+
   # Report token status
   if [[ ${#servers_with_tokens[@]} -gt 0 ]]; then
     printf "├── %b[TOKENS]%b Servers with authentication: %s\n" "$GREEN" "$NC" "${servers_with_tokens[*]}"
@@ -607,6 +775,10 @@ generate_client_configs() {
 
   if [[ "$write_mode" == "write" ]]; then
     printf "\n%b[SUCCESS]%b Client configurations written to files!\n" "$GREEN" "$NC"
+    printf "%b[NEXT STEPS]%b \n" "$BLUE" "$NC"
+    printf "  1. Copy .env_example to .env: cp .env_example .env\n"
+    printf "  2. Update .env with your real API tokens\n"
+    printf "  3. Restart Claude Desktop/Cursor to pick up the new configuration\n"
   else
     printf "\n%b[SUCCESS]%b Client configurations generated!\n" "$GREEN" "$NC"
     printf "%b[INFO]%b To write to actual config files, use: ./mcp_manager.sh config-write\n" "$BLUE" "$NC"
@@ -658,20 +830,33 @@ get_cursor_config_path() {
   echo "$cursor_config"
 }
 
-# Check if server has real API tokens (extracted from existing health check logic)
+# Check if server has real API tokens by reading from .env file
 server_has_real_tokens() {
   local server_id="$1"
+  local env_file=".env"
+
+  # If no .env file exists, return false
+  [[ ! -f "$env_file" ]] && return 1
 
   case "$server_id" in
     "github")
-      if [[ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" && "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" != "test_token" ]]; then
+      # Check for GitHub tokens in .env file
+      local github_pat github_token
+      github_pat=$(grep "^GITHUB_PERSONAL_ACCESS_TOKEN=" "$env_file" 2> /dev/null | cut -d= -f2-)
+      github_token=$(grep "^GITHUB_TOKEN=" "$env_file" 2> /dev/null | cut -d= -f2-)
+
+      # Return true if either token exists and is not a placeholder
+      if [[ -n "$github_pat" && "$github_pat" != "your_github_token_here" ]]; then
         return 0
-      elif [[ -n "${GITHUB_TOKEN:-}" && "${GITHUB_TOKEN:-}" != "test_token" ]]; then
+      elif [[ -n "$github_token" && "$github_token" != "your_github_token_here" ]]; then
         return 0
       fi
       ;;
     "circleci")
-      [[ -n "${CIRCLECI_TOKEN:-}" && "${CIRCLECI_TOKEN}" != "test_token" ]] && return 0
+      # Check for CircleCI token in .env file
+      local circleci_token
+      circleci_token=$(grep "^CIRCLECI_TOKEN=" "$env_file" 2> /dev/null | cut -d= -f2-)
+      [[ -n "$circleci_token" && "$circleci_token" != "your_circleci_token_here" ]] && return 0
       ;;
   esac
   return 1
@@ -702,25 +887,45 @@ get_env_value_or_placeholder() {
   fi
 }
 
+# Get servers with available Docker images (for configuration generation)
+get_available_servers() {
+  # Check if we're in CI or don't have Docker - return all configured servers
+  if [[ "${CI:-false}" == "true" ]] || ! command -v docker > /dev/null 2>&1; then
+    while IFS= read -r server_id_line; do
+      [[ -n "$server_id_line" ]] && echo "$server_id_line"
+    done < <(get_configured_servers)
+    return 0
+  fi
+
+  # Include all servers that have Docker images available (regardless of health check status)
+  while IFS= read -r server_id_line; do
+    [[ -z "$server_id_line" ]] && continue
+
+    local image
+    image=$(parse_server_config "$server_id_line" "source.image" 2> /dev/null)
+
+    # Skip if we couldn't get a valid image
+    [[ -z "$image" ]] && continue
+
+    # Check if image exists (this means the server was successfully set up)
+    if docker images | grep -q "$(echo "$image" | cut -d: -f1)" 2> /dev/null; then
+      echo "$server_id_line"
+    fi
+  done < <(get_configured_servers)
+}
+
 # Get working servers with token status
 get_working_servers_with_tokens() {
   local -a all_servers
   local server_line
 
-  # Get all configured servers (since we don't have Docker in this environment)
-  if [[ "${CI:-false}" == "true" ]] || ! command -v docker > /dev/null 2>&1; then
-    while IFS= read -r server_line; do
-      if [[ -n "$server_line" && "$server_line" =~ ^[a-z]+$ ]]; then
-        all_servers+=("$server_line")
-      fi
-    done < <(get_configured_servers)
-  else
-    while IFS= read -r server_line; do
-      if [[ -n "$server_line" && "$server_line" =~ ^[a-z]+$ ]]; then
-        all_servers+=("$server_line")
-      fi
-    done < <(get_working_servers)
-  fi
+  # For configuration generation, we want all available servers (with Docker images)
+  # not just those that pass health checks
+  while IFS= read -r server_line; do
+    if [[ -n "$server_line" && "$server_line" =~ ^[a-z]+$ ]]; then
+      all_servers+=("$server_line")
+    fi
+  done < <(get_available_servers)
 
   for server_id in "${all_servers[@]}"; do
     [[ -z "$server_id" ]] && continue
@@ -748,86 +953,55 @@ write_cursor_config() {
     printf "│   ├── %b[BACKUP]%b Created backup of existing configuration\n" "$GREEN" "$NC"
   fi
 
-  # Create temporary file for MCP servers configuration
-  local temp_mcp_config
-  temp_mcp_config=$(mktemp)
+  # Create configuration content directly without command substitution
+  local env_file_path
+  env_file_path="$(pwd)/.env"
 
-  {
-    echo "{"
-    local first_server=true
+  # Build JSON content string directly
+  local json_content="{"
+  local first_server=true
 
-    for server_id in "${server_ids[@]}"; do
-      [[ -z "$server_id" ]] && continue
+  for server_id in "${server_ids[@]}"; do
+    [[ -z "$server_id" ]] && continue
 
-      [[ "$first_server" != "true" ]] && echo ","
-      first_server=false
+    [[ "$first_server" != "true" ]] && json_content="${json_content},"
+    first_server=false
 
-      local image
-      local env_vars
-      image=$(parse_server_config "$server_id" "source.image" 2> /dev/null)
-      env_vars=$(parse_server_config "$server_id" "environment_variables" 2> /dev/null | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//')
+    local image
+    # Simple direct assignment without command substitution debug
+    case "$server_id" in
+      "github")
+        image="mcp/github-mcp-server:latest"
+        ;;
+      "circleci")
+        image="local/mcp-server-circleci:latest"
+        ;;
+      *)
+        # Fallback to config parsing if needed
+        {
+          set +x 2> /dev/null
+          image=$(parse_server_config "$server_id" "source.image")
+        } 2> /dev/null
+        ;;
+    esac
 
-      # Build server configuration using simpler approach
-      {
-        echo "  \"$server_id\": {"
-        echo "    \"command\": \"docker\","
-        echo "    \"args\": ["
-        echo "      \"run\", \"--rm\", \"-i\","
+    # Build server configuration using --env-file approach
+    json_content="${json_content}
+  \"$server_id\": {
+    \"command\": \"docker\",
+    \"args\": [
+      \"run\", \"--rm\", \"-i\",
+      \"--env-file\", \"$env_file_path\",
+      \"$image\"
+    ]
+  }"
+  done
 
-        # Add environment variables
-        if [[ -n "$env_vars" ]]; then
-          echo "$env_vars" | while IFS= read -r env_var; do
-            [[ -n "$env_var" ]] && echo "      \"-e\", \"$env_var\","
-          done
-        fi
+  json_content="${json_content}
+}"
 
-        echo "      \"$image\""
-        echo "    ],"
-        echo "    \"env\": {"
-
-        # Add environment variable mappings
-        if [[ -n "$env_vars" ]]; then
-          local env_count=0
-          local env_array=()
-          while IFS= read -r env_var; do
-            [[ -n "$env_var" ]] && env_array+=("$env_var")
-          done <<< "$env_vars"
-
-          for env_var in "${env_array[@]}"; do
-            ((env_count++))
-            local env_value
-            env_value=$(get_env_value_or_placeholder "$env_var" "$server_id" 2> /dev/null)
-            if [[ $env_count -eq ${#env_array[@]} ]]; then
-              echo "      \"$env_var\": \"$env_value\""
-            else
-              echo "      \"$env_var\": \"$env_value\","
-            fi
-          done
-        fi
-
-        echo "    }"
-        echo "  }"
-      } >> "$temp_mcp_config"
-    done
-
-    echo "}"
-  } > "$temp_mcp_config"
-
-  # Read existing config or create empty one
-  local existing_config="{}"
-  if [[ -f "$cursor_config" ]]; then
-    existing_config=$(cat "$cursor_config")
-  fi
-
-  # Update configuration using jq (for mcp.json, the structure is simpler)
-  local mcp_servers_json
-  mcp_servers_json=$(cat "$temp_mcp_config")
-  local updated_config
-  updated_config=$(echo "$existing_config" | jq --argjson mcp_servers "$mcp_servers_json" '. = $mcp_servers')
-
-  # Write updated configuration
-  echo "$updated_config" > "$cursor_config"
-  rm "$temp_mcp_config"
+  # Write the configuration directly
+  echo "$json_content" > "$cursor_config"
   printf "│   └── %b[SUCCESS]%b Cursor MCP configuration updated\n" "$GREEN" "$NC"
 }
 
@@ -846,71 +1020,65 @@ write_claude_config() {
     printf "│   ├── %b[BACKUP]%b Created backup of existing configuration\n" "$GREEN" "$NC"
   fi
 
-  # Create temporary file for MCP servers configuration
-  local temp_mcp_config
-  temp_mcp_config=$(mktemp)
+  # Create configuration content directly without command substitution
+  local env_file_path
+  env_file_path="$(pwd)/.env"
 
-  {
-    echo "{"
-    echo "  \"mcpServers\": {"
-    local first_server=true
+  # Build JSON content string directly
+  local json_content="{
+  \"mcpServers\": {"
+  local first_server=true
 
-    for server_id in "${server_ids[@]}"; do
-      [[ -z "$server_id" ]] && continue
+  for server_id in "${server_ids[@]}"; do
+    [[ -z "$server_id" ]] && continue
 
-      [[ "$first_server" != "true" ]] && echo ","
-      first_server=false
+    [[ "$first_server" != "true" ]] && json_content="${json_content},"
+    first_server=false
 
-      local image
-      local env_vars
-      image=$(parse_server_config "$server_id" "source.image" 2> /dev/null)
-      env_vars=$(parse_server_config "$server_id" "environment_variables" 2> /dev/null | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//')
+    local image
+    # Simple direct assignment without command substitution debug
+    case "$server_id" in
+      "github")
+        image="mcp/github-mcp-server:latest"
+        ;;
+      "circleci")
+        image="local/mcp-server-circleci:latest"
+        ;;
+      *)
+        # Fallback to config parsing if needed
+        {
+          set +x 2> /dev/null
+          image=$(parse_server_config "$server_id" "source.image")
+        } 2> /dev/null
+        ;;
+    esac
 
-      # Build server configuration using simpler approach
-      {
-        echo "    \"$server_id\": {"
-        echo "      \"command\": \"docker\","
-        echo "      \"args\": ["
-        echo "        \"run\", \"--rm\", \"-i\","
+    # Build server configuration using --env-file approach
+    json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\",
+        \"--env-file\", \"$env_file_path\",
+        \"$image\"
+      ]
+    }"
+  done
 
-        # Add environment variables
-        if [[ -n "$env_vars" ]]; then
-          echo "$env_vars" | while IFS= read -r env_var; do
-            [[ -n "$env_var" ]] && echo "        \"-e\", \"$env_var=\${$env_var}\","
-          done
-        fi
+  json_content="${json_content}
+  }
+}"
 
-        echo "        \"$image\""
-        echo "      ]"
-        echo "    }"
-      } >> "$temp_mcp_config"
-    done
-
-    echo "  }"
-    echo "}"
-  } > "$temp_mcp_config"
-
-  # Read existing config or create empty one
-  local existing_config="{}"
-  if [[ -f "$claude_config" ]]; then
-    existing_config=$(cat "$claude_config")
-  fi
-
-  # Update configuration using jq
-  local mcp_servers_json
-  mcp_servers_json=$(cat "$temp_mcp_config")
-  local updated_config
-  updated_config=$(echo "$existing_config" | jq --argjson mcp_servers "$mcp_servers_json" '.mcpServers = $mcp_servers.mcpServers')
-
-  # Write updated configuration
-  echo "$updated_config" > "$claude_config"
-  rm "$temp_mcp_config"
+  # Write the configuration directly
+  echo "$json_content" > "$claude_config"
   printf "│   └── %b[SUCCESS]%b Claude Desktop MCP configuration updated\n" "$GREEN" "$NC"
 }
 
 # Generate Cursor-specific MCP configuration
 generate_cursor_config() {
   local server_ids=("$@")
+  local env_file_path
+  env_file_path="$(pwd)/.env"
 
   cat << 'EOF'
 
@@ -925,45 +1093,19 @@ EOF
 
     local server_name
     local image
-    local env_vars
-    server_name=$(parse_server_config "$server_id" "name")
-    image=$(parse_server_config "$server_id" "source.image")
-
-    # Get environment variables for this server
-    env_vars=$(parse_server_config "$server_id" "environment_variables" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+    {
+      set +x 2> /dev/null
+      server_name=$(parse_server_config "$server_id" "name")
+      image=$(parse_server_config "$server_id" "source.image")
+    } 2> /dev/null
 
     printf '  "%s": {\n' "$server_id"
     printf '    "command": "docker",\n'
     printf '    "args": [\n'
     printf '      "run", "--rm", "-i",\n'
-
-    # Add environment variables
-    if [[ -n "$env_vars" ]]; then
-      echo "$env_vars" | while IFS= read -r env_var; do
-        [[ -n "$env_var" ]] && printf '      "-e", "%s",\n' "$env_var"
-      done
-    fi
-
+    printf '      "--env-file", "%s",\n' "$env_file_path"
     printf '      "%s"\n' "$image"
-    printf '    ],\n'
-    printf '    "env": {\n'
-
-    # Add environment variable mappings with proper value handling
-    if [[ -n "$env_vars" ]]; then
-      local first=true
-      echo "$env_vars" | while IFS= read -r env_var; do
-        if [[ -n "$env_var" ]]; then
-          [[ "$first" != "true" ]] && printf ',\n'
-          local env_value
-          env_value=$(get_env_value_or_placeholder "$env_var" "$server_id" 2> /dev/null)
-          printf '      "%s": "%s"' "$env_var" "$env_value"
-          first=false
-        fi
-      done
-      echo ""
-    fi
-
-    printf '    }\n'
+    printf '    ]\n'
     printf '  }'
 
     # Add comma if not the last server
@@ -987,6 +1129,8 @@ EOF
 # Generate Claude Desktop-specific MCP configuration
 generate_claude_config() {
   local server_ids=("$@")
+  local env_file_path
+  env_file_path="$(pwd)/.env"
 
   cat << 'EOF'
 
@@ -1003,27 +1147,17 @@ EOF
 
     local server_name
     local image
-    local env_vars
-    server_name=$(parse_server_config "$server_id" "name")
-    image=$(parse_server_config "$server_id" "source.image")
-    env_vars=$(parse_server_config "$server_id" "environment_variables" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+    {
+      set +x 2> /dev/null
+      server_name=$(parse_server_config "$server_id" "name")
+      image=$(parse_server_config "$server_id" "source.image")
+    } 2> /dev/null
 
     printf '    "%s": {\n' "$server_id"
     printf '      "command": "docker",\n'
     printf '      "args": [\n'
     printf '        "run", "--rm", "-i",\n'
-
-    # Add environment variables with proper value handling
-    if [[ -n "$env_vars" ]]; then
-      echo "$env_vars" | while IFS= read -r env_var; do
-        if [[ -n "$env_var" ]]; then
-          local env_value
-          env_value=$(get_env_value_or_placeholder "$env_var" "$server_id" 2> /dev/null)
-          printf '        "-e", "%s=%s",\n' "$env_var" "$env_value"
-        fi
-      done
-    fi
-
+    printf '        "--env-file", "%s",\n' "$env_file_path"
     printf '        "%s"\n' "$image"
     printf '      ]\n'
     printf '    }'
@@ -1113,28 +1247,32 @@ normalize_args() {
 main() {
   # Normalize arguments to handle both formats
   local normalized_args
+  # shellcheck disable=SC2207
   normalized_args=($(normalize_args "$1" "$2" "$3"))
 
-  case "${normalized_args[0]:-help}" in
+  case "${normalized_args[1]:-help}" in
     "setup")
-      if [[ -n "${normalized_args[1]}" ]]; then
-        setup_mcp_server "${normalized_args[1]}"
+      if [[ -n "${normalized_args[2]}" ]]; then
+        setup_mcp_server "${normalized_args[2]}"
       else
         setup_all_mcp_servers
       fi
       ;;
     "test")
-      if [[ -n "${normalized_args[1]}" ]]; then
-        test_mcp_server_health "${normalized_args[1]}"
+      if [[ -n "${normalized_args[2]}" ]]; then
+        test_mcp_server_health "${normalized_args[2]}"
       else
-        test_all_mcp_servers
+        # Filter out debug output from shell tracing
+        test_all_mcp_servers 2>&1 | grep -v -E '^(container_value=|image=|env_vars=|placeholder=)'
       fi
       ;;
     "config")
-      generate_client_configs "${normalized_args[1]:-all}" "preview"
+      # Filter out debug output from shell tracing
+      generate_client_configs "${normalized_args[2]:-all}" "preview" 2>&1 | grep -v -E '^(container_value=|image=|env_vars=|placeholder=|server_name=)'
       ;;
     "config-write")
-      generate_client_configs "${normalized_args[1]:-all}" "write"
+      # Filter out debug output from shell tracing
+      generate_client_configs "${normalized_args[2]:-all}" "write" 2>&1 | grep -v -E '^(container_value=|image=|env_vars=|placeholder=|server_name=)'
       ;;
     "list")
       echo "Configured MCP servers:"
@@ -1143,8 +1281,8 @@ main() {
       done
       ;;
     "parse")
-      if [[ -n "${normalized_args[1]}" ]] && [[ -n "${normalized_args[2]}" ]]; then
-        parse_server_config "${normalized_args[1]}" "${normalized_args[2]}"
+      if [[ -n "${normalized_args[2]}" ]] && [[ -n "${normalized_args[3]}" ]]; then
+        parse_server_config "${normalized_args[2]}" "${normalized_args[3]}"
       else
         echo "Usage: $0 parse <server_id> <config_key>"
         echo "Example: $0 parse github source.image"

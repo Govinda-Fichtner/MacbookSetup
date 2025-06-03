@@ -32,6 +32,8 @@ _mcp_commands() {
   commands=(
     'setup:Set up MCP server(s) (registry pull or local build)'
     'test:Test MCP server(s) health via stdio/JSON-RPC'
+    'config:Generate client configuration snippets (preview)'
+    'config-write:Write configuration to actual client config files'
     'list:List configured servers from registry'
     'parse:Parse configuration value from registry'
     'help:Show help message'
@@ -43,8 +45,8 @@ _mcp_server_ids() {
   local server_ids
   local registry_file="mcp_server_registry.yml"
 
-  # Only provide server completion if we're after setup/test commands
-  if [[ ${words[2]} == "setup" || ${words[2]} == "test" || ${words[2]} == "parse" ]]; then
+  # Only provide server completion if we're after setup/test/config/config-write commands
+  if [[ ${words[2]} == "setup" || ${words[2]} == "test" || ${words[2]} == "config" || ${words[2]} == "config-write" || ${words[2]} == "parse" ]]; then
     if [[ -f "$registry_file" ]]; then
       # Extract server IDs from registry file
       server_ids=($(awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' "$registry_file" 2>/dev/null))

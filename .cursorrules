@@ -76,6 +76,27 @@ feat: add tree structure to setup.sh output for consistency
 - Maintain clean visual flow throughout setup process
 ```
 
+## 🔧 Shell Completion Update Requirement
+
+### **Mandatory Completion Check**
+When modifying any shell script (*.sh files), you MUST check if shell completion needs updates:
+
+1. **Check completion file**: `_mcp_manager` for mcp_manager.sh changes
+2. **Verify commands match**: Ensure completion options match actual commands
+3. **Test completion**: Verify tab completion works for new/modified commands
+4. **Update if needed**: Add new commands, options, or server IDs to completion
+
+### **Files to Check**:
+- `_mcp_manager` - Completion for mcp_manager.sh
+- Any other completion files in the project
+
+### **Testing**:
+```bash
+# Source completion and test
+source _mcp_manager
+./mcp_manager.sh <TAB><TAB>  # Should show available commands
+```
+
 ## 🚫 Anti-Patterns to Avoid
 
 ### **Complexity Anti-Patterns**
@@ -162,6 +183,141 @@ setup_<language>_environment() {
 - All background installations must use `show_progress()` with proper spinner
 - Version extraction must use shared `extract_version()` function
 - Verification logic must handle tool-specific requirements while maintaining output consistency
+
+## 🔗 MCP Server Integration Patterns (Added from GitHub/CircleCI experience)
+
+### **MCP Server Addition Protocol**
+When adding new MCP servers to the project, follow this exact pattern:
+
+```bash
+# 1. Add server to AVAILABLE_SERVERS array in mcp_manager.sh
+AVAILABLE_SERVERS=("github" "circleci" "new-server")
+
+# 2. Add Docker image mapping in get_docker_image()
+get_docker_image() {
+  case "$1" in
+    "github") echo "mcp/github-mcp-server:latest" ;;
+    "circleci") echo "local/mcp-server-circleci:latest" ;;
+    "new-server") echo "vendor/new-server:latest" ;;
+    *) return 1 ;;
+  esac
+}
+
+# 3. Add environment variables in get_expected_env_vars()
+get_expected_env_vars() {
+  case "$1" in
+    "new-server")
+      echo "NEW_SERVER_TOKEN NEW_SERVER_API_KEY NEW_SERVER_BASE_URL"
+      ;;
+  esac
+}
+
+# 4. Add placeholder mapping in get_env_placeholder()
+get_env_placeholder() {
+  case "$1" in
+    "NEW_SERVER_TOKEN") echo "your_new_server_token_here" ;;
+    "NEW_SERVER_API_KEY") echo "your_api_key_here" ;;
+    "NEW_SERVER_BASE_URL") echo "https://api.newserver.com" ;;
+  esac
+}
+```
+
+### **Configuration Generation Standards**
+- **ALWAYS use --env-file approach**: Never inline environment variables in JSON
+- **Use absolute paths**: `--env-file /Users/gfichtner/MacbookSetup/.env`
+- **Generate .env_example**: Never overwrite existing `.env` files
+- **Include all available servers**: Use `get_available_servers()` not just working ones
+- **Maintain JSON structure consistency**: Both Cursor and Claude Desktop formats
+
+### **Environment File Safety Rules**
+- ❌ **NEVER generate or overwrite .env files directly**
+- ✅ **ALWAYS generate .env_example with placeholders**
+- ✅ **Read tokens from .env file, not environment variables**
+- ✅ **Validate against placeholders**: Detect "your_token_here" patterns
+- ✅ **Preserve existing .env**: Show "[INFO] Existing .env file found (keeping as-is)"
+
+### **Token Detection and Validation**
+```bash
+# Template for server token validation:
+server_has_real_tokens() {
+  local server="$1"
+  local env_vars
+  env_vars=$(get_expected_env_vars "$server")
+
+  for var in $env_vars; do
+    local value placeholder
+    value=$(grep "^${var}=" .env 2>/dev/null | cut -d'=' -f2- | tr -d '"')
+    placeholder=$(get_env_placeholder "$var")
+
+    if [[ -z "$value" || "$value" == "$placeholder" ]]; then
+      return 1
+    fi
+  done
+  return 0
+}
+```
+
+### **Container Environment Testing**
+- **Test variables inside containers**: Use `docker run --env-file .env image sh -c "echo \$VAR"`
+- **Validate environment visibility**: Ensure all expected variables are accessible
+- **Handle mixed output gracefully**: Use `grep -o` to extract JSON from startup messages
+- **Support different parse modes**: Handle both "json" and default parsing
+
+### **Debug Output Prevention (CRITICAL)**
+- ❌ **NEVER leave debug trace enabled**: Check for `set -x`, `functrace`, etc.
+- ❌ **NEVER output variable assignments**: Avoid `container_value=`, `image=` patterns
+- ✅ **Use structured output**: Tree format with proper status indicators
+- ✅ **Redirect debug info**: Send debugging to stderr or suppress entirely
+- ✅ **Test JSON validity**: Always validate with `jq` before committing
+
+### **Health Check Architecture**
+- **Basic Protocol Tests**: Always work in CI (no authentication required)
+- **Advanced Functionality Tests**: Only when real tokens detected
+- **Graceful Degradation**: Warn about missing tokens, don't fail
+- **Container Environment Verification**: Test actual Docker variable visibility
+- **Mixed Output Handling**: Support servers with startup messages before JSON
+
+### **Testing Requirements for New Servers**
+When adding MCP servers, update `spec/mcp_manager_spec.sh`:
+
+```bash
+# 1. Update expected_servers in has_expected_servers()
+local expected_servers="github circleci new-server"
+
+# 2. Add environment variable tests
+The output should include "NEW_SERVER_TOKEN"
+The output should include "NEW_SERVER_API_KEY"
+
+# 3. Add placeholder tests
+The output should include "your_new_server_token_here"
+
+# 4. Add Docker image tests
+The output should include "vendor/new-server:latest"
+```
+
+### **JSON Structure Consistency**
+- **Cursor Format**: Direct server mapping `{ "server": { "command": "docker", "args": [...] } }`
+- **Claude Desktop Format**: Nested under mcpServers `{ "mcpServers": { "server": {...} } }`
+- **Args Array Standard**: `["run", "--rm", "-i", "--env-file", "path", "image"]`
+- **No Inline Environment Variables**: Configuration should be environment-agnostic
+
+### **Error Handling for MCP Servers**
+- **Missing Docker**: Graceful fallback, generate configs anyway
+- **Missing Tokens**: Warning messages, not errors
+- **Container Failures**: Detailed error output with full Docker response
+- **JSON Parsing Errors**: Strip non-JSON content before parsing
+- **File Permission Issues**: Clear error messages about config file locations
+
+### **Shell Completion Extension**
+When adding new MCP servers, update `_mcp_manager`:
+```bash
+# Add server names to completion
+case $line[1] in
+  test|health|config-write)
+    _arguments '*:servers:(github circleci new-server)'
+    ;;
+esac
+```
 
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file

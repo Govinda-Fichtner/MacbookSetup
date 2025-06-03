@@ -84,83 +84,151 @@ The setup script configures Terraform with:
 
 ### MCP Server Integration
 
-The setup includes integration with Model Context Protocol (MCP) servers, which provide enhanced AI capabilities through specialized Docker containers. This feature enables:
+The setup includes comprehensive integration with Model Context Protocol (MCP) servers, which provide enhanced AI capabilities through specialized Docker containers. This feature enables seamless integration between AI tools (Cursor IDE, Claude Desktop) and external services.
 
 #### Available MCP Servers
 - **GitHub MCP Server**: Repository management and code analysis
-  - Features: Repository management, issue tracking, pull requests, code search
-  - Requires: GitHub Personal Access Token or GitHub Token
+  - **Features**: Repository management, issue tracking, pull requests, code search, file operations
+  - **Docker Image**: `mcp/github-mcp-server:latest`
+  - **Requires**: `GITHUB_TOKEN` and `GITHUB_PERSONAL_ACCESS_TOKEN`
 
-- **CircleCI MCP Server**: Pipeline monitoring and management
-  - Features: Pipeline monitoring, job management, artifact access, environment variables
-  - Requires: CircleCI Token
+- **CircleCI MCP Server**: CI/CD pipeline monitoring and management
+  - **Features**: Pipeline monitoring, job management, artifact access, environment variables
+  - **Docker Image**: `local/mcp-server-circleci:latest`
+  - **Requires**: `CIRCLECI_TOKEN` and `CIRCLECI_BASE_URL`
 
 #### MCP Server Management
 
 The setup includes a comprehensive MCP server manager (`mcp_manager.sh`) that provides:
 
-1. **Server Setup**
+1. **Health Testing**
    ```bash
-   # Set up all MCP servers
-   ./mcp_manager.sh setup
-
-   # Set up specific server
-   ./mcp_manager.sh setup github
-   ```
-
-2. **Health Testing**
-   ```bash
-   # Test all servers
+   # Test all servers with comprehensive health checks
    ./mcp_manager.sh test
 
    # Test specific server
-   ./mcp_manager.sh test circleci
+   ./mcp_manager.sh test github
+
+   # Health testing includes:
+   # - Basic MCP protocol validation (CI-friendly, no auth required)
+   # - Advanced functionality testing (when real tokens detected)
+   # - Container environment variable verification
    ```
 
-3. **Configuration Management**
+2. **Configuration Generation**
    ```bash
-   # Preview configurations
-   ./mcp_manager.sh config
-
-   # Write configurations to client files
+   # Generate client configurations and environment templates
    ./mcp_manager.sh config-write
+
+   # Preview configurations without writing files
+   ./mcp_manager.sh config cursor    # Preview Cursor config
+   ./mcp_manager.sh config claude    # Preview Claude Desktop config
+   ./mcp_manager.sh config env       # Preview environment variables
+   ```
+
+3. **Environment Management**
+   ```bash
+   # The script automatically:
+   # - Creates .env_example with placeholder tokens
+   # - Preserves existing .env files (never overwrites)
+   # - Validates tokens against placeholders
+   # - Tests environment variables inside Docker containers
    ```
 
 #### Client Integration
 
-MCP servers can be integrated with:
+MCP servers integrate with AI tools using a secure, Docker-based approach:
 
 1. **Cursor IDE**
-   - Configuration file: `~/.cursor/mcp.json`
-   - Automatic token management
-   - Docker-based server execution
+   - **Configuration file**: `~/.cursor/mcp.json`
+   - **Format**: Direct server mapping with Docker commands
+   - **Environment**: Uses `--env-file /path/to/.env` approach
 
 2. **Claude Desktop**
-   - Configuration file: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Environment variable support
-   - Containerized server execution
+   - **Configuration file**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Format**: Nested under `mcpServers` object
+   - **Environment**: Uses `--env-file /path/to/.env` approach
 
-#### Configuration Structure
+#### Security and Environment Handling
 
-MCP servers are configured through `mcp_server_registry.yml`, which defines:
-- Server metadata (name, description, category)
-- Source configuration (Docker image or build)
-- Environment variables
-- Health test parameters
-- Server capabilities
+The MCP integration follows security best practices:
+
+- **Environment File Safety**:
+  - ✅ Generates `.env_example` with placeholders like `your_github_token_here`
+  - ✅ Never overwrites existing `.env` files
+  - ✅ Uses absolute paths for environment files
+  - ❌ Never includes real tokens in configuration files
+
+- **Token Validation**:
+  - Reads tokens from `.env` file, not host environment variables
+  - Validates tokens against placeholder patterns
+  - Tests environment variable visibility inside Docker containers
+  - Provides clear guidance for missing or invalid tokens
+
+- **Configuration Approach**:
+  - Uses `--env-file` instead of inline environment variables in JSON
+  - Maintains environment-agnostic configuration files
+  - Supports both authenticated and basic protocol testing
+
+#### Getting Started with MCP Servers
+
+1. **Generate Initial Configuration**:
+   ```bash
+   ./mcp_manager.sh config-write
+   ```
+
+2. **Set Up Environment Variables**:
+   ```bash
+   # Copy the example file
+   cp .env_example .env
+
+   # Edit .env with your real tokens
+   # Replace placeholder values like "your_github_token_here" with actual tokens
+   ```
+
+3. **Test Server Health**:
+   ```bash
+   # Basic protocol tests (no authentication required)
+   ./mcp_manager.sh test
+
+   # Advanced tests (requires real tokens in .env)
+   # Will automatically run when real tokens are detected
+   ```
+
+4. **Use with AI Tools**:
+   - **Cursor**: Restart Cursor IDE to pick up `~/.cursor/mcp.json`
+   - **Claude Desktop**: Restart Claude Desktop to pick up configuration changes
 
 #### Environment Requirements
 
 For full MCP functionality:
-- OrbStack or Docker for container management
-- Valid API tokens for each service
-- Proper network connectivity for container communication
+- **Container Runtime**: OrbStack or Docker for container management
+- **API Tokens**: Valid tokens for each service (stored in `.env` file)
+- **Network Access**: Proper connectivity for container communication
 
-The setup script automatically:
-- Creates necessary configuration directories
-- Sets up default configuration files
-- Validates server health
-- Manages client integrations
+#### Shell Completion
+
+The setup includes comprehensive tab completion for `mcp_manager.sh`:
+
+```bash
+# After setup, you can use tab completion for all commands
+./mcp_manager.sh <TAB><TAB>           # Shows: config, config-write, test, health
+./mcp_manager.sh test <TAB><TAB>      # Shows: github, circleci
+./mcp_manager.sh config <TAB><TAB>    # Shows: cursor, claude, env
+```
+
+Completion features:
+- **Command completion**: All available commands and subcommands
+- **Server name completion**: Auto-complete server names for test commands
+- **Configuration type completion**: Auto-complete config types (cursor, claude, env)
+
+#### Troubleshooting
+
+- **"No tools available" warnings**: Usually indicates token lacks required permissions
+- **JSON parsing errors**: Check that no debug output is contaminating configuration files
+- **Environment variable issues**: Use `./mcp_manager.sh test` to verify container environment
+- **Configuration not loading**: Ensure AI tools are restarted after configuration changes
+- **Tab completion not working**: Ensure shell completion is properly sourced: `source _mcp_manager`
 
 ### Terminal and Editor Tools
 - **iTerm2**: Enhanced terminal emulator
@@ -362,3 +430,53 @@ SOFTWARE.
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Testing
+
+### Shellspec Tests
+
+Comprehensive tests for `mcp_manager.sh` are located in the `spec/` directory and cover:
+
+- **Configuration Generation**: Valid JSON output for both Cursor and Claude Desktop
+- **Environment File Safety**: Proper `.env_example` generation without overwriting existing files
+- **Debug Output Prevention**: Ensures clean output without variable contamination
+- **JSON Structure Validation**: Proper configuration format and structure
+- **Server Integration**: Complete coverage of GitHub and CircleCI server configurations
+
+To run all tests:
+
+```sh
+shellspec
+```
+
+To run only the MCP manager test suite:
+
+```sh
+shellspec spec/mcp_manager_spec.sh
+```
+
+### Test Categories
+
+The test suite includes several focused categories:
+
+1. **Configuration Generation Tests**
+   - Valid JSON generation for both clients
+   - Proper `--env-file` usage
+   - Environment variable handling
+
+2. **Debug Output Regression Tests**
+   - Prevents debug variable contamination in JSON files
+   - Ensures clean terminal output
+   - Validates JSON parsing reliability
+
+3. **Environment File Generation Tests**
+   - `.env_example` creation with proper placeholders
+   - Safety checks against overwriting existing `.env` files
+   - Proper environment variable inclusion
+
+4. **JSON Structure Validation Tests**
+   - Validates configuration format consistency
+   - Tests server configuration structure
+   - Ensures proper args array formatting
+
+This comprehensive testing ensures reliability and prevents regressions in MCP server configuration generation.

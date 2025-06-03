@@ -9,7 +9,7 @@ servers:
     description: "GitHub repository management and code analysis"
     category: "code"
     source:
-      type: docker
+      type: registry
       image: mcp/github-mcp-server:latest
     environment_variables:
       - "GITHUB_TOKEN"
@@ -31,7 +31,7 @@ servers:
     description: "CircleCI pipeline monitoring and management"
     category: "cicd"
     source:
-      type: docker
+      type: registry
       image: local/mcp-server-circleci:latest
     environment_variables:
       - "CIRCLECI_TOKEN"
