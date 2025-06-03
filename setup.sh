@@ -1,6 +1,6 @@
 #!/bin/zsh
 # shellcheck shell=bash
-# shellcheck disable=SC2296,SC2034,SC2154,SC1091
+# shellcheck disable=SC2296,SC2034,SC1091
 
 # macOS Development Environment Setup Script
 #
@@ -175,7 +175,7 @@ ensure_mcp_server_config() {
       echo "{}" > "$mcp_config_file"
     fi
 
-    if [[ $? -ne 0 ]]; then
+    if [ ! -f "$mcp_config_file" ]; then
       printf "│   │   └── %b[ERROR]%b Failed to create default config.json for %s\n" "$RED" "$NC" "$server_name"
       return 1
     fi
@@ -281,9 +281,28 @@ setup_containerization_and_mcp() {
     printf "│   └── %b[SUCCESS]%b Base MCP config directory ensured.\n" "$GREEN" "$NC"
   fi
 
-  # Setup Colima
-  printf "├── %b[CHECKING]%b Colima status\n" "$BLUE" "$NC"
+  # Prefer Orbstack if available and working
+  printf "├── %b[CHECKING]%b Orbstack status\n" "$BLUE" "$NC"
+  if check_command orbctl; then
+    if orbctl status > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Orbstack is installed and running. Using Orbstack for containerization.\n" "$GREEN" "$NC"
+      export CONTAINER_RUNTIME=orbstack
+      return 0
+    else
+      printf "│   └── %b[WARNING]%b Orbstack is installed but not running. Attempting to start...\n" "$YELLOW" "$NC"
+      if orbctl start > /tmp/orbstack_start.log 2>&1 && orbctl status > /dev/null 2>&1; then
+        printf "│   └── %b[SUCCESS]%b Orbstack started successfully. Using Orbstack.\n" "$GREEN" "$NC"
+        export CONTAINER_RUNTIME=orbstack
+        return 0
+      else
+        printf "│   └── %b[WARNING]%b Failed to start Orbstack. Falling back to Colima. See /tmp/orbstack_start.log\n" "$YELLOW" "$NC"
+      fi
+    fi
+  else
+    printf "│   └── %b[INFO]%b Orbstack not found. Will try Colima.\n" "$BLUE" "$NC"
+  fi
 
+  # Only install Colima and dependencies if Orbstack is not available/working
   # Ensure QEMU, Lima, and lima-additional-guestagents are installed before Colima
   local colima_deps=(qemu lima lima-additional-guestagents)
   for dep in "${colima_deps[@]}"; do
@@ -299,53 +318,56 @@ setup_containerization_and_mcp() {
         printf "│   │   └── %b[ERROR]%b Homebrew not found. Cannot install %s.\n" "$RED" "$NC" "$dep"
       fi
     else
-      printf "│   ├── %b[SUCCESS]%b %s already installed\n" "$GREEN" "$NC" "$dep"
+      printf "│   ├── %b[EXISTS]%b %s already installed\n" "$GREEN" "$NC" "$dep"
     fi
   done
 
+  # Setup Colima
+  printf "├── %b[CHECKING]%b Colima status\n" "$BLUE" "$NC"
   if ! check_command colima; then
     printf "│   ├── %b[INFO]%b Colima not found. It should be installed via Brewfile.\n" "$YELLOW" "$NC"
     printf "│   └── %b[WARNING]%b Colima setup skipped. Install it via Homebrew if needed.\n" "$YELLOW" "$NC"
-  elif colima status > /dev/null 2>&1; then
-    printf "│   └── %b[SUCCESS]%b Colima is running\n" "$GREEN" "$NC"
-  else
-    printf "│   ├── %b[INFO]%b Colima is not running. Attempting to start...\n" "$BLUE" "$NC"
-    local colima_started=false
-    if [[ "${CI:-false}" == "true" ]]; then
-      # In CI, try qemu first, then vz
-      printf "│   │   ├── %b[INFO]%b Trying Colima with --vm-type=qemu\n" "$BLUE" "$NC"
-      colima start --runtime docker --vm-type=qemu --arch "$(uname -m)" --memory 2 --disk 20 --cpu 1 &> /tmp/colima_start.log
-      if colima status > /dev/null 2>&1; then
-        printf "│   │   └── %b[SUCCESS]%b Colima started with qemu\n" "$GREEN" "$NC"
-        colima_started=true
-      else
-        printf "│   │   ├── %b[WARNING]%b Colima qemu start failed. Trying --vm-type=vz\n" "$YELLOW" "$NC"
-        colima start --runtime docker --vm-type=vz --arch "$(uname -m)" --memory 2 --disk 20 --cpu 1 &>> /tmp/colima_start.log
-        if colima status > /dev/null 2>&1; then
-          printf "│   │   └── %b[SUCCESS]%b Colima started with vz\n" "$GREEN" "$NC"
-          colima_started=true
-        else
-          printf "│   │   └── %b[ERROR]%b Colima failed to start with both qemu and vz.\n" "$RED" "$NC"
-          printf "│   │   Last 20 lines of Colima log:\n"
-          tail -20 /tmp/colima_start.log
-          printf "│   └── %b[WARNING]%b Colima could not start in CI. Skipping Docker-based MCP tests.\n" "$YELLOW" "$NC"
-        fi
-      fi
+    return 0
+  fi
+
+  # Start Colima with QEMU first in CI, fallback to VZ, otherwise use default
+  local colima_started=false
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "│   ├── %b[INFO]%b CI detected. Trying Colima with --vm-type=qemu...\n" "$BLUE" "$NC"
+    if colima start --vm-type=qemu > /tmp/colima_start_qemu.log 2>&1; then
+      printf "│   │   └── %b[SUCCESS]%b Colima started with QEMU.\n" "$GREEN" "$NC"
+      colima_started=true
     else
-      # Local: use default (vz or user default)
-      colima start --runtime docker --arch "$(uname -m)" --memory 4 --disk 100 --cpu 2 &> /tmp/colima_start.log &
-      show_progress "│   │" "Starting Colima" "$!"
-      wait "$!"
-      if colima status > /dev/null 2>&1; then
-        printf "│   └── %b[SUCCESS]%b Colima started successfully\n" "$GREEN" "$NC"
+      printf "│   │   └── %b[WARNING]%b Failed to start Colima with QEMU. See /tmp/colima_start_qemu.log\n" "$YELLOW" "$NC"
+      printf "│   ├── %b[INFO]%b Trying Colima with --vm-type=vz...\n" "$BLUE" "$NC"
+      if colima start --vm-type=vz > /tmp/colima_start_vz.log 2>&1; then
+        printf "│   │   └── %b[SUCCESS]%b Colima started with VZ.\n" "$GREEN" "$NC"
         colima_started=true
       else
-        printf "│   └── %b[ERROR]%b Failed to start Colima. Check /tmp/colima_start.log. You may need to run 'colima start' manually.\n" "$RED" "$NC"
-        printf "│   │   Last 20 lines of Colima log:\n"
-        tail -20 /tmp/colima_start.log
+        printf "│   │   └── %b[ERROR]%b Failed to start Colima with both QEMU and VZ. See /tmp/colima_start_vz.log\n" "$RED" "$NC"
+      fi
+    fi
+  else
+    # Local: use default Colima logic
+    if colima status > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Colima is installed and running\n" "$GREEN" "$NC"
+      colima_started=true
+    else
+      printf "│   ├── %b[INFO]%b Colima is installed but not running. Attempting to start...\n" "$BLUE" "$NC"
+      if colima start > /tmp/colima_start_local.log 2>&1; then
+        printf "│   └── %b[SUCCESS]%b Colima started successfully.\n" "$GREEN" "$NC"
+        colima_started=true
+      else
+        printf "│   └── %b[ERROR]%b Failed to start Colima. See /tmp/colima_start_local.log\n" "$RED" "$NC"
       fi
     fi
   fi
+
+  if [[ "$colima_started" != true ]]; then
+    printf "│   └── %b[WARNING]%b Failed to start any container runtime. MCP testing will be limited to configuration validation.\n" "$YELLOW" "$NC"
+    return 0
+  fi
+  export CONTAINER_RUNTIME=colima
 
   # Check Docker
   printf "├── %b[CHECKING]%b Docker command-line tool\n" "$BLUE" "$NC"
@@ -397,7 +419,7 @@ setup_containerization_and_mcp() {
         # For now, let it continue to create the docker-compose.yml, which might then fail at runtime if image is missing.
         # Or, return 1 to mark this section as problematic.
       }
-      if [[ $? -eq 0 ]]; then # Check if clone was successful before saying so
+      if [ -d "$circleci_mcp_repo_path/.git" ]; then # Check if clone was successful before saying so
         printf "│   │   └── %b[SUCCESS]%b Cloned CircleCI MCP server repository.\n" "$GREEN" "$NC"
       fi
     fi
@@ -448,7 +470,7 @@ services:
     tty: false
 EOF
 
-  if [[ $? -eq 0 ]]; then
+  if [ -f "$mcp_docker_compose_file" ]; then
     printf "    └── %b[SUCCESS]%b MCP docker-compose.yml created/updated.\n" "$GREEN" "$NC"
     # Validate the docker-compose file syntax if docker-compose is available
     if check_command docker-compose; then
