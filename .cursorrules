@@ -27,6 +27,31 @@
 5. git push origin main
 ```
 
+### **🚫 NEVER BYPASS PRE-COMMIT CHECKS**
+**MANDATORY RULE**: Pre-commit hooks exist for quality control and MUST NEVER be bypassed.
+
+#### **Forbidden Commands**
+- ❌ **NEVER use `git commit --no-verify`** - This bypasses all validation
+- ❌ **NEVER use `git commit -n`** - Short form of --no-verify
+- ❌ **NEVER skip pre-commit fixes** because "functionality works"
+- ❌ **NEVER commit with known linting/testing failures**
+
+#### **Required Approach When Pre-commit Fails**
+1. **🔧 FIX THE ISSUES** - Address shellcheck warnings, test failures, formatting
+2. **📋 UNDERSTAND WHY** - Learn what the tools are catching
+3. **✅ VERIFY FIXES** - Re-run pre-commit until it passes
+4. **📝 UPDATE RULES** - Document new patterns if needed
+5. **🎯 COMMIT ONLY AFTER ALL CHECKS PASS**
+
+#### **Emergency Exception Protocol** (Rare Cases Only)
+If there's a critical production issue requiring immediate bypass:
+1. **📋 Document the reason** in commit message
+2. **⏰ Set timeline** for fixing the bypassed issues
+3. **🔄 Create follow-up task** to address the problems
+4. **👥 Get approval** from team/project owner before bypassing
+
+**Philosophy**: Pre-commit hooks catch issues before they become problems. Bypassing them creates technical debt and reduces code quality.
+
 ### 4. **Visual Consistency Rules**
 - Use tree structure (`├──`, `└──`) for hierarchical output
 - Maintain color coding: `$GREEN` for success, `$YELLOW` for warnings, `$BLUE` for info

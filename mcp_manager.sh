@@ -1545,18 +1545,6 @@ ${mount_args}        \"$image\",
       ]
     }"
         ;;
-      "api_based" | "standalone" | *)
-        # Standard servers using --env-file approach
-        json_content="${json_content}
-    \"$server_id\": {
-      \"command\": \"docker\",
-      \"args\": [
-        \"run\", \"--rm\", \"-i\",
-        \"--env-file\", \"$env_file_path\",
-        \"$image\"
-      ]
-    }"
-        ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
         local volumes networks docker_args
@@ -1585,6 +1573,18 @@ ${mount_args}        \"$image\",
 ${docker_args}
     ]
   }"
+        ;;
+      "api_based" | "standalone" | *)
+        # Standard servers using --env-file approach
+        json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\",
+        \"--env-file\", \"$env_file_path\",
+        \"$image\"
+      ]
+    }"
         ;;
     esac
   done
@@ -1648,12 +1648,6 @@ EOF
         printf '      "%s",\n' "$image"
         printf '      "%s"\n' "$container_path"
         ;;
-      "api_based" | "standalone" | *)
-        # Standard servers use environment files
-        printf '      "run", "--rm", "-i",\n'
-        printf '      "--env-file", "%s",\n' "$env_file_path"
-        printf '      "%s"\n' "$image"
-        ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
         local volumes networks
@@ -1673,6 +1667,12 @@ EOF
           [[ -n "$network" ]] && printf '      "--network", "%s",\n' "$network"
         done <<< "$networks"
 
+        printf '      "%s"\n' "$image"
+        ;;
+      "api_based" | "standalone" | *)
+        # Standard servers use environment files
+        printf '      "run", "--rm", "-i",\n'
+        printf '      "--env-file", "%s",\n' "$env_file_path"
         printf '      "%s"\n' "$image"
         ;;
     esac
@@ -1750,12 +1750,6 @@ EOF
         printf '        "%s",\n' "$image"
         printf '        "%s"\n' "$container_path"
         ;;
-      "api_based" | "standalone" | *)
-        # Standard servers use environment files
-        printf '        "run", "--rm", "-i",\n'
-        printf '        "--env-file", "%s",\n' "$env_file_path"
-        printf '        "%s"\n' "$image"
-        ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
         local volumes networks docker_args
@@ -1775,6 +1769,12 @@ EOF
           [[ -n "$network" ]] && printf '        "--network", "%s",\n' "$network"
         done <<< "$networks"
 
+        printf '        "%s"\n' "$image"
+        ;;
+      "api_based" | "standalone" | *)
+        # Standard servers use environment files
+        printf '        "run", "--rm", "-i",\n'
+        printf '        "--env-file", "%s",\n' "$env_file_path"
         printf '        "%s"\n' "$image"
         ;;
     esac
