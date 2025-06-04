@@ -704,6 +704,7 @@ Cleanup is **MANDATORY** at the end of every major development step, including:
 - ✅ **Update path references**: Ensure all file paths point to correct locations
 - ✅ **Validate configurations**: Test that generated configs work correctly
 - ✅ **Check for unused functions**: Remove or document any unused code
+- ✅ **CI output validation**: Ensure CI pipelines have clean output without shell initialization errors
 
 #### **📦 Git Hygiene**
 - ✅ **Stage all changes**: `git add -A` (after verifying no sensitive files)
@@ -781,6 +782,26 @@ If cleanup reveals issues:
 
 ### **Ready for Next Development Phase** 🚀
 ```
+
+## 🤖 CI Environment Standards
+
+### **Clean Output Requirements**
+- ✅ **No shell initialization errors**: Suppress `.zshrc` loading errors in CI with `2>/dev/null || true`
+- ✅ **No debug variable assignments**: Filter out `container_value=`, `server_count=`, etc.
+- ✅ **No command not found errors**: Handle missing tools gracefully in CI environments
+- ✅ **Structured output from line 1**: Ensure first line starts with section headers (`===`)
+
+### **CI-Specific Error Handling**
+- ✅ **Shell setup errors**: Suppress plugin/completion failures that don't affect functionality
+- ✅ **Missing tool warnings**: Distinguish between critical failures and CI environment limitations
+- ✅ **Container unavailability**: Graceful degradation when Docker/OrbStack not available
+- ✅ **Test environment isolation**: Ensure CI tests don't depend on local development setup
+
+### **CI Output Validation Tests**
+- ✅ **Add `spec/ci_output_spec.sh`**: Dedicated tests for clean CI output
+- ✅ **Test shell initialization**: Verify no stray error messages appear
+- ✅ **Test debug output filtering**: Ensure all debug variables are filtered
+- ✅ **Test structured output**: Verify consistent formatting across environments
 
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file

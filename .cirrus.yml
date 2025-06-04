@@ -88,8 +88,8 @@ env:
 .verify_template: &verify_template
   verify_script:
     - |
-      # Run verification script
-      source ~/.zshrc
+      # Run verification script (suppress shell init errors in CI)
+      source ~/.zshrc 2>/dev/null || true
       ./verify_setup.sh 2>&1 | tee verify.log
 
 # Template for artifact collection

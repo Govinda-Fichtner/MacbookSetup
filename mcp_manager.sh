@@ -1810,7 +1810,11 @@ main() {
       ;;
     "inspect")
       # Handle inspect command and preserve exit code, filter debug output
-      handle_inspect_command "${normalized_args[2]}" "${normalized_args[3]}" "${normalized_args[4]}" 2>&1 | grep -v -E '^(container_value=|image=|env_vars=|placeholder=|server_name=|server_count=)'
+      local temp_output
+      temp_output=$(handle_inspect_command "${normalized_args[2]}" "${normalized_args[3]}" "${normalized_args[4]}" 2>&1)
+      local exit_code=$?
+      echo "$temp_output" | grep -v -E '^(container_value=|image=|env_vars=|placeholder=|server_name=|server_count=)'
+      return $exit_code
       ;;
     "help" | *)
       echo "MCP Server Manager"
