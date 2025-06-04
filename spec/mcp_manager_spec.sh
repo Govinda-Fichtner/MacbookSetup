@@ -319,11 +319,12 @@ The output should include "Desktop"
 The output should include "Downloads"
 End
 
-It 'filesystem server uses --env-file approach'
+It 'filesystem server uses mount-based approach'
 zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
 When run jq '.filesystem.args[]' "$HOME/.cursor/mcp.json"
 The status should be success
-The output should include "--env-file"
+The output should include "--mount"
+The output should include "/project"
 End
 
 It 'filesystem server can be tested individually'

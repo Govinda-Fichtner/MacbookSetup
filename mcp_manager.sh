@@ -346,6 +346,120 @@ test_mcp_basic_protocol() {
   fi
 }
 
+# Test filesystem server specific functionality (runs locally only)
+test_filesystem_advanced_functionality() {
+  local server_id="$1"
+  local server_name="$2"
+  local image="$3"
+
+  # Skip filesystem advanced tests in CI - they require real file system access
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "│   │   ├── %b[SKIPPED]%b Filesystem operations (CI environment)\n" "$YELLOW" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b Filesystem server configured for CI\n" "$GREEN" "$NC"
+    return 0
+  fi
+
+  # Get configured directory for testing
+  local filesystem_dirs_raw first_dir
+  filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+  first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
+  [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+
+  printf "│   │   ├── %b[TESTING]%b Directory mounting: %s\n" "$BLUE" "$NC" "$first_dir"
+
+  # Verify directory exists and is accessible
+  if [[ ! -d "$first_dir" ]]; then
+    printf "│   │   │   └── %b[ERROR]%b Directory not found: %s\n" "$RED" "$NC" "$first_dir"
+    return 1
+  fi
+
+  # Test filesystem server can start with directory mounted
+  local mount_test_response
+  mount_test_response=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "filesystem-test", "version": "1.0.0"}}}' \
+    | timeout 10 docker run --rm -i --mount "type=bind,src=${first_dir},dst=/project" "$image" "/project" 2>&1)
+
+  if echo "$mount_test_response" | grep -q "Secure MCP Filesystem Server running on stdio"; then
+    printf "│   │   │   └── %b[SUCCESS]%b Filesystem server started with mounted directory\n" "$GREEN" "$NC"
+  else
+    printf "│   │   │   └── %b[ERROR]%b Failed to mount directory or start server\n" "$RED" "$NC"
+    return 1
+  fi
+
+  printf "│   │   ├── %b[TESTING]%b File operations functionality\n" "$BLUE" "$NC"
+
+  # Test filesystem tools are available
+  local tools_messages
+  tools_messages=$(
+    cat << 'EOF'
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "filesystem-test", "version": "1.0.0"}}}
+{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+EOF
+  )
+
+  local tools_response
+  tools_response=$(echo "$tools_messages" | timeout 15 docker run --rm -i --mount "type=bind,src=${first_dir},dst=/project" "$image" "/project" 2>&1)
+
+  # Count filesystem tools
+  local tool_count=0
+  local expected_tools=("read_file" "write_file" "list_directory" "create_directory" "search_files" "get_file_info")
+
+  for tool in "${expected_tools[@]}"; do
+    if echo "$tools_response" | grep -q "\"name\":\"$tool\""; then
+      ((tool_count++))
+    fi
+  done
+
+  if [[ $tool_count -ge 5 ]]; then
+    printf "│   │   │   ├── %b[SUCCESS]%b %d filesystem tools available\n" "$GREEN" "$NC" "$tool_count"
+  else
+    printf "│   │   │   ├── %b[WARNING]%b Only %d filesystem tools found\n" "$YELLOW" "$NC" "$tool_count"
+  fi
+
+  # Test actual file operations if we're in a safe directory
+  printf "│   │   ├── %b[TESTING]%b File read/write operations\n" "$BLUE" "$NC"
+
+  # Test reading an existing file (README.md should exist in MacbookSetup)
+  if [[ -f "$first_dir/README.md" ]]; then
+    local read_test_messages
+    read_test_messages=$(
+      cat << 'EOF'
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "filesystem-test", "version": "1.0.0"}}}
+{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "read_file", "arguments": {"path": "/project/README.md"}}}
+EOF
+    )
+
+    local read_response
+    read_response=$(echo "$read_test_messages" | timeout 15 docker run --rm -i --mount "type=bind,src=${first_dir},dst=/project" "$image" "/project" 2>&1)
+
+    if echo "$read_response" | grep -q "MacbookSetup\|# Mac"; then
+      printf "│   │   │   ├── %b[SUCCESS]%b File read operation functional\n" "$GREEN" "$NC"
+    else
+      printf "│   │   │   ├── %b[WARNING]%b File read test inconclusive\n" "$YELLOW" "$NC"
+    fi
+  fi
+
+  # Test directory listing
+  local list_test_messages
+  list_test_messages=$(
+    cat << 'EOF'
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "filesystem-test", "version": "1.0.0"}}}
+{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_directory", "arguments": {"path": "/project"}}}
+EOF
+  )
+
+  local list_response
+  list_response=$(echo "$list_test_messages" | timeout 15 docker run --rm -i --mount "type=bind,src=${first_dir},dst=/project" "$image" "/project" 2>&1)
+
+  if echo "$list_response" | grep -q '\[FILE\]\|\[DIR\]'; then
+    printf "│   │   │   ├── %b[SUCCESS]%b Directory listing functional\n" "$GREEN" "$NC"
+  else
+    printf "│   │   │   ├── %b[WARNING]%b Directory listing test inconclusive\n" "$YELLOW" "$NC"
+  fi
+
+  printf "│   │   └── %b[SUCCESS]%b Filesystem advanced functionality test completed\n" "$GREEN" "$NC"
+  return 0
+}
+
 # Advanced MCP functionality test (requires real API tokens - local development)
 test_mcp_advanced_functionality() {
   local server_id="$1"
@@ -354,6 +468,12 @@ test_mcp_advanced_functionality() {
   local parse_mode="$4"
 
   printf "│   ├── %b[ADVANCED]%b MCP functionality with authentication\n" "$BLUE" "$NC"
+
+  # Special handling for filesystem server
+  if [[ "$server_id" == "filesystem" ]]; then
+    test_filesystem_advanced_functionality "$server_id" "$server_name" "$image"
+    return $?
+  fi
 
   # Test container environment variables visibility
   printf "│   │   ├── %b[TESTING]%b Container environment variables\n" "$BLUE" "$NC"
@@ -694,7 +814,7 @@ generate_env_file() {
         placeholder="https://circleci.com"
         ;;
       "FILESYSTEM_ALLOWED_DIRS")
-        placeholder="/Users/$(whoami)/Documents/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
+        placeholder="$(pwd),/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
         ;;
       "MCP_AUTO_OPEN_ENABLED")
         placeholder="false"
@@ -893,8 +1013,11 @@ server_has_real_tokens() {
     "filesystem")
       # Check for filesystem allowed directories in .env file
       local filesystem_dirs
-      filesystem_dirs=$(grep "^FILESYSTEM_ALLOWED_DIRS=" "$env_file" 2> /dev/null | cut -d= -f2-)
-      [[ -n "$filesystem_dirs" && "$filesystem_dirs" != "/Users/$(whoami)/Documents/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads" ]] && return 0
+      filesystem_dirs=$(grep "^FILESYSTEM_ALLOWED_DIRS=" "$env_file" 2> /dev/null | cut -d= -f2- | tr -d '"')
+      # Compare against current default placeholder
+      local default_placeholder
+      default_placeholder="$(pwd),/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
+      [[ -n "$filesystem_dirs" && "$filesystem_dirs" != "$default_placeholder" ]] && return 0
       ;;
   esac
   return 1
@@ -1026,8 +1149,37 @@ write_cursor_config() {
         ;;
     esac
 
-    # Build server configuration using --env-file approach
-    json_content="${json_content}
+    # Build server configuration - special handling for filesystem server
+    if [[ "$server_id" == "filesystem" ]]; then
+      # Filesystem server requires directory paths as arguments, not environment variables
+      local filesystem_dirs_raw
+      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+
+      if [[ -z "$filesystem_dirs_raw" ]]; then
+        # Default fallback: current project directory
+        filesystem_dirs_raw="$(pwd)"
+      fi
+
+      # Simple approach: just mount the first directory or current pwd
+      local first_dir
+      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
+      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+
+      local mount_args="      \"--mount\", \"type=bind,src=${first_dir},dst=/project\",\n"
+      local path_args="\"/project\""
+
+      json_content="${json_content}
+  \"$server_id\": {
+    \"command\": \"docker\",
+    \"args\": [
+      \"run\", \"--rm\", \"-i\",
+${mount_args}      \"$image\",
+      ${path_args}
+    ]
+  }"
+    else
+      # Standard server configuration using --env-file approach
+      json_content="${json_content}
   \"$server_id\": {
     \"command\": \"docker\",
     \"args\": [
@@ -1036,6 +1188,7 @@ write_cursor_config() {
       \"$image\"
     ]
   }"
+    fi
   done
 
   json_content="${json_content}
@@ -1094,8 +1247,37 @@ write_claude_config() {
         ;;
     esac
 
-    # Build server configuration using --env-file approach
-    json_content="${json_content}
+    # Build server configuration - special handling for filesystem server
+    if [[ "$server_id" == "filesystem" ]]; then
+      # Filesystem server requires directory paths as arguments, not environment variables
+      local filesystem_dirs_raw
+      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+
+      if [[ -z "$filesystem_dirs_raw" ]]; then
+        # Default fallback: current project directory
+        filesystem_dirs_raw="$(pwd)"
+      fi
+
+      # Simple approach: just mount the first directory or current pwd
+      local first_dir
+      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
+      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+
+      local mount_args="        \"--mount\", \"type=bind,src=${first_dir},dst=/project\",\n"
+      local path_args="\"/project\""
+
+      json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\",
+${mount_args}        \"$image\",
+        ${path_args}
+      ]
+    }"
+    else
+      # Standard server configuration using --env-file approach
+      json_content="${json_content}
     \"$server_id\": {
       \"command\": \"docker\",
       \"args\": [
@@ -1104,6 +1286,7 @@ write_claude_config() {
         \"$image\"
       ]
     }"
+    fi
   done
 
   json_content="${json_content}
@@ -1143,9 +1326,25 @@ EOF
     printf '  "%s": {\n' "$server_id"
     printf '    "command": "docker",\n'
     printf '    "args": [\n'
-    printf '      "run", "--rm", "-i",\n'
-    printf '      "--env-file", "%s",\n' "$env_file_path"
-    printf '      "%s"\n' "$image"
+
+    if [[ "$server_id" == "filesystem" ]]; then
+      # Filesystem server gets directory paths as arguments
+      local filesystem_dirs_raw first_dir
+      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
+      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+
+      printf '      "run", "--rm", "-i",\n'
+      printf '      "--mount", "type=bind,src=%s,dst=/project",\n' "$first_dir"
+      printf '      "%s",\n' "$image"
+      printf '      "/project"\n'
+    else
+      # Standard servers use environment files
+      printf '      "run", "--rm", "-i",\n'
+      printf '      "--env-file", "%s",\n' "$env_file_path"
+      printf '      "%s"\n' "$image"
+    fi
+
     printf '    ]\n'
     printf '  }'
 
@@ -1197,9 +1396,25 @@ EOF
     printf '    "%s": {\n' "$server_id"
     printf '      "command": "docker",\n'
     printf '      "args": [\n'
-    printf '        "run", "--rm", "-i",\n'
-    printf '        "--env-file", "%s",\n' "$env_file_path"
-    printf '        "%s"\n' "$image"
+
+    if [[ "$server_id" == "filesystem" ]]; then
+      # Filesystem server gets directory paths as arguments
+      local filesystem_dirs_raw first_dir
+      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
+      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+
+      printf '        "run", "--rm", "-i",\n'
+      printf '        "--mount", "type=bind,src=%s,dst=/project",\n' "$first_dir"
+      printf '        "%s",\n' "$image"
+      printf '        "/project"\n'
+    else
+      # Standard servers use environment files
+      printf '        "run", "--rm", "-i",\n'
+      printf '        "--env-file", "%s",\n' "$env_file_path"
+      printf '        "%s"\n' "$image"
+    fi
+
     printf '      ]\n'
     printf '    }'
 

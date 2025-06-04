@@ -100,8 +100,23 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
 - **Filesystem MCP Server**: Local file system operations and management
   - **Features**: File operations, directory management, file search, file metadata, secure access
   - **Docker Image**: `mcp/filesystem:latest`
-  - **Requires**: `FILESYSTEM_ALLOWED_DIRS` (comma-separated directory paths)
-  - **Security**: Restricts access to explicitly specified directories only
+  - **Configuration**: Uses directory path arguments (not environment variables)
+  - **Mount Setup**: Automatically mounts project directory to `/project` inside container
+  - **Default Access**: Current MacbookSetup project directory by default
+  - **Security**: Restricts access to explicitly mounted directories only
+
+  **Available Tools**:
+  - `read_file` / `read_multiple_files` - Read file contents
+  - `write_file` - Create or overwrite files with new content
+  - `list_directory` - Get detailed directory listings
+  - `create_directory` - Create new directories
+  - `move_file` - Move or rename files and directories
+  - `delete_file` - Delete files or directories (with recursive option)
+  - `search_files` - Search for files matching patterns
+  - `get_file_info` - Get file metadata (size, timestamps, permissions)
+  - `list_allowed_directories` - Show accessible directory paths
+
+  **Note**: The filesystem server operates differently from other MCP servers - it requires directory paths as command line arguments rather than environment variables. Our Docker configuration automatically mounts the current project directory (`$(pwd)`) to `/project` inside the container.
 
 #### MCP Server Management
 
