@@ -213,44 +213,34 @@ test_mcp_server_health() {
   local image
   local parse_mode
 
-  server_name=$(parse_server_config "$server_id" "name")
-  image=$(parse_server_config "$server_id" "source.image")
-  parse_mode=$(parse_server_config "$server_id" "health_test.parse_mode")
+  {
+    set +x 2> /dev/null
+    server_name=$(parse_server_config "$server_id" "name")
+    image=$(parse_server_config "$server_id" "source.image")
+    parse_mode=$(parse_server_config "$server_id" "health_test.parse_mode")
+  } 2> /dev/null
 
-  printf "├── %b[TESTING]%b %s health\n" "$BLUE" "$NC" "$server_name"
+  printf "├── %b[SERVER]%b %s\\n" "$BLUE" "$NC" "$server_name"
 
-  # Determine if we have real tokens available
-  local has_real_tokens=false
-  case "$server_id" in
-    "github")
-      if [[ -n "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" && "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" != "test_token" ]]; then
-        has_real_tokens=true
-      elif [[ -n "${GITHUB_TOKEN:-}" && "${GITHUB_TOKEN:-}" != "test_token" ]]; then
-        has_real_tokens=true
-      fi
-      ;;
-    "circleci")
-      [[ -n "${CIRCLECI_TOKEN:-}" && "${CIRCLECI_TOKEN}" != "test_token" ]] && has_real_tokens=true
-      ;;
-  esac
-
-  # Run basic test first (always)
+  # Basic protocol testing (CI + local)
   if ! test_mcp_basic_protocol "$server_id" "$server_name" "$image" "$parse_mode"; then
+    printf "│   └── %b[ERROR]%b Basic protocol test failed\\n" "$RED" "$NC"
     return 1
   fi
 
-  # Run advanced test if tokens are available
-  if [[ "$has_real_tokens" == true ]]; then
-    printf "│   ├── %b[DETECTED]%b Real API tokens available - running advanced tests\n" "$BLUE" "$NC"
-    if ! test_mcp_advanced_functionality "$server_id" "$server_name" "$image" "$parse_mode"; then
-      printf "│   └── %b[WARNING]%b Advanced tests failed (basic protocol works)\n" "$YELLOW" "$NC"
-    fi
-  else
-    printf "│   └── %b[INFO]%b No API tokens - skipping advanced tests\n" "$YELLOW" "$NC"
+  # Advanced functionality testing (local only, with real tokens)
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (CI environment)\\n" "$YELLOW" "$NC"
+    return 0
   fi
 
-  printf "└── %b[SUCCESS]%b %s health test completed\n" "$GREEN" "$NC" "$server_name"
-  return 0
+  if server_has_real_tokens "$server_id" || [[ "$(get_server_type "$server_id")" == "standalone" ]]; then
+    test_server_advanced_functionality "$server_id" "$server_name" "$image"
+    return $?
+  else
+    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (no real tokens)\\n" "$YELLOW" "$NC"
+    return 0
+  fi
 }
 
 # Basic MCP protocol test (no authentication required - CI pipeline compatible)
@@ -260,7 +250,7 @@ test_mcp_basic_protocol() {
   local image="$3"
   local parse_mode="$4"
 
-  printf "│   ├── %b[BASIC]%b MCP protocol validation (CI-friendly)\n" "$BLUE" "$NC"
+  printf "│   ├── %b[BASIC]%b MCP protocol validation (CI-friendly)\\n" "$BLUE" "$NC"
 
   # Use test tokens for basic protocol validation (CI pipeline doesn't need real tokens)
   local env_args=()
@@ -280,7 +270,7 @@ test_mcp_basic_protocol() {
   fi
 
   # Test MCP initialization with basic protocol check
-  printf "│   │   ├── %b[TESTING]%b Protocol handshake\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b Protocol handshake\\n" "$BLUE" "$NC"
   local mcp_init_message='{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "basic-test", "version": "1.0.0"}}}'
 
   local raw_response_for_log
@@ -322,8 +312,8 @@ test_mcp_basic_protocol() {
     if jq -e '.result.serverInfo.name' <<< "$json_response" > /dev/null 2>&1; then
       local server_info
       server_info=$(jq -r '.result.serverInfo.name + " v" + .result.serverInfo.version' <<< "$json_response")
-      printf "│   │   │   └── %b[SUCCESS]%b MCP protocol: %s\n" "$GREEN" "$NC" "$server_info"
-      printf "│   │   └── %b[SUCCESS]%b Basic protocol validation passed\n" "$GREEN" "$NC"
+      printf "│   │   │   └── %b[SUCCESS]%b MCP protocol: %s\\n" "$GREEN" "$NC" "$server_info"
+      printf "│   │   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC"
       return 0
     else
       # jq parsing failed for basic init
@@ -336,14 +326,122 @@ test_mcp_basic_protocol() {
 
   # Broader check for auth-related errors or common failure keywords for basic test success
   if echo "$raw_response_for_log" | grep -Eiq "not set|invalid|unauthorized|token|Usage:|error|fail|denied|forbidden"; then # Check raw log for errors
-    printf "│   │   │   └── %b[SUCCESS]%b MCP protocol functional (auth required or specific error)\n" "$GREEN" "$NC"
-    printf "│   │   └── %b[SUCCESS]%b Basic protocol validation passed\n" "$GREEN" "$NC"
+    printf "│   │   │   └── %b[SUCCESS]%b MCP protocol functional (auth required or specific error)\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC"
     return 0
   else
-    printf "│   │   │   └── %b[ERROR]%b MCP protocol failed unexpectedly for %s\n" "$RED" "$NC" "$server_name"
-    printf "│   │   │       %bFull Docker run response:%b\n%s\n" "$YELLOW" "$NC" "$raw_response_for_log"
+    printf "│   │   │   └── %b[ERROR]%b MCP protocol failed unexpectedly for %s\\n" "$RED" "$NC" "$server_name"
+    printf "│   │   │       %bFull Docker run response:%b\\n%s\\n" "$YELLOW" "$NC" "$raw_response_for_log"
     return 1
   fi
+}
+
+# Advanced functionality testing based on server type
+test_server_advanced_functionality() {
+  local server_id="$1"
+  local server_name="$2"
+  local image="$3"
+
+  local server_type
+  server_type=$(get_server_type "$server_id")
+
+  case "$server_type" in
+    "api_based")
+      test_api_based_advanced_functionality "$server_id" "$server_name" "$image"
+      ;;
+    "mount_based")
+      test_mount_based_advanced_functionality "$server_id" "$server_name" "$image"
+      ;;
+    "standalone")
+      test_standalone_advanced_functionality "$server_id" "$server_name" "$image"
+      ;;
+    *)
+      printf "│   ├── %b[WARNING]%b Unknown server type: %s\\n" "$YELLOW" "$NC" "$server_type"
+      return 0
+      ;;
+  esac
+}
+
+# API-based server advanced functionality (GitHub, CircleCI, etc.)
+test_api_based_advanced_functionality() {
+  local server_id="$1"
+  local server_name="$2"
+  local image="$3"
+
+  printf "│   ├── %b[ADVANCED]%b API functionality testing (requires real tokens)\\n" "$BLUE" "$NC"
+
+  # Test with actual API calls that require authentication
+  local test_payload
+  case "$server_id" in
+    "github")
+      test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "get_repository", "arguments": {"owner": "octocat", "repo": "Hello-World"}}}'
+      ;;
+    "circleci")
+      test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "get_projects", "arguments": {}}}'
+      ;;
+    *)
+      printf "│   │   └── %b[WARNING]%b No advanced test defined for %s\\n" "$YELLOW" "$NC" "$server_id"
+      return 0
+      ;;
+  esac
+
+  printf "│   │   ├── %b[TESTING]%b API authentication and tool execution\\n" "$BLUE" "$NC"
+  local response
+  response=$(echo "$test_payload" | timeout 15 docker run --rm -i --env-file .env "$image" 2>&1)
+
+  if echo "$response" | grep -q '"error"'; then
+    printf "│   │   └── %b[WARNING]%b API test failed (check tokens/permissions)\\n" "$YELLOW" "$NC"
+    return 1
+  else
+    printf "│   │   └── %b[SUCCESS]%b API functionality verified\\n" "$GREEN" "$NC"
+    return 0
+  fi
+}
+
+# Mount-based server advanced functionality (Filesystem, etc.)
+test_mount_based_advanced_functionality() {
+  local server_id="$1"
+  local server_name="$2"
+  local image="$3"
+
+  printf "│   ├── %b[ADVANCED]%b Filesystem operations testing (local only)\\n" "$BLUE" "$NC"
+
+  # Get mount configuration
+  local source_env_var container_path default_fallback
+  source_env_var=$(get_mount_config "$server_id" "source_env_var")
+  container_path=$(get_mount_config "$server_id" "container_path")
+  default_fallback=$(get_mount_config "$server_id" "default_fallback")
+
+  # Determine mount directory
+  local mount_dir
+  mount_dir=$(grep "^${source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"' | cut -d',' -f1)
+  [[ -z "$mount_dir" ]] && mount_dir=$(eval echo "$default_fallback")
+
+  printf "│   │   ├── %b[TESTING]%b Directory mount: %s\\n" "$BLUE" "$NC" "$mount_dir"
+
+  # Test file operations
+  local test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_directory", "arguments": {"path": "'"$container_path"'"}}}'
+  local response
+  response=$(echo "$test_payload" | timeout 10 docker run --rm -i --mount "type=bind,src=$mount_dir,dst=$container_path" "$image" "$container_path" 2>&1)
+
+  if echo "$response" | grep -q '"result"'; then
+    printf "│   │   └── %b[SUCCESS]%b Filesystem operations verified\\n" "$GREEN" "$NC"
+    return 0
+  else
+    printf "│   │   └── %b[WARNING]%b Filesystem test failed\\n" "$YELLOW" "$NC"
+    return 1
+  fi
+}
+
+# Standalone server advanced functionality (Inspector, etc.)
+test_standalone_advanced_functionality() {
+  local server_id="$1"
+  local server_name="$2"
+  local image="$3"
+
+  printf "│   ├── %b[ADVANCED]%b Standalone functionality testing\\n" "$BLUE" "$NC"
+  printf "│   │   └── %b[SUCCESS]%b No external dependencies required\\n" "$GREEN" "$NC"
+  return 0
 }
 
 # Test filesystem server specific functionality (runs locally only)
@@ -354,8 +452,8 @@ test_filesystem_advanced_functionality() {
 
   # Skip filesystem advanced tests in CI - they require real file system access
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   │   ├── %b[SKIPPED]%b Filesystem operations (CI environment)\n" "$YELLOW" "$NC"
-    printf "│   │   └── %b[SUCCESS]%b Filesystem server configured for CI\n" "$GREEN" "$NC"
+    printf "│   │   ├── %b[SKIPPED]%b Filesystem operations (CI environment)\\n" "$YELLOW" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b Filesystem server configured for CI\\n" "$GREEN" "$NC"
     return 0
   fi
 
@@ -365,11 +463,11 @@ test_filesystem_advanced_functionality() {
   first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
   [[ -z "$first_dir" ]] && first_dir="$(pwd)"
 
-  printf "│   │   ├── %b[TESTING]%b Directory mounting: %s\n" "$BLUE" "$NC" "$first_dir"
+  printf "│   │   ├── %b[TESTING]%b Directory mounting: %s\\n" "$BLUE" "$NC" "$first_dir"
 
   # Verify directory exists and is accessible
   if [[ ! -d "$first_dir" ]]; then
-    printf "│   │   │   └── %b[ERROR]%b Directory not found: %s\n" "$RED" "$NC" "$first_dir"
+    printf "│   │   │   └── %b[ERROR]%b Directory not found: %s\\n" "$RED" "$NC" "$first_dir"
     return 1
   fi
 
@@ -379,13 +477,13 @@ test_filesystem_advanced_functionality() {
     | timeout 10 docker run --rm -i --mount "type=bind,src=${first_dir},dst=/project" "$image" "/project" 2>&1)
 
   if echo "$mount_test_response" | grep -q "Secure MCP Filesystem Server running on stdio"; then
-    printf "│   │   │   └── %b[SUCCESS]%b Filesystem server started with mounted directory\n" "$GREEN" "$NC"
+    printf "│   │   │   └── %b[SUCCESS]%b Filesystem server started with mounted directory\\n" "$GREEN" "$NC"
   else
-    printf "│   │   │   └── %b[ERROR]%b Failed to mount directory or start server\n" "$RED" "$NC"
+    printf "│   │   │   └── %b[ERROR]%b Failed to mount directory or start server\\n" "$RED" "$NC"
     return 1
   fi
 
-  printf "│   │   ├── %b[TESTING]%b File operations functionality\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b File operations functionality\\n" "$BLUE" "$NC"
 
   # Test filesystem tools are available
   local tools_messages
@@ -410,13 +508,13 @@ EOF
   done
 
   if [[ $tool_count -ge 5 ]]; then
-    printf "│   │   │   ├── %b[SUCCESS]%b %d filesystem tools available\n" "$GREEN" "$NC" "$tool_count"
+    printf "│   │   │   ├── %b[SUCCESS]%b %d filesystem tools available\\n" "$GREEN" "$NC" "$tool_count"
   else
-    printf "│   │   │   ├── %b[WARNING]%b Only %d filesystem tools found\n" "$YELLOW" "$NC" "$tool_count"
+    printf "│   │   │   ├── %b[WARNING]%b Only %d filesystem tools found\\n" "$YELLOW" "$NC" "$tool_count"
   fi
 
   # Test actual file operations if we're in a safe directory
-  printf "│   │   ├── %b[TESTING]%b File read/write operations\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b File read/write operations\\n" "$BLUE" "$NC"
 
   # Test reading an existing file (README.md should exist in MacbookSetup)
   if [[ -f "$first_dir/README.md" ]]; then
@@ -431,10 +529,10 @@ EOF
     local read_response
     read_response=$(echo "$read_test_messages" | timeout 15 docker run --rm -i --mount "type=bind,src=${first_dir},dst=/project" "$image" "/project" 2>&1)
 
-    if echo "$read_response" | grep -q "MacbookSetup\|# Mac"; then
-      printf "│   │   │   ├── %b[SUCCESS]%b File read operation functional\n" "$GREEN" "$NC"
+    if echo "$read_response" | grep -q "MacbookSetup\\|# Mac"; then
+      printf "│   │   │   ├── %b[SUCCESS]%b File read operation functional\\n" "$GREEN" "$NC"
     else
-      printf "│   │   │   ├── %b[WARNING]%b File read test inconclusive\n" "$YELLOW" "$NC"
+      printf "│   │   │   ├── %b[WARNING]%b File read test inconclusive\\n" "$YELLOW" "$NC"
     fi
   fi
 
@@ -451,12 +549,12 @@ EOF
   list_response=$(echo "$list_test_messages" | timeout 15 docker run --rm -i --mount "type=bind,src=${first_dir},dst=/project" "$image" "/project" 2>&1)
 
   if echo "$list_response" | grep -q '\[FILE\]\|\[DIR\]'; then
-    printf "│   │   │   ├── %b[SUCCESS]%b Directory listing functional\n" "$GREEN" "$NC"
+    printf "│   │   │   ├── %b[SUCCESS]%b Directory listing functional\\n" "$GREEN" "$NC"
   else
-    printf "│   │   │   ├── %b[WARNING]%b Directory listing test inconclusive\n" "$YELLOW" "$NC"
+    printf "│   │   │   ├── %b[WARNING]%b Directory listing test inconclusive\\n" "$YELLOW" "$NC"
   fi
 
-  printf "│   │   └── %b[SUCCESS]%b Filesystem advanced functionality test completed\n" "$GREEN" "$NC"
+  printf "│   │   └── %b[SUCCESS]%b Filesystem advanced functionality test completed\\n" "$GREEN" "$NC"
   return 0
 }
 
@@ -467,7 +565,7 @@ test_mcp_advanced_functionality() {
   local image="$3"
   local parse_mode="$4"
 
-  printf "│   ├── %b[ADVANCED]%b MCP functionality with authentication\n" "$BLUE" "$NC"
+  printf "│   ├── %b[ADVANCED]%b MCP functionality with authentication\\n" "$BLUE" "$NC"
 
   # Special handling for filesystem server
   if [[ "$server_id" == "filesystem" ]]; then
@@ -476,9 +574,9 @@ test_mcp_advanced_functionality() {
   fi
 
   # Test container environment variables visibility
-  printf "│   │   ├── %b[TESTING]%b Container environment variables\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b Container environment variables\\n" "$BLUE" "$NC"
   if ! test_container_environment "$server_id" "$image"; then
-    printf "│   │   │   └── %b[ERROR]%b Environment variables not visible in container\n" "$RED" "$NC"
+    printf "│   │   │   └── %b[ERROR]%b Environment variables not visible in container\\n" "$RED" "$NC"
     return 1
   fi
 
@@ -486,7 +584,7 @@ test_mcp_advanced_functionality() {
   local env_args=(--env-file ".env")
 
   # Test authenticated MCP initialization
-  printf "│   │   ├── %b[TESTING]%b Authenticated initialization\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b Authenticated initialization\\n" "$BLUE" "$NC"
   local mcp_init_message='{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "advanced-test", "version": "1.0.0"}}}'
 
   local raw_auth_response_for_log
@@ -527,22 +625,22 @@ test_mcp_advanced_functionality() {
     if jq -e '.result.serverInfo.name' <<< "$auth_json_response" > /dev/null 2>&1; then
       local server_info
       server_info=$(jq -r '.result.serverInfo.name + " v" + .result.serverInfo.version' <<< "$auth_json_response")
-      printf "│   │   │   └── %b[SUCCESS]%b Authenticated: %s\n" "$GREEN" "$NC" "$server_info"
+      printf "│   │   │   └── %b[SUCCESS]%b Authenticated: %s\\n" "$GREEN" "$NC" "$server_info"
     else
       # jq parsing failed for auth init
-      printf "│   │   │   └── %b[ERROR]%b Authentication failed\n" "$RED" "$NC"
-      printf "│   │   │       %bFull Docker run response:%b\n%s\n" "$YELLOW" "$NC" "$raw_auth_response_for_log"
+      printf "│   │   │   └── %b[ERROR]%b Authentication failed\\n" "$RED" "$NC"
+      printf "│   │   │       %bFull Docker run response:%b\\n%s\\n" "$YELLOW" "$NC" "$raw_auth_response_for_log"
       return 1 # Important to return failure here
     fi
   else
     # auth_json_response was empty
-    printf "│   │   │   └── %b[ERROR]%b Authentication failed (empty JSON response)\n" "$RED" "$NC"
-    printf "│   │   │       %bFull Docker run response:%b\n%s\n" "$YELLOW" "$NC" "$raw_auth_response_for_log"
+    printf "│   │   │   └── %b[ERROR]%b Authentication failed (empty JSON response)\\n" "$RED" "$NC"
+    printf "│   │   │       %bFull Docker run response:%b\\n%s\\n" "$YELLOW" "$NC" "$raw_auth_response_for_log"
     return 1 # Important to return failure here
   fi
 
   # Test tools/list with authentication
-  printf "│   │   ├── %b[TESTING]%b Authenticated tools discovery\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b Authenticated tools discovery\\n" "$BLUE" "$NC"
   local tools_messages
   tools_messages=$(
     cat << 'EOF'
@@ -598,15 +696,15 @@ EOF
 
     # Output formatted for easy parsing by verify_setup.sh
     if [[ $tool_count -gt 5 ]]; then
-      printf "│   │   │   └── %b[SUCCESS]%b %s: %s tools available (%s, ...)\n" "$GREEN" "$NC" "$server_name" "$tool_count" "$tool_names"
+      printf "│   │   │   └── %b[SUCCESS]%b %s: %s tools available (%s, ...)\\n" "$GREEN" "$NC" "$server_name" "$tool_count" "$tool_names"
     else
-      printf "│   │   │   └── %b[SUCCESS]%b %s: %s tools available (%s)\n" "$GREEN" "$NC" "$server_name" "$tool_count" "$tool_names"
+      printf "│   │   │   └── %b[SUCCESS]%b %s: %s tools available (%s)\\n" "$GREEN" "$NC" "$server_name" "$tool_count" "$tool_names"
     fi
   else
-    printf "│   │   │   └── %b[WARNING]%b No tools available (token may lack permissions)\n" "$YELLOW" "$NC"
+    printf "│   │   │   └── %b[WARNING]%b No tools available (token may lack permissions)\\n" "$YELLOW" "$NC"
   fi
 
-  printf "│   │   └── %b[SUCCESS]%b Advanced functionality test passed\n" "$GREEN" "$NC"
+  printf "│   │   └── %b[SUCCESS]%b Advanced functionality test passed\\n" "$GREEN" "$NC"
   return 0
 }
 
@@ -618,7 +716,7 @@ test_container_environment() {
 
   # Skip if no .env file exists
   [[ ! -f "$env_file" ]] && {
-    printf "│   │   │   └── %b[WARNING]%b No .env file found\n" "$YELLOW" "$NC"
+    printf "│   │   │   └── %b[WARNING]%b No .env file found\\n" "$YELLOW" "$NC"
     return 0
   }
 
@@ -649,21 +747,21 @@ test_container_environment() {
       } 2> /dev/null
 
       if [[ -n "$container_value" ]]; then
-        printf "│   │   │   ├── %b[SUCCESS]%b %s visible in container\n" "$GREEN" "$NC" "$var_name"
+        printf "│   │   │   ├── %b[SUCCESS]%b %s visible in container\\n" "$GREEN" "$NC" "$var_name"
       else
-        printf "│   │   │   ├── %b[ERROR]%b %s not visible in container\n" "$RED" "$NC" "$var_name"
+        printf "│   │   │   ├── %b[ERROR]%b %s not visible in container\\n" "$RED" "$NC" "$var_name"
         ((failed_vars++))
       fi
     else
-      printf "│   │   │   ├── %b[WARNING]%b %s not defined in .env\n" "$YELLOW" "$NC" "$var_name"
+      printf "│   │   │   ├── %b[WARNING]%b %s not defined in .env\\n" "$YELLOW" "$NC" "$var_name"
     fi
   done
 
   if [[ $failed_vars -eq 0 ]]; then
-    printf "│   │   │   └── %b[SUCCESS]%b All environment variables visible\n" "$GREEN" "$NC"
+    printf "│   │   │   └── %b[SUCCESS]%b All environment variables visible\\n" "$GREEN" "$NC"
     return 0
   else
-    printf "│   │   │   └── %b[ERROR]%b %d environment variable(s) failed\n" "$RED" "$NC" "$failed_vars"
+    printf "│   │   │   └── %b[ERROR]%b %d environment variable(s) failed\\n" "$RED" "$NC" "$failed_vars"
     return 1
   fi
 }
@@ -760,7 +858,7 @@ generate_env_file() {
   local env_example_file=".env_example"
   local env_file=".env"
 
-  printf "├── %b[GENERATING]%b Environment example file: %s\n" "$BLUE" "$NC" "$env_example_file"
+  printf "├── %b[GENERATING]%b Environment example file: %s\\n" "$BLUE" "$NC" "$env_example_file"
 
   # Create the example file with all required environment variables
   local temp_env_file
@@ -833,22 +931,22 @@ generate_env_file() {
         ;;
     esac
     echo "${env_var}=${placeholder}" >> "$temp_env_file"
-    printf "│   ├── %b[PLACEHOLDER]%b %s\n" "$YELLOW" "$NC" "$env_var"
+    printf "│   ├── %b[PLACEHOLDER]%b %s\\n" "$YELLOW" "$NC" "$env_var"
   done
 
   # Replace the .env_example file
   mv "$temp_env_file" "$env_example_file"
-  printf "│   ├── %b[SUCCESS]%b Environment example file created\n" "$GREEN" "$NC"
+  printf "│   ├── %b[SUCCESS]%b Environment example file created\\n" "$GREEN" "$NC"
 
   # Check if .env exists and provide guidance
   if [[ -f "$env_file" ]]; then
-    printf "│   ├── %b[INFO]%b Existing %s file found (keeping as-is)\n" "$BLUE" "$NC" "$env_file"
+    printf "│   ├── %b[INFO]%b Existing %s file found (keeping as-is)\\n" "$BLUE" "$NC" "$env_file"
   else
-    printf "│   ├── %b[NEXT STEP]%b Copy example to create your environment file:\n" "$YELLOW" "$NC"
-    printf "│   │   cp %s %s\n" "$env_example_file" "$env_file"
+    printf "│   ├── %b[NEXT STEP]%b Copy example to create your environment file:\\n" "$YELLOW" "$NC"
+    printf "│   │   cp %s %s\\n" "$env_example_file" "$env_file"
   fi
 
-  printf "│   └── %b[REMINDER]%b Update %s with your real API tokens\n" "$BLUE" "$NC" "$env_file"
+  printf "│   └── %b[REMINDER]%b Update %s with your real API tokens\\n" "$BLUE" "$NC" "$env_file"
 }
 
 # Generate client configuration snippets for Cursor and Claude Desktop
@@ -860,9 +958,9 @@ generate_client_configs() {
 
   # Check if servers are available before generating configs
   if [[ "${CI:-false}" != "true" ]] && command -v docker > /dev/null 2>&1; then
-    printf "├── %b[INFO]%b Generating configuration for Docker-based MCP servers\n" "$BLUE" "$NC"
+    printf "├── %b[INFO]%b Generating configuration for Docker-based MCP servers\\n" "$BLUE" "$NC"
   else
-    printf "├── %b[WARNING]%b Docker not available - generating template configurations\n" "$YELLOW" "$NC"
+    printf "├── %b[WARNING]%b Docker not available - generating template configurations\\n" "$YELLOW" "$NC"
   fi
 
   # Get list of working servers with token status
@@ -885,8 +983,8 @@ generate_client_configs() {
   done < <(get_working_servers_with_tokens)
 
   if [[ ${#working_servers[@]} -eq 0 ]]; then
-    printf "├── %b[WARNING]%b No working MCP servers found - run health tests first\n" "$YELLOW" "$NC"
-    printf "└── %b[INFO]%b Use: ./mcp_manager.sh test\n" "$BLUE" "$NC"
+    printf "├── %b[WARNING]%b No working MCP servers found - run health tests first\\n" "$YELLOW" "$NC"
+    printf "└── %b[INFO]%b Use: ./mcp_manager.sh test\\n" "$BLUE" "$NC"
     return 1
   fi
 
@@ -897,19 +995,19 @@ generate_client_configs() {
 
   # Report token status
   if [[ ${#servers_with_tokens[@]} -gt 0 ]]; then
-    printf "├── %b[TOKENS]%b Servers with authentication: %s\n" "$GREEN" "$NC" "${servers_with_tokens[*]}"
+    printf "├── %b[TOKENS]%b Servers with authentication: %s\\n" "$GREEN" "$NC" "${servers_with_tokens[*]}"
   fi
   if [[ ${#servers_without_tokens[@]} -gt 0 ]]; then
-    printf "├── %b[PLACEHOLDERS]%b Servers using placeholders: %s\n" "$YELLOW" "$NC" "${servers_without_tokens[*]}"
+    printf "├── %b[PLACEHOLDERS]%b Servers using placeholders: %s\\n" "$YELLOW" "$NC" "${servers_without_tokens[*]}"
   fi
 
   # Generate/write configurations
   if [[ "$target_client" == "all" || "$target_client" == "cursor" ]]; then
     if [[ "$write_mode" == "write" ]]; then
-      printf "├── %b[WRITING]%b Cursor configuration\n" "$BLUE" "$NC"
+      printf "├── %b[WRITING]%b Cursor configuration\\n" "$BLUE" "$NC"
       write_cursor_config "${working_servers[@]}"
     else
-      printf "├── %b[GENERATING]%b Cursor configuration\n" "$BLUE" "$NC"
+      printf "├── %b[GENERATING]%b Cursor configuration\\n" "$BLUE" "$NC"
       generate_cursor_config "${working_servers[@]}"
     fi
   fi
@@ -917,23 +1015,23 @@ generate_client_configs() {
   # Generate Claude Desktop configuration
   if [[ "$target_client" == "all" || "$target_client" == "claude" ]]; then
     if [[ "$write_mode" == "write" ]]; then
-      printf "└── %b[WRITING]%b Claude Desktop configuration\n" "$BLUE" "$NC"
+      printf "└── %b[WRITING]%b Claude Desktop configuration\\n" "$BLUE" "$NC"
       write_claude_config "${working_servers[@]}"
     else
-      printf "└── %b[GENERATING]%b Claude Desktop configuration\n" "$BLUE" "$NC"
+      printf "└── %b[GENERATING]%b Claude Desktop configuration\\n" "$BLUE" "$NC"
       generate_claude_config "${working_servers[@]}"
     fi
   fi
 
   if [[ "$write_mode" == "write" ]]; then
-    printf "\n%b[SUCCESS]%b Client configurations written to files!\n" "$GREEN" "$NC"
-    printf "%b[NEXT STEPS]%b \n" "$BLUE" "$NC"
-    printf "  1. Copy .env_example to .env: cp .env_example .env\n"
-    printf "  2. Update .env with your real API tokens\n"
-    printf "  3. Restart Claude Desktop/Cursor to pick up the new configuration\n"
+    printf "\\n%b[SUCCESS]%b Client configurations written to files!\\n" "$GREEN" "$NC"
+    printf "%b[NEXT STEPS]%b \\n" "$BLUE" "$NC"
+    printf "  1. Copy .env_example to .env: cp .env_example .env\\n"
+    printf "  2. Update .env with your real API tokens\\n"
+    printf "  3. Restart Claude Desktop/Cursor to pick up the new configuration\\n"
   else
-    printf "\n%b[SUCCESS]%b Client configurations generated!\n" "$GREEN" "$NC"
-    printf "%b[INFO]%b To write to actual config files, use: ./mcp_manager.sh config-write\n" "$BLUE" "$NC"
+    printf "\\n%b[SUCCESS]%b Client configurations generated!\\n" "$GREEN" "$NC"
+    printf "%b[INFO]%b To write to actual config files, use: ./mcp_manager.sh config-write\\n" "$BLUE" "$NC"
   fi
 }
 
@@ -982,6 +1080,19 @@ get_cursor_config_path() {
   echo "$cursor_config"
 }
 
+# Get server type for configuration strategy dispatch
+get_server_type() {
+  local server_id="$1"
+  parse_server_config "$server_id" "server_type"
+}
+
+# Get mount configuration for mount-based servers
+get_mount_config() {
+  local server_id="$1"
+  local config_key="$2"
+  parse_server_config "$server_id" "mount_configuration.${config_key}"
+}
+
 # Check if server has real API tokens by reading from .env file
 server_has_real_tokens() {
   local server_id="$1"
@@ -990,34 +1101,42 @@ server_has_real_tokens() {
   # If no .env file exists, return false
   [[ ! -f "$env_file" ]] && return 1
 
-  case "$server_id" in
-    "github")
-      # Check for GitHub tokens in .env file
-      local github_pat github_token
-      github_pat=$(grep "^GITHUB_PERSONAL_ACCESS_TOKEN=" "$env_file" 2> /dev/null | cut -d= -f2-)
-      github_token=$(grep "^GITHUB_TOKEN=" "$env_file" 2> /dev/null | cut -d= -f2-)
+  local server_type
+  server_type=$(get_server_type "$server_id")
 
-      # Return true if either token exists and is not a placeholder
-      if [[ -n "$github_pat" && "$github_pat" != "your_github_token_here" ]]; then
-        return 0
-      elif [[ -n "$github_token" && "$github_token" != "your_github_token_here" ]]; then
-        return 0
-      fi
+  case "$server_type" in
+    "api_based")
+      # Get expected environment variables for API-based servers
+      local env_vars
+      env_vars=$(parse_server_config "$server_id" "environment_variables" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+
+      # Check if any of the expected environment variables have real values
+      while IFS= read -r env_var; do
+        [[ -z "$env_var" ]] && continue
+        local value
+        value=$(grep "^${env_var}=" "$env_file" 2> /dev/null | cut -d= -f2- | tr -d '"')
+        # Check against common placeholder patterns
+        if [[ -n "$value" && "$value" != *"your_"*"_here"* && "$value" != *"placeholder"* ]]; then
+          return 0
+        fi
+      done <<< "$env_vars"
       ;;
-    "circleci")
-      # Check for CircleCI token in .env file
-      local circleci_token
-      circleci_token=$(grep "^CIRCLECI_TOKEN=" "$env_file" 2> /dev/null | cut -d= -f2-)
-      [[ -n "$circleci_token" && "$circleci_token" != "your_circleci_token_here" ]] && return 0
+    "mount_based")
+      # For mount-based servers, check if custom directories are configured
+      local source_env_var default_fallback
+      source_env_var=$(get_mount_config "$server_id" "source_env_var")
+      default_fallback=$(get_mount_config "$server_id" "default_fallback")
+
+      local configured_dirs
+      configured_dirs=$(grep "^${source_env_var}=" "$env_file" 2> /dev/null | cut -d= -f2- | tr -d '"')
+      # Expand the default fallback for comparison
+      local expanded_default
+      expanded_default=$(eval echo "$default_fallback")
+      [[ -n "$configured_dirs" && "$configured_dirs" != "$expanded_default"* ]] && return 0
       ;;
-    "filesystem")
-      # Check for filesystem allowed directories in .env file
-      local filesystem_dirs
-      filesystem_dirs=$(grep "^FILESYSTEM_ALLOWED_DIRS=" "$env_file" 2> /dev/null | cut -d= -f2- | tr -d '"')
-      # Compare against current default placeholder
-      local default_placeholder
-      default_placeholder="$(pwd),/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
-      [[ -n "$filesystem_dirs" && "$filesystem_dirs" != "$default_placeholder" ]] && return 0
+    "standalone")
+      # Standalone servers don't require tokens
+      return 1
       ;;
   esac
   return 1
@@ -1107,14 +1226,14 @@ write_cursor_config() {
   local cursor_config
   cursor_config=$(get_cursor_config_path)
 
-  printf "│   ├── %b[CONFIG]%b Target file: %s\n" "$BLUE" "$NC" "$cursor_config"
+  printf "│   ├── %b[CONFIG]%b Target file: %s\\n" "$BLUE" "$NC" "$cursor_config"
 
   # Environment variables are handled per-server based on health check results
 
   # Backup existing config
   if [[ -f "$cursor_config" ]]; then
     cp "$cursor_config" "${cursor_config}.backup.$(date +%Y%m%d_%H%M%S)"
-    printf "│   ├── %b[BACKUP]%b Created backup of existing configuration\n" "$GREEN" "$NC"
+    printf "│   ├── %b[BACKUP]%b Created backup of existing configuration\\n" "$GREEN" "$NC"
   fi
 
   # Create configuration content directly without command substitution
@@ -1149,26 +1268,31 @@ write_cursor_config() {
         ;;
     esac
 
-    # Build server configuration - special handling for filesystem server
-    if [[ "$server_id" == "filesystem" ]]; then
-      # Filesystem server requires directory paths as arguments, not environment variables
-      local filesystem_dirs_raw
-      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+    # Build server configuration based on server type
+    local server_type
+    server_type=$(get_server_type "$server_id")
 
-      if [[ -z "$filesystem_dirs_raw" ]]; then
-        # Default fallback: current project directory
-        filesystem_dirs_raw="$(pwd)"
-      fi
+    case "$server_type" in
+      "mount_based")
+        # Mount-based servers (filesystem, etc.)
+        local source_env_var container_path default_fallback
+        source_env_var=$(get_mount_config "$server_id" "source_env_var")
+        container_path=$(get_mount_config "$server_id" "container_path")
+        default_fallback=$(get_mount_config "$server_id" "default_fallback")
 
-      # Simple approach: just mount the first directory or current pwd
-      local first_dir
-      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
-      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+        local mount_dirs
+        mount_dirs=$(grep "^${source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+        [[ -z "$mount_dirs" ]] && mount_dirs=$(eval echo "$default_fallback")
 
-      local mount_args="      \"--mount\", \"type=bind,src=${first_dir},dst=/project\",\n"
-      local path_args="\"/project\""
+        # Use first directory from comma-separated list
+        local first_dir
+        first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
+        [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-      json_content="${json_content}
+        local mount_args="      \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
+        local path_args="\"${container_path}\""
+
+        json_content="${json_content}
   \"$server_id\": {
     \"command\": \"docker\",
     \"args\": [
@@ -1177,9 +1301,10 @@ ${mount_args}      \"$image\",
       ${path_args}
     ]
   }"
-    else
-      # Standard server configuration using --env-file approach
-      json_content="${json_content}
+        ;;
+      "api_based" | "standalone" | *)
+        # Standard servers using --env-file approach
+        json_content="${json_content}
   \"$server_id\": {
     \"command\": \"docker\",
     \"args\": [
@@ -1188,7 +1313,8 @@ ${mount_args}      \"$image\",
       \"$image\"
     ]
   }"
-    fi
+        ;;
+    esac
   done
 
   json_content="${json_content}
@@ -1196,7 +1322,7 @@ ${mount_args}      \"$image\",
 
   # Write the configuration directly
   echo "$json_content" > "$cursor_config"
-  printf "│   └── %b[SUCCESS]%b Cursor MCP configuration updated\n" "$GREEN" "$NC"
+  printf "│   └── %b[SUCCESS]%b Cursor MCP configuration updated\\n" "$GREEN" "$NC"
 }
 
 # Write Claude Desktop configuration
@@ -1204,14 +1330,14 @@ write_claude_config() {
   local server_ids=("$@")
   local claude_config="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
 
-  printf "│   ├── %b[CONFIG]%b Target file: %s\n" "$BLUE" "$NC" "$claude_config"
+  printf "│   ├── %b[CONFIG]%b Target file: %s\\n" "$BLUE" "$NC" "$claude_config"
 
   # Environment variables are handled per-server based on health check results
 
   # Backup existing config
   if [[ -f "$claude_config" ]]; then
     cp "$claude_config" "${claude_config}.backup.$(date +%Y%m%d_%H%M%S)"
-    printf "│   ├── %b[BACKUP]%b Created backup of existing configuration\n" "$GREEN" "$NC"
+    printf "│   ├── %b[BACKUP]%b Created backup of existing configuration\\n" "$GREEN" "$NC"
   fi
 
   # Create configuration content directly without command substitution
@@ -1247,26 +1373,31 @@ write_claude_config() {
         ;;
     esac
 
-    # Build server configuration - special handling for filesystem server
-    if [[ "$server_id" == "filesystem" ]]; then
-      # Filesystem server requires directory paths as arguments, not environment variables
-      local filesystem_dirs_raw
-      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+    # Build server configuration based on server type
+    local server_type
+    server_type=$(get_server_type "$server_id")
 
-      if [[ -z "$filesystem_dirs_raw" ]]; then
-        # Default fallback: current project directory
-        filesystem_dirs_raw="$(pwd)"
-      fi
+    case "$server_type" in
+      "mount_based")
+        # Mount-based servers (filesystem, etc.)
+        local source_env_var container_path default_fallback
+        source_env_var=$(get_mount_config "$server_id" "source_env_var")
+        container_path=$(get_mount_config "$server_id" "container_path")
+        default_fallback=$(get_mount_config "$server_id" "default_fallback")
 
-      # Simple approach: just mount the first directory or current pwd
-      local first_dir
-      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
-      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+        local mount_dirs
+        mount_dirs=$(grep "^${source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+        [[ -z "$mount_dirs" ]] && mount_dirs=$(eval echo "$default_fallback")
 
-      local mount_args="        \"--mount\", \"type=bind,src=${first_dir},dst=/project\",\n"
-      local path_args="\"/project\""
+        # Use first directory from comma-separated list
+        local first_dir
+        first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
+        [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-      json_content="${json_content}
+        local mount_args="        \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
+        local path_args="\"${container_path}\""
+
+        json_content="${json_content}
     \"$server_id\": {
       \"command\": \"docker\",
       \"args\": [
@@ -1275,9 +1406,10 @@ ${mount_args}        \"$image\",
         ${path_args}
       ]
     }"
-    else
-      # Standard server configuration using --env-file approach
-      json_content="${json_content}
+        ;;
+      "api_based" | "standalone" | *)
+        # Standard servers using --env-file approach
+        json_content="${json_content}
     \"$server_id\": {
       \"command\": \"docker\",
       \"args\": [
@@ -1286,7 +1418,8 @@ ${mount_args}        \"$image\",
         \"$image\"
       ]
     }"
-    fi
+        ;;
+    esac
   done
 
   json_content="${json_content}
@@ -1295,7 +1428,7 @@ ${mount_args}        \"$image\",
 
   # Write the configuration directly
   echo "$json_content" > "$claude_config"
-  printf "│   └── %b[SUCCESS]%b Claude Desktop MCP configuration updated\n" "$GREEN" "$NC"
+  printf "│   └── %b[SUCCESS]%b Claude Desktop MCP configuration updated\\n" "$GREEN" "$NC"
 }
 
 # Generate Cursor-specific MCP configuration
@@ -1327,23 +1460,34 @@ EOF
     printf '    "command": "docker",\n'
     printf '    "args": [\n'
 
-    if [[ "$server_id" == "filesystem" ]]; then
-      # Filesystem server gets directory paths as arguments
-      local filesystem_dirs_raw first_dir
-      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
-      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
-      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+    local server_type
+    server_type=$(get_server_type "$server_id")
 
-      printf '      "run", "--rm", "-i",\n'
-      printf '      "--mount", "type=bind,src=%s,dst=/project",\n' "$first_dir"
-      printf '      "%s",\n' "$image"
-      printf '      "/project"\n'
-    else
-      # Standard servers use environment files
-      printf '      "run", "--rm", "-i",\n'
-      printf '      "--env-file", "%s",\n' "$env_file_path"
-      printf '      "%s"\n' "$image"
-    fi
+    case "$server_type" in
+      "mount_based")
+        # Mount-based servers get directory paths as arguments
+        local source_env_var container_path default_fallback
+        source_env_var=$(get_mount_config "$server_id" "source_env_var")
+        container_path=$(get_mount_config "$server_id" "container_path")
+        default_fallback=$(get_mount_config "$server_id" "default_fallback")
+
+        local mount_dirs first_dir
+        mount_dirs=$(grep "^${source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+        first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
+        [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
+
+        printf '      "run", "--rm", "-i",\n'
+        printf '      "--mount", "type=bind,src=%s,dst=%s",\n' "$first_dir" "$container_path"
+        printf '      "%s",\n' "$image"
+        printf '      "%s"\n' "$container_path"
+        ;;
+      "api_based" | "standalone" | *)
+        # Standard servers use environment files
+        printf '      "run", "--rm", "-i",\n'
+        printf '      "--env-file", "%s",\n' "$env_file_path"
+        printf '      "%s"\n' "$image"
+        ;;
+    esac
 
     printf '    ]\n'
     printf '  }'
@@ -1397,23 +1541,34 @@ EOF
     printf '      "command": "docker",\n'
     printf '      "args": [\n'
 
-    if [[ "$server_id" == "filesystem" ]]; then
-      # Filesystem server gets directory paths as arguments
-      local filesystem_dirs_raw first_dir
-      filesystem_dirs_raw=$(grep "^FILESYSTEM_ALLOWED_DIRS=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
-      first_dir=$(echo "$filesystem_dirs_raw" | cut -d',' -f1 | xargs)
-      [[ -z "$first_dir" ]] && first_dir="$(pwd)"
+    local server_type
+    server_type=$(get_server_type "$server_id")
 
-      printf '        "run", "--rm", "-i",\n'
-      printf '        "--mount", "type=bind,src=%s,dst=/project",\n' "$first_dir"
-      printf '        "%s",\n' "$image"
-      printf '        "/project"\n'
-    else
-      # Standard servers use environment files
-      printf '        "run", "--rm", "-i",\n'
-      printf '        "--env-file", "%s",\n' "$env_file_path"
-      printf '        "%s"\n' "$image"
-    fi
+    case "$server_type" in
+      "mount_based")
+        # Mount-based servers get directory paths as arguments
+        local source_env_var container_path default_fallback
+        source_env_var=$(get_mount_config "$server_id" "source_env_var")
+        container_path=$(get_mount_config "$server_id" "container_path")
+        default_fallback=$(get_mount_config "$server_id" "default_fallback")
+
+        local mount_dirs first_dir
+        mount_dirs=$(grep "^${source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+        first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
+        [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
+
+        printf '        "run", "--rm", "-i",\n'
+        printf '        "--mount", "type=bind,src=%s,dst=%s",\n' "$first_dir" "$container_path"
+        printf '        "%s",\n' "$image"
+        printf '        "%s"\n' "$container_path"
+        ;;
+      "api_based" | "standalone" | *)
+        # Standard servers use environment files
+        printf '        "run", "--rm", "-i",\n'
+        printf '        "--env-file", "%s",\n' "$env_file_path"
+        printf '        "%s"\n' "$image"
+        ;;
+    esac
 
     printf '      ]\n'
     printf '    }'
@@ -1442,11 +1597,11 @@ ensure_mcp_network() {
   local network_name="mcp-network"
 
   if ! docker network ls | grep -q "$network_name"; then
-    printf "├── %b[CREATING]%b Docker network: %s\n" "$BLUE" "$NC" "$network_name"
+    printf "├── %b[CREATING]%b Docker network: %s\\n" "$BLUE" "$NC" "$network_name"
     if docker network create "$network_name" > /dev/null 2>&1; then
-      printf "│   └── %b[SUCCESS]%b Network created\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b Network created\\n" "$GREEN" "$NC"
     else
-      printf "│   └── %b[WARNING]%b Failed to create network\n" "$YELLOW" "$NC"
+      printf "│   └── %b[WARNING]%b Failed to create network\\n" "$YELLOW" "$NC"
     fi
   fi
 }
@@ -1469,17 +1624,17 @@ start_inspector() {
   local env_args
   local additional_args=""
 
-  printf "├── %b[STARTING]%b MCP Inspector\n" "$BLUE" "$NC"
+  printf "├── %b[STARTING]%b MCP Inspector\\n" "$BLUE" "$NC"
 
   # CI environment: skip inspector startup
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[SKIPPED]%b Inspector startup (CI environment)\n" "$YELLOW" "$NC"
+    printf "│   └── %b[SKIPPED]%b Inspector startup (CI environment)\\n" "$YELLOW" "$NC"
     return 0
   fi
 
   # Check if Docker is available
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   └── %b[ERROR]%b Docker not available - install OrbStack for MCP Inspector\n" "$RED" "$NC"
+    printf "│   └── %b[ERROR]%b Docker not available - install OrbStack for MCP Inspector\\n" "$RED" "$NC"
     return 1
   fi
 
@@ -1536,23 +1691,23 @@ start_inspector() {
 
   # Check if container is already running
   if docker ps --filter "name=$container_name" --format "{{.Names}}" | grep -q "^$container_name$"; then
-    printf "│   └── %b[INFO]%b Inspector already running (container: %s)\n" "$BLUE" "$NC" "$container_name"
+    printf "│   └── %b[INFO]%b Inspector already running (container: %s)\\n" "$BLUE" "$NC" "$container_name"
     return 0
   fi
 
   # Pull image if not available
   local image="mcp/inspector:latest"
   if ! docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
-    printf "│   ├── %b[PULLING]%b Inspector image: %s\n" "$BLUE" "$NC" "$image"
+    printf "│   ├── %b[PULLING]%b Inspector image: %s\\n" "$BLUE" "$NC" "$image"
     if ! docker pull "$image" > /dev/null 2>&1; then
-      printf "│   └── %b[ERROR]%b Failed to pull inspector image\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b Failed to pull inspector image\\n" "$RED" "$NC"
       return 1
     fi
   fi
 
   # Start inspector container
   if [[ "$mode" == "ui" ]]; then
-    printf "│   ├── %b[LAUNCHING]%b Inspector UI at http://localhost:6274\n" "$BLUE" "$NC"
+    printf "│   ├── %b[LAUNCHING]%b Inspector UI at http://localhost:6274\\n" "$BLUE" "$NC"
     additional_args="$additional_args -d" # Run in background for UI mode
   fi
 
@@ -1560,13 +1715,13 @@ start_inspector() {
 
   if eval "$start_cmd" > /dev/null 2>&1; then
     if [[ "$mode" == "ui" ]]; then
-      printf "│   └── %b[SUCCESS]%b Inspector UI started (visit http://localhost:6274)\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b Inspector UI started (visit http://localhost:6274)\\n" "$GREEN" "$NC"
     else
-      printf "│   └── %b[SUCCESS]%b Inspector started in %s mode\n" "$GREEN" "$NC" "$mode"
+      printf "│   └── %b[SUCCESS]%b Inspector started in %s mode\\n" "$GREEN" "$NC" "$mode"
     fi
     return 0
   else
-    printf "│   └── %b[ERROR]%b Failed to start inspector\n" "$RED" "$NC"
+    printf "│   └── %b[ERROR]%b Failed to start inspector\\n" "$RED" "$NC"
     return 1
   fi
 }
@@ -1575,25 +1730,25 @@ start_inspector() {
 monitor_inspector_health() {
   local container_name="mcp-inspector"
 
-  printf "├── %b[MONITORING]%b MCP Inspector health\n" "$BLUE" "$NC"
+  printf "├── %b[MONITORING]%b MCP Inspector health\\n" "$BLUE" "$NC"
 
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   └── %b[ERROR]%b Docker not available\n" "$RED" "$NC"
+    printf "│   └── %b[ERROR]%b Docker not available\\n" "$RED" "$NC"
     return 1
   fi
 
   # Check if container exists and is running
   if ! docker ps --filter "name=$container_name" --format "{{.Names}}" | grep -q "^$container_name$"; then
-    printf "│   ├── %b[WARNING]%b Inspector container not running\n" "$YELLOW" "$NC"
-    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\n" "$BLUE" "$NC"
+    printf "│   ├── %b[WARNING]%b Inspector container not running\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\\n" "$BLUE" "$NC"
     start_inspector "ui"
     return $?
   fi
 
   # Check UI health (port 6274)
   if ! curl -s --max-time 5 http://localhost:6274 > /dev/null 2>&1; then
-    printf "│   ├── %b[ERROR]%b UI server (port 6274) not responding\n" "$RED" "$NC"
-    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\n" "$BLUE" "$NC"
+    printf "│   ├── %b[ERROR]%b UI server (port 6274) not responding\\n" "$RED" "$NC"
+    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\\n" "$BLUE" "$NC"
     docker restart "$container_name" > /dev/null 2>&1
     sleep 5
     return 0
@@ -1601,23 +1756,23 @@ monitor_inspector_health() {
 
   # Check Proxy health (port 6277)
   if ! curl -s --max-time 5 http://localhost:6277/health | grep -q "ok" 2> /dev/null; then
-    printf "│   ├── %b[ERROR]%b Proxy server (port 6277) not responding\n" "$RED" "$NC"
-    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\n" "$BLUE" "$NC"
+    printf "│   ├── %b[ERROR]%b Proxy server (port 6277) not responding\\n" "$RED" "$NC"
+    printf "│   └── %b[AUTO-HEAL]%b Restarting Inspector...\\n" "$BLUE" "$NC"
     docker restart "$container_name" > /dev/null 2>&1
     sleep 5
     return 0
   fi
 
-  printf "│   └── %b[SUCCESS]%b Inspector health check passed\n" "$GREEN" "$NC"
+  printf "│   └── %b[SUCCESS]%b Inspector health check passed\\n" "$GREEN" "$NC"
   return 0
 }
 
 # Stop MCP Inspector container
 stop_inspector() {
-  printf "├── %b[STOPPING]%b MCP Inspector\n" "$BLUE" "$NC"
+  printf "├── %b[STOPPING]%b MCP Inspector\\n" "$BLUE" "$NC"
 
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   └── %b[ERROR]%b Docker not available\n" "$RED" "$NC"
+    printf "│   └── %b[ERROR]%b Docker not available\\n" "$RED" "$NC"
     return 1
   fi
 
@@ -1627,13 +1782,13 @@ stop_inspector() {
   if docker ps -a --filter "name=$container_name" --format "{{.Names}}" | grep -q "^$container_name$"; then
     # Stop and remove the container
     if docker stop "$container_name" > /dev/null 2>&1 && docker rm "$container_name" > /dev/null 2>&1; then
-      printf "│   └── %b[SUCCESS]%b Inspector stopped and removed\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b Inspector stopped and removed\\n" "$GREEN" "$NC"
     else
-      printf "│   └── %b[ERROR]%b Failed to stop inspector\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b Failed to stop inspector\\n" "$RED" "$NC"
       return 1
     fi
   else
-    printf "│   └── %b[INFO]%b Inspector not running\n" "$BLUE" "$NC"
+    printf "│   └── %b[INFO]%b Inspector not running\\n" "$BLUE" "$NC"
   fi
 }
 
@@ -2027,7 +2182,7 @@ main() {
     "list")
       echo "Configured MCP servers:"
       get_configured_servers | while read -r server; do
-        printf "  - %s: %s\n" "$server" "$(parse_server_config "$server" "name")"
+        printf "  - %s: %s\\n" "$server" "$(parse_server_config "$server" "name")"
       done
       ;;
     "parse")

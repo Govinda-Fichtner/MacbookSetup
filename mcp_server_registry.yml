@@ -6,6 +6,7 @@
 servers:
   github:
     name: GitHub MCP Server
+    server_type: "api_based"  # Uses environment variables for API authentication
     description: "GitHub repository management and code analysis"
     category: "code"
     source:
@@ -28,6 +29,7 @@ servers:
 
   circleci:
     name: CircleCI MCP Server
+    server_type: "api_based"  # Uses environment variables for API authentication
     description: "CircleCI pipeline monitoring and management"
     category: "cicd"
     source:
@@ -52,6 +54,7 @@ servers:
 
   inspector:
     name: "MCP Inspector"
+    server_type: "standalone"  # Self-contained, no external API dependencies
     description: "Official Model Context Protocol visual testing and debugging tool"
     category: "development"
     source:
@@ -81,6 +84,7 @@ servers:
 
   filesystem:
     name: "Filesystem MCP Server"
+    server_type: "mount_based"  # Uses Docker mounts instead of environment variables
     description: "Official Anthropic filesystem operations server for local file management"
     category: "filesystem"
     source:
@@ -88,6 +92,10 @@ servers:
       image: "mcp/filesystem:latest"
     environment_variables:
       - "FILESYSTEM_ALLOWED_DIRS"
+    mount_configuration:
+      source_env_var: "FILESYSTEM_ALLOWED_DIRS"
+      container_path: "/project"
+      default_fallback: "$(pwd)"
     health_test:
       parse_mode: json
       path: "/health"
