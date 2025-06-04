@@ -22,10 +22,40 @@
 # Required checks in this exact order:
 1. zsh -n setup.sh && zsh -n verify_setup.sh
 2. ./verify_setup.sh > /dev/null  # execution test
-3. pre-commit run --all-files
-4. git add . && git commit -m "descriptive message"
-5. git push origin main
+3. shellspec spec/ --format documentation  # ALL TESTS MUST PASS
+4. pre-commit run --all-files
+5. git add . && git commit -m "descriptive message"
+6. git push origin main
 ```
+
+### **🚫 NEVER COMMIT WITH FAILING TESTS**
+**ABSOLUTE RULE**: NO commits are allowed until ALL tests pass completely.
+
+#### **Test-First Development Protocol**
+- ❌ **NEVER commit code with any failing tests** - even "minor" ones
+- ❌ **NEVER skip test fixes** because "functionality works"
+- ❌ **NEVER defer test fixes** to "next iteration"
+- ✅ **ALWAYS run full test suite** before any commit: `shellspec spec/`
+- ✅ **ALWAYS fix all failures** before proceeding to next development phase
+- ✅ **ALWAYS get to 0 failures** - partial fixes are not acceptable
+
+#### **Test Failure Resolution Strategy**
+When tests fail:
+1. **🛑 STOP development immediately** - no new features until tests pass
+2. **🔍 Analyze each failure systematically** - understand root causes
+3. **🔧 Fix one test at a time** - validate fix before moving to next
+4. **🧪 Re-run full suite** after each fix to prevent regressions
+5. **✅ Only proceed** when ALL tests show 0 failures
+
+#### **Emergency Exception Protocol** (Extremely Rare)
+If critical production issue requires bypassing:
+1. **📋 Document specific reason** in commit message
+2. **⏰ Set immediate timeline** for fixing tests (within hours, not days)
+3. **🔄 Create follow-up task** with highest priority
+4. **👥 Get explicit approval** from project owner
+5. **🎯 Address test failures** before any other work
+
+**Philosophy**: Tests are the safety net. Bypassing them creates technical debt and hidden bugs.
 
 ### **🚫 NEVER BYPASS PRE-COMMIT CHECKS**
 **MANDATORY RULE**: Pre-commit hooks exist for quality control and MUST NEVER be bypassed.
@@ -169,6 +199,7 @@ When moving completion files:
 
 ### **Security Anti-Patterns**
 - ❌ **NEVER commit `.envrc` files** - They contain sensitive environment variables
+- ❌ **NEVER commit backup files** - `.env.backup`, `*.bak` may contain sensitive tokens
 - ❌ Committing any file with real API tokens, passwords, or secrets
 - ❌ Using real credentials in example files (use placeholders like "your-token-here")
 - ❌ Ignoring GitHub push protection warnings about detected secrets
@@ -292,6 +323,20 @@ get_env_placeholder() {
 - ✅ **Validate against placeholders**: Detect "your_token_here" patterns
 - ✅ **Preserve existing .env**: Show "[INFO] Existing .env file found (keeping as-is)"
 
+### **Mount-Based Server Configuration (Filesystem Example)**
+**Key Pattern for Directory-Based MCP Servers**:
+
+- **Multiple Directory Support**: Use comma-separated paths in .env_example
+```bash
+FILESYSTEM_ALLOWED_DIRS=/Users/user/Project,/Users/user/Desktop,/Users/user/Downloads
+```
+
+- **First Directory Mounting**: Configuration uses first directory for Docker mount
+- **Mount Configuration**: `--mount type=bind,src=<first_dir>,dst=/project`
+- **Container Argument**: Pass container path as final argument (`/project`)
+- **Testing Behavior**: Servers with placeholder values excluded from final configs
+- **Real vs Test Environment**: Test environments without .env show servers as "PLACEHOLDERS"
+
 ### **Token Detection and Validation**
 ```bash
 # Template for server token validation:
@@ -318,6 +363,42 @@ server_has_real_tokens() {
 - **Validate environment visibility**: Ensure all expected variables are accessible
 - **Handle mixed output gracefully**: Use `grep -o` to extract JSON from startup messages
 - **Support different parse modes**: Handle both "json" and default parsing
+
+### **MCP Repository Cleanup (Build-Based Servers)**
+**MANDATORY**: After building Docker images from source repositories, always clean up cloned code:
+
+#### **Build Process Pattern**
+```bash
+# 1. Clone repository to temporary location
+git clone https://github.com/server/repo support/docker/server-name/
+
+# 2. Build Docker image using cloned source
+docker build -t local/server-name:latest support/docker/server-name/
+
+# 3. MANDATORY CLEANUP: Remove cloned repository
+rm -rf support/docker/server-name/
+```
+
+#### **Cleanup Requirements**
+- ✅ **ALWAYS remove cloned repositories**: Full `.git/` directories, source code, documentation
+- ✅ **Keep only essential files**: Dockerfile, build scripts if needed for debugging
+- ✅ **Verify image exists**: Confirm `docker images | grep server-name` shows built image
+- ✅ **Test functionality**: Ensure built image works before cleanup
+- ❌ **NEVER commit cloned repositories**: Prevents repository bloat and licensing issues
+
+#### **Detection and Verification**
+```bash
+# Find any remaining cloned repositories (excluding main project)
+find . -name ".git" -type d | grep -v "^\\./.git$"
+
+# Should return empty after proper cleanup
+```
+
+#### **Emergency Recovery**
+If cleanup removed necessary files:
+- Built Docker images remain available even after source cleanup
+- Re-clone repository if debugging or modification needed
+- Use `docker history image-name` to understand image layers if issues arise
 
 ### **Debug Output Prevention (CRITICAL)**
 - ❌ **NEVER leave debug trace enabled**: Check for `set -x`, `functrace`, etc.
@@ -351,11 +432,30 @@ The output should include "your_new_server_token_here"
 The output should include "vendor/new-server:latest"
 ```
 
-### **JSON Structure Consistency**
-- **Cursor Format**: Direct server mapping `{ "server": { "command": "docker", "args": [...] } }`
-- **Claude Desktop Format**: Nested under mcpServers `{ "mcpServers": { "server": {...} } }`
+### **JSON Structure Consistency (CORRECTED)**
+**🎯 CRITICAL UPDATE**: Both Cursor and Claude Desktop use **IDENTICAL** configuration formats.
+
+- **✅ UNIFIED FORMAT**: Both platforms use `mcpServers` wrapper structure:
+```json
+{
+  "mcpServers": {
+    "server-name": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--env-file", "path", "image"]
+    }
+  }
+}
+```
+
+- **❌ PREVIOUS MISCONCEPTION**: Earlier assumption that Cursor used flat structure was incorrect
+- **✅ CONFIRMED BY DOCUMENTATION**: Official Cursor docs show `mcpServers` wrapper requirement
+- **✅ IMPLEMENTATION STATUS**: Our configuration generation has been correct all along
 - **Args Array Standard**: `["run", "--rm", "-i", "--env-file", "path", "image"]`
 - **No Inline Environment Variables**: Configuration should be environment-agnostic
+
+**References**:
+- Cursor MCP Docs: https://docs.cursor.com/context/model-context-protocol
+- Verified: 2025-01-03 during filesystem server directory testing
 
 ### **Error Handling for MCP Servers**
 - **Missing Docker**: Graceful fallback, generate configs anyway
@@ -414,7 +514,7 @@ When making significant changes to the project, you MUST update the README.md fi
 
 ## 🎯 **Generalized MCP Server Addition Test Framework**
 
-### **📋 MCP Server Addition Protocol (Based on Docker Experience)**
+### **📋 MCP Server Addition Protocol (Based on Docker & Kubernetes Experience)**
 
 When adding ANY new MCP server, follow this exact TDD-based protocol:
 
@@ -523,12 +623,17 @@ End
   description: "<Description>"
   category: "<category>"
   source:
-    type: registry
-    image: "<image_url>"
+    type: registry  # OR: type: build for source-based servers
+    image: "<image_url>"  # OR: repository: "<github_url>" + image: "local/<name>:latest"
+    # For build type, add: build_context: "."
   environment_variables:  # If applicable
     - "<ENV_VAR_1>"
     - "<ENV_VAR_2>"
-  # Additional type-specific configuration as needed
+  # For privileged servers, add:
+  volumes:  # Use exact format - functions depend on this structure
+    - "<host_path>:<container_path>:<options>"
+  networks:
+    - "<network_name>"
 ```
 
 **2.2 Environment Variable Placeholders** (If new variables)
@@ -603,16 +708,18 @@ awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' mcp_server_regist
 - File system operation tests
 
 **privileged**: Docker, Kubernetes, System Tools
-- Requires `--privileged` or special volumes (Docker socket)
-- Network access requirements
+- Requires special volumes (Docker socket, kubeconfig) and/or network access
+- Uses `volumes:` and `networks:` in registry configuration
 - System-level validation tests
+- May need entrypoint overrides for STDIO mode
+- Critical: YAML structure must be `volumes:` and `networks:` directly under server entry
 
 **standalone**: Inspector, Utilities, Converters
 - No external dependencies
 - No authentication required
 - Self-contained functionality tests
 
-### **⚠️ Common Pitfalls to Avoid (Learned from Docker Experience)**
+### **⚠️ Common Pitfalls to Avoid (Learned from Docker & Kubernetes Experience)**
 
 1. **Function Ordering**: Always define helper functions BEFORE they're called
 2. **Missing Test Categories**: Every server needs basic + advanced + integration tests
@@ -622,6 +729,11 @@ awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' mcp_server_regist
 6. **Environment Variables**: Always test placeholder generation
 7. **Interactive Commands**: Use non-interactive flags (`-f`, `--yes`, `cat >`)
 8. **Documentation Sync**: Update README.md with every functional change
+9. **Docker Entrypoint Issues**: Check if images have hardcoded entrypoints (like SSE mode) and override for STDIO testing
+10. **Build Dependencies**: Ensure `setup` command builds images before `test` command is run
+11. **Privileged Configuration Structure**: Use correct YAML structure for volumes/networks - functions parse these directly
+12. **Container Path Mapping**: Environment variables like KUBECONFIG need container paths, not host paths
+13. **Test Environment Differences**: Manual testing may work while automated tests fail due to environment isolation
 
 ### **✅ Definition of Done for MCP Server Addition**
 
@@ -1044,6 +1156,9 @@ Cleanup is **MANDATORY** at the end of every major development step, including:
 
 #### **🗂️ File Organization**
 - ✅ **Remove temporary files**: Delete `*.tmp`, `test_home/`, build artifacts
+  - **Note**: ShellSpec's `AfterAll()` cleanup may not execute reliably, so manual cleanup of `test_home/` is often required
+- ✅ **Clean up cloned MCP server repositories**: Remove full git repositories after Docker image builds (keep only necessary files like Dockerfile, but remove .git/, source code, docs, etc.)
+- ✅ **Remove backup files**: Delete `.env.backup`, `*.bak`, and other temporary backup files
 - ✅ **Organize supporting files**: Ensure proper placement in `support/` structure
 - ✅ **Check for outdated files**: Remove deprecated configurations or examples
 - ✅ **Validate file permissions**: Ensure executable files have correct permissions
@@ -1216,11 +1331,205 @@ If cleanup reveals issues:
 - ✅ **Test debug output filtering**: Ensure all debug variables are filtered
 - ✅ **Test structured output**: Verify consistent formatting across environments
 
+## 📝 Cursor Rules Maintenance Protocol
+
+### **🎯 Rule Update Methodology**
+After each major development iteration (new feature, server addition, significant debugging), systematically update `.cursorrules`:
+
+#### **1. Capture Key Learnings**
+- **What worked well?** → Add to best practices sections
+- **What caused issues?** → Add to anti-patterns and pitfalls
+- **What was unexpected?** → Document edge cases and special handling
+- **What would help next time?** → Add to templates and checklists
+
+#### **2. Focused Rule Updates**
+- ✅ **Update relevant sections only** - Don't rewrite everything
+- ✅ **Add specific examples** from the actual work completed
+- ✅ **Include exact code patterns** that were successful
+- ✅ **Document exact error patterns** to avoid repeating
+- ✅ **Update templates** with new required steps discovered
+
+#### **3. Rule Quality Standards**
+- **Specific over Generic**: "Use `--entrypoint /app/server` for Kubernetes server" vs "Override entrypoints"
+- **Actionable over Descriptive**: "Add volumes: under server entry" vs "Handle volumes properly"
+- **Example-Rich**: Include exact YAML, commands, and code snippets
+- **Categorized**: Place updates in logical sections for easy reference
+
+#### **4. Validation Process**
+- ✅ **Test new patterns** on next iteration to verify they work
+- ✅ **Remove outdated rules** that no longer apply
+- ✅ **Consolidate duplicate guidance** into single, clear statements
+- ✅ **Maintain rule hierarchy** from general principles to specific examples
+
+### **🔄 Iterative Improvement Examples**
+
+**Before (Generic):**
+```
+- Handle Docker containers properly
+- Test thoroughly
+- Update configuration
+```
+
+**After (Specific, from Kubernetes experience):**
+```
+- Override entrypoints with --entrypoint for servers that default to SSE mode
+- Map host environment variables to container paths (KUBECONFIG=/home/.kube/config)
+- Use volumes: and networks: directly under server entry, not nested under privileged_configuration
+- Build images with setup command before testing build-based servers
+```
+
+## 🔬 **Ultimate Integration Testing: MCP-to-Cursor Protocol Validation**
+
+### **🎯 The Methodology**
+**Concept**: Use Cursor's native MCP integration to directly communicate with our configured MCP servers. If the AI model can successfully call tools and access resources from our servers, it proves the entire configuration pipeline works end-to-end.
+
+### **📋 Implementation Blueprint**
+
+#### **Step 1: Configuration Generation & Setup**
+```bash
+# Generate Cursor MCP configuration
+./mcp_manager.sh config-write cursor
+
+# Ensure all required servers are built (for build-based servers)
+./mcp_manager.sh setup circleci    # Build source-based servers
+./mcp_manager.sh setup kubernetes  # Build source-based servers
+
+# Verify configuration exists
+cat "$HOME/.cursor/mcp.json" | jq '.'
+```
+
+#### **Step 2: Environment Configuration**
+```bash
+# Copy environment template and add real tokens
+cp .env_example .env
+
+# Add real API tokens for servers requiring authentication:
+# - GITHUB_TOKEN (for GitHub server)
+# - CIRCLECI_TOKEN (for CircleCI server)
+# - Update KUBECONFIG path for Kubernetes server
+# - Update FILESYSTEM_ALLOWED_DIRS for filesystem server
+```
+
+#### **Step 3: Cursor MCP Integration Test**
+```markdown
+**Test Protocol**: Ask the AI model to:
+
+1. **List Available Tools**: "What MCP tools do you have available?"
+2. **Test Each Server Type**:
+   - **GitHub**: "Can you list repositories in my GitHub account?"
+   - **CircleCI**: "Can you show my CircleCI projects?"
+   - **Filesystem**: "Can you list files in the MacbookSetup directory?"
+   - **Docker**: "Can you list Docker containers?"
+   - **Kubernetes**: "Can you list Kubernetes namespaces?"
+   - **Inspector**: "Can you use the MCP inspector tools?"
+
+3. **Validate Responses**: Verify the AI can actually execute these commands and return real data
+```
+
+#### **Step 4: Success Criteria**
+- ✅ **Tool Discovery**: AI model can see and list all configured MCP server tools
+- ✅ **Authentication**: Servers requiring tokens work with real credentials
+- ✅ **Data Retrieval**: AI can fetch actual data from external services (GitHub repos, K8s resources, etc.)
+- ✅ **Error Handling**: Graceful handling of missing credentials or unavailable services
+- ✅ **Multiple Server Types**: All server types (api_based, mount_based, privileged, standalone) work
+
+### **🔍 Troubleshooting Guide**
+
+**Problem**: "No MCP tools available"
+- **Solution**: Check if `~/.cursor/mcp.json` exists and is valid JSON
+- **Verification**: Restart Cursor after configuration changes
+
+**Problem**: "Authentication failed for [server]"
+- **Solution**: Verify `.env` file has real tokens, not placeholders
+- **Verification**: Run `./mcp_manager.sh test [server]` manually
+
+**Problem**: "Docker image not found"
+- **Solution**: Run `./mcp_manager.sh setup [server]` to build missing images
+- **Verification**: Check `docker images` for required images
+
+**Problem**: "Mount/volume access denied"
+- **Solution**: Verify file paths exist and Docker has permission
+- **Verification**: Test mount commands manually with `docker run`
+
+### **💡 Benefits of This Approach**
+
+1. **End-to-End Validation**: Tests the complete pipeline from registry → configuration → AI integration
+2. **Claude Desktop Compatibility**: If Cursor MCP works, Claude Desktop will work (same protocol)
+3. **Real-World Testing**: Uses actual API calls and data, not mocked responses
+4. **Immediate Feedback**: Quickly identifies configuration issues vs waiting for external testing
+5. **Documentation Validation**: Proves our templates and documentation are correct
+
+### **📝 Integration Test Template**
+
+```markdown
+## MCP Integration Test Results
+
+**Date**: [Current Date]
+**Servers Tested**: [List servers]
+
+### Test Results:
+- [ ] GitHub MCP Server: Tools available ✅/❌ | Authentication ✅/❌ | Data retrieval ✅/❌
+- [ ] CircleCI MCP Server: Tools available ✅/❌ | Authentication ✅/❌ | Data retrieval ✅/❌
+- [ ] Filesystem MCP Server: Tools available ✅/❌ | Mount access ✅/❌ | File operations ✅/❌
+- [ ] Docker MCP Server: Tools available ✅/❌ | Socket access ✅/❌ | Container operations ✅/❌
+- [ ] Kubernetes MCP Server: Tools available ✅/❌ | Cluster access ✅/❌ | Resource operations ✅/❌
+- [ ] Inspector MCP Server: Tools available ✅/❌ | Protocol access ✅/❌ | Debug operations ✅/❌
+
+### Notes:
+[Any issues encountered, workarounds used, or observations]
+
+### Conclusion:
+✅ **PASSED**: All servers functional - ready for Claude Desktop integration
+❌ **FAILED**: [List issues] - requires fixes before production use
+```
+
+### **🔄 When to Run Integration Tests**
+- After adding any new MCP server
+- After modifying configuration generation logic
+- Before committing major changes to the MCP system
+- When troubleshooting Claude Desktop integration issues
+- As part of the final validation in TDD cycles
+
+### **🆕 Latest Update: MCP Configuration Format Clarification & Filesystem Directory Testing (Current Iteration)**
+
+**Key Learnings Captured:**
+1. **🎯 CRITICAL CORRECTION**: Both Cursor and Claude Desktop use **IDENTICAL** `mcpServers` wrapper format
+   - Previous assumption about Cursor flat structure was incorrect
+   - Official documentation confirms unified JSON structure
+   - Our implementation has been correct all along
+
+2. **Filesystem Directory Configuration**:
+   - Multiple directories supported via comma-separated FILESYSTEM_ALLOWED_DIRS
+   - First directory used for Docker mount configuration
+   - Test environments without .env show servers as "PLACEHOLDERS" (expected behavior)
+
+3. **Previous Kubernetes Learnings**:
+   - **Build-from-Source Pattern**: When pre-built images don't exist, use `type: build` with repository URL
+   - **Entrypoint Override Required**: Kubernetes server defaults to SSE mode (`--sse-port 8080`), needs `--entrypoint /app/kubernetes-mcp-server` override
+   - **Critical Bug Found**: `get_server_volumes()` and `get_server_networks()` functions were looking for nested `privileged_configuration.*` but YAML has direct `volumes:` and `networks:` entries
+   - **Container Path Mapping**: Host `KUBECONFIG=/Users/user/.kube/config` → Container `KUBECONFIG=/home/.kube/config`
+   - **Test Environment Isolation**: Manual tests can pass while automated tests fail due to build/environment differences
+
+**Rules Updated:**
+- Added Docker entrypoint override patterns to Common Pitfalls (#9)
+- Added build dependency requirements to Common Pitfalls (#10)
+- Updated privileged server type description with exact YAML structure requirements
+- Added container path mapping guidance to Common Pitfalls (#12)
+- Enhanced MCP Server Addition Protocol with build-source registry format
+- **NEW**: Added Ultimate Integration Testing methodology for MCP-to-Cursor validation
+
 ## 🔄 Continuous Improvement
-- Document successful patterns in this file
-- Update rules based on what works in practice
+- Document successful patterns in this file using the Rule Update Methodology above
+- Update rules based on what works in practice, with specific examples
 - Keep the "minimal complexity" principle as the north star
-- Review and refine these rules after major changes
+- Review and refine these rules after major changes using focused updates
 - **Always maintain README.md alongside code changes**
 - **Continuously improve test coverage and quality**
 - **Refactor tests alongside production code**
+
+## 🧪 ShellSpec Formatting Best Practices
+
+- Indent each `Describe`, `Context`, and `It` block by two spaces per nesting level.
+- Align all `End` statements with their corresponding block openings.
+- No auto-formatter (like `shfmt`) understands ShellSpec blocks; manual or custom-script formatting is required for BDD block structure.
+- For reference and examples, see the official ShellSpec repository: https://github.com/shellspec/shellspec

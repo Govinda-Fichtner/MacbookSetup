@@ -13,7 +13,6 @@ servers:
       type: registry
       image: mcp/github-mcp-server:latest
     environment_variables:
-      - "GITHUB_TOKEN"
       - "GITHUB_PERSONAL_ACCESS_TOKEN"
     health_test:
       parse_mode: json
@@ -52,35 +51,10 @@ servers:
       - "artifact_access"
       - "environment_variables"
 
-  inspector:
-    name: "MCP Inspector"
-    server_type: "standalone"  # Self-contained, no external API dependencies
-    description: "Official Model Context Protocol visual testing and debugging tool"
-    category: "development"
-    source:
-      type: registry
-      image: "mcp/inspector:latest"  # Official MCP Inspector containerized
-    ports:
-      - "6274:6274"  # MCPI client UI
-      - "6277:6277"  # MCPP proxy server
-    networks:
-      - "mcp-network"
-    environment_variables:
-      - "MCP_AUTO_OPEN_ENABLED"
-      - "CLIENT_PORT"
-      - "SERVER_PORT"
-      - "MCP_SERVER_REQUEST_TIMEOUT"
-    health_test:
-      parse_mode: direct
-      path: "/"
-      expected_status: 200
-      expected_response: "<!DOCTYPE html>"  # HTML response from UI
-    capabilities:
-      - "visual_testing"
-      - "server_debugging"
-      - "protocol_inspection"
-      - "configuration_export"
-      - "cli_mode"
+  # inspector:
+    # NOTE: MCP Inspector is NOT an MCP server - it's a debugging tool
+    # Use it as: npx @modelcontextprotocol/inspector <mcp-server-command>
+    # Do not include in Cursor/Claude Desktop configurations
 
   filesystem:
     name: "Filesystem MCP Server"
@@ -112,7 +86,8 @@ servers:
   docker:
     name: "Docker MCP Server (QuantGeekDev)"
     server_type: "privileged"
-    description: "Docker container and compose management via QuantGeekDev/docker-mcp"
+    description: "Docker container management and orchestration via QuantGeekDev docker-mcp server with direct \
+      Docker API access"
     category: "infrastructure"
     source:
       type: registry
@@ -120,21 +95,31 @@ servers:
     environment_variables:
       - "DOCKER_HOST"
       - "DOCKER_COMPOSE_PROJECT_NAME"
-    privileged_configuration:
-      docker_socket: true
-      networks:
-        - "mcp-network"
-      volumes:
-        - "/var/run/docker.sock:/var/run/docker.sock"
-    health_test:
-      parse_mode: json
-      path: "/health"
-      expected_status: 200
-      expected_response:
-        status: "ok"
-    capabilities:
-      - "container_management"
-      - "compose_stack_deployment"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - "mcp-network"
+
+  kubernetes:
+    name: "Kubernetes MCP Server (manusa)"
+    server_type: "privileged"
+    description: "Native Go-based Kubernetes and OpenShift management via manusa/kubernetes-mcp-server - the most \
+      advanced community K8s MCP server"
+    category: "infrastructure"
+    source:
+      type: build
+      repository: https://github.com/manusa/kubernetes-mcp-server.git
+      image: local/mcp-server-kubernetes:latest
+      build_context: "."
+      entrypoint: "/app/kubernetes-mcp-server"  # Override default SSE mode entrypoint
+    environment_variables:
+      - "KUBECONFIG"
+      - "K8S_NAMESPACE"
+      - "K8S_CONTEXT"
+    volumes:
+      - "$HOME/.kube:/home/.kube:ro"
+    networks:
+      - "mcp-network"
 
 # Global MCP configuration
 global:
