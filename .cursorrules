@@ -596,8 +596,9 @@ shellspec --trace spec/mcp_inspector_spec.sh
 5. shellspec spec/                            # Verify test passes
 6. ./verify_setup.sh > /dev/null              # Integration test
 7. pre-commit run --all-files                 # Code quality
-8. git add . && git commit -m "descriptive message"
-9. git push origin main
+8. MANDATORY CLEANUP PROTOCOL                 # See 🧹 Mandatory Cleanup Protocol
+9. git add . && git commit -m "descriptive message"
+10. git push origin main
 ```
 
 #### **CI Integration**
@@ -664,6 +665,122 @@ When a major change is needed:
 - **Present proposals before implementation**
 - **Respect the user's project ownership**
 - **Remember: it's easier to get approval than to fix mistakes**
+
+## 🧹 Mandatory Cleanup Protocol
+
+### **When Cleanup is Required**
+Cleanup is **MANDATORY** at the end of every major development step, including:
+
+#### **Major Development Milestones**
+- ✅ **Feature Implementation**: After adding new commands, functions, or capabilities
+- ✅ **Bug Fixes**: After resolving issues that touched multiple files
+- ✅ **Refactoring**: After code reorganization or optimization
+- ✅ **Testing**: After adding new test suites or major test changes
+- ✅ **Documentation**: After significant README or documentation updates
+- ✅ **Configuration Changes**: After modifying workflows, CI, or project structure
+
+### **Mandatory Cleanup Checklist**
+
+#### **🗂️ File Organization**
+- ✅ **Remove temporary files**: Delete `*.tmp`, `test_home/`, build artifacts
+- ✅ **Organize supporting files**: Ensure proper placement in `support/` structure
+- ✅ **Check for outdated files**: Remove deprecated configurations or examples
+- ✅ **Validate file permissions**: Ensure executable files have correct permissions
+
+#### **📝 Documentation Sync**
+- ✅ **Update README.md**: Reflect any new functionality or changed workflows
+- ✅ **Update help text**: Ensure `./mcp_manager.sh help` matches implementation
+- ✅ **Update completion files**: Ensure shell completion matches available commands
+- ✅ **Update .cursorrules**: Document new patterns or learned best practices
+
+#### **🧪 Quality Assurance**
+- ✅ **Run full test suite**: `shellspec spec/` - all tests must pass
+- ✅ **Syntax validation**: `zsh -n setup.sh && zsh -n verify_setup.sh`
+- ✅ **Integration test**: `./verify_setup.sh > /dev/null` (expect success or known issues)
+- ✅ **Pre-commit checks**: `pre-commit run --all-files` - all checks must pass
+
+#### **🔧 Code Quality**
+- ✅ **Remove debug output**: No `set -x`, `echo "debug:"`, or variable assignments in output
+- ✅ **Update path references**: Ensure all file paths point to correct locations
+- ✅ **Validate configurations**: Test that generated configs work correctly
+- ✅ **Check for unused functions**: Remove or document any unused code
+
+#### **📦 Git Hygiene**
+- ✅ **Stage all changes**: `git add -A` (after verifying no sensitive files)
+- ✅ **Descriptive commit**: Use format `<type>: <description> - <details>`
+- ✅ **Push to remote**: `git push origin main` after successful commit
+- ✅ **Verify CI**: Ensure remote builds pass (if applicable)
+
+### **Cleanup Enforcement Rules**
+
+#### **🛑 Mandatory Cleanup Process**
+At the end of every major development step, you MUST:
+
+1. **📋 Announce Cleanup**: "Beginning mandatory cleanup for [feature/fix/refactor]"
+2. **🧹 Execute Checklist**: Work through entire cleanup checklist systematically
+3. **✅ Verify Results**: Confirm all checklist items completed successfully
+4. **📝 Document Status**: Report cleanup completion and any remaining items
+5. **🚀 Final Commit**: Only proceed after cleanup is 100% complete
+
+#### **❌ No Exceptions**
+- **Never skip cleanup** because "it's just a small change"
+- **Never defer cleanup** to "next time" or "later"
+- **Never commit** without completing the full cleanup checklist
+- **Never push** without verifying all tests pass
+
+#### **🔄 Cleanup Failure Recovery**
+If cleanup reveals issues:
+
+1. **🛑 Stop development**: Do not proceed with new features
+2. **🔧 Fix issues**: Address any test failures or problems discovered
+3. **🧹 Re-run cleanup**: Complete the full checklist again
+4. **✅ Verify success**: Ensure all issues are resolved
+5. **📝 Document lessons**: Update .cursorrules with new patterns if needed
+
+### **Cleanup Templates**
+
+#### **Standard Cleanup Announcement**
+```
+## 🧹 **Mandatory Cleanup: [Feature Name]**
+
+### **Development Completed**
+- ✅ [List major changes made]
+- ✅ [Key functionality added/modified]
+
+### **Cleanup Checklist**
+- [ ] Remove temporary files
+- [ ] Organize supporting files
+- [ ] Update documentation
+- [ ] Run full test suite
+- [ ] Validate syntax and integration
+- [ ] Check code quality
+- [ ] Commit and push changes
+
+### **Status**: [IN PROGRESS/COMPLETED]
+```
+
+#### **Cleanup Completion Report**
+```
+## ✅ **Cleanup Complete: [Feature Name]**
+
+### **Files Organized**
+- ✅ Temporary files removed: [list]
+- ✅ Supporting files organized: [moved files]
+- ✅ Outdated files removed: [list]
+
+### **Quality Verification**
+- ✅ Tests passing: [X/X]
+- ✅ Syntax validation: PASS
+- ✅ Integration test: PASS
+- ✅ Pre-commit checks: PASS
+
+### **Documentation Updated**
+- ✅ README.md: [changes made]
+- ✅ Help text: [updated sections]
+- ✅ Completion files: [new commands added]
+
+### **Ready for Next Development Phase** 🚀
+```
 
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file
