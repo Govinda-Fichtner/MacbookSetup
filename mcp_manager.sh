@@ -355,6 +355,9 @@ test_server_advanced_functionality() {
     "standalone")
       test_standalone_advanced_functionality "$server_id" "$server_name" "$image"
       ;;
+    "privileged")
+      test_privileged_advanced_functionality "$server_id" "$server_name" "$image"
+      ;;
     *)
       printf "│   ├── %b[WARNING]%b Unknown server type: %s\\n" "$YELLOW" "$NC" "$server_type"
       return 0
@@ -556,6 +559,50 @@ EOF
 
   printf "│   │   └── %b[SUCCESS]%b Filesystem advanced functionality test completed\\n" "$GREEN" "$NC"
   return 0
+}
+
+# Privileged server advanced functionality (Docker, etc.)
+test_privileged_advanced_functionality() {
+  local server_id="$1"
+  local server_name="$2"
+  local image="$3"
+
+  printf "│   ├── %b[ADVANCED]%b Privileged functionality testing (requires system access)\\n" "$BLUE" "$NC"
+
+  # Get privileged configuration
+  local volumes networks
+  volumes=$(get_server_volumes "$server_id")
+  networks=$(get_server_networks "$server_id")
+
+  # Build Docker command with privileged features
+  local docker_cmd="docker run --rm -i --env-file .env"
+
+  # Add volume mounts
+  while IFS= read -r volume; do
+    [[ -n "$volume" ]] && docker_cmd="$docker_cmd -v $volume"
+  done <<< "$volumes"
+
+  # Add network connections
+  while IFS= read -r network; do
+    [[ -n "$network" ]] && docker_cmd="$docker_cmd --network $network"
+  done <<< "$networks"
+
+  docker_cmd="$docker_cmd $image"
+
+  printf "│   │   ├── %b[TESTING]%b System access and privilege validation\\n" "$BLUE" "$NC"
+
+  # Test basic functionality with privileged access
+  local test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}'
+  local response
+  response=$(echo "$test_payload" | timeout 15 "$docker_cmd" 2>&1)
+
+  if echo "$response" | grep -q '"tools"'; then
+    printf "│   │   └── %b[SUCCESS]%b Privileged functionality verified\\n" "$GREEN" "$NC"
+    return 0
+  else
+    printf "│   │   └── %b[WARNING]%b Privileged test failed (check system access)\\n" "$YELLOW" "$NC"
+    return 1
+  fi
 }
 
 # Advanced MCP functionality test (requires real API tokens - local development)
@@ -899,37 +946,9 @@ generate_env_file() {
     echo "" >> "$temp_env_file"
     echo "# ${env_var} for MCP server authentication" >> "$temp_env_file"
 
-    # Always use placeholders in the example file
+    # Always use placeholders in the example file - use centralized function
     local placeholder
-    case "$env_var" in
-      "GITHUB_PERSONAL_ACCESS_TOKEN" | "GITHUB_TOKEN")
-        placeholder="your_github_token_here"
-        ;;
-      "CIRCLECI_TOKEN")
-        placeholder="your_circleci_token_here"
-        ;;
-      "CIRCLECI_BASE_URL")
-        placeholder="https://circleci.com"
-        ;;
-      "FILESYSTEM_ALLOWED_DIRS")
-        placeholder="$(pwd),/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
-        ;;
-      "MCP_AUTO_OPEN_ENABLED")
-        placeholder="false"
-        ;;
-      "CLIENT_PORT")
-        placeholder="6274"
-        ;;
-      "SERVER_PORT")
-        placeholder="6277"
-        ;;
-      "MCP_SERVER_REQUEST_TIMEOUT")
-        placeholder="10000"
-        ;;
-      *)
-        placeholder="your_$(echo "$env_var" | tr '[:upper:]' '[:lower:]')_here"
-        ;;
-    esac
+    placeholder=$(get_env_placeholder "$env_var")
     echo "${env_var}=${placeholder}" >> "$temp_env_file"
     printf "│   ├── %b[PLACEHOLDER]%b %s\\n" "$YELLOW" "$NC" "$env_var"
   done
@@ -1093,6 +1112,73 @@ get_mount_config() {
   parse_server_config "$server_id" "mount_configuration.${config_key}"
 }
 
+# Get privileged configuration for servers requiring special system access
+get_privileged_config() {
+  local server_id="$1"
+  local config_key="$2"
+  parse_server_config "$server_id" "privileged_configuration.${config_key}"
+}
+
+# Check if server requires Docker socket access
+server_needs_docker_socket() {
+  local server_id="$1"
+  local docker_socket
+  docker_socket=$(get_privileged_config "$server_id" "docker_socket")
+  [[ "$docker_socket" == "true" ]]
+}
+
+# Get networks required by privileged servers
+get_server_networks() {
+  local server_id="$1"
+  parse_server_config "$server_id" "privileged_configuration.networks" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null
+}
+
+# Get volumes required by privileged servers
+get_server_volumes() {
+  local server_id="$1"
+  parse_server_config "$server_id" "privileged_configuration.volumes" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null
+}
+
+# Get environment variable placeholder value
+get_env_placeholder() {
+  local var_name="$1"
+  case "$var_name" in
+    "GITHUB_PERSONAL_ACCESS_TOKEN" | "GITHUB_TOKEN")
+      echo "your_github_token_here"
+      ;;
+    "CIRCLECI_TOKEN")
+      echo "your_circleci_token_here"
+      ;;
+    "CIRCLECI_BASE_URL")
+      echo "https://circleci.com"
+      ;;
+    "FILESYSTEM_ALLOWED_DIRS")
+      echo "/Users/$(whoami)/Documents/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
+      ;;
+    "DOCKER_HOST")
+      echo "unix:///var/run/docker.sock"
+      ;;
+    "DOCKER_COMPOSE_PROJECT_NAME")
+      echo "macbooksetup"
+      ;;
+    "MCP_AUTO_OPEN_ENABLED")
+      echo "false"
+      ;;
+    "CLIENT_PORT")
+      echo "6274"
+      ;;
+    "SERVER_PORT")
+      echo "6277"
+      ;;
+    "MCP_SERVER_REQUEST_TIMEOUT")
+      echo "10000"
+      ;;
+    *)
+      echo "your_$(echo "$var_name" | tr '[:upper:]' '[:lower:]')_here"
+      ;;
+  esac
+}
+
 # Check if server has real API tokens by reading from .env file
 server_has_real_tokens() {
   local server_id="$1"
@@ -1138,6 +1224,22 @@ server_has_real_tokens() {
       # Standalone servers don't require tokens
       return 1
       ;;
+    "privileged")
+      # Check expected environment variables for privileged servers
+      local env_vars
+      env_vars=$(parse_server_config "$server_id" "environment_variables" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+
+      # Check if any of the expected environment variables have real values
+      while IFS= read -r env_var; do
+        [[ -z "$env_var" ]] && continue
+        local value
+        value=$(grep "^${env_var}=" "$env_file" 2> /dev/null | cut -d= -f2- | tr -d '"')
+        # Check against common placeholder patterns
+        if [[ -n "$value" && "$value" != *"your_"*"_here"* && "$value" != *"placeholder"* ]]; then
+          return 0
+        fi
+      done <<< "$env_vars"
+      ;;
   esac
   return 1
 }
@@ -1162,6 +1264,12 @@ get_env_value_or_placeholder() {
         ;;
       "FILESYSTEM_ALLOWED_DIRS")
         echo "/Users/$(whoami)/Documents/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
+        ;;
+      "DOCKER_HOST")
+        echo "unix:///var/run/docker.sock"
+        ;;
+      "DOCKER_COMPOSE_PROJECT_NAME")
+        echo "macbooksetup"
         ;;
       *)
         echo "YOUR_${var_name}_HERE"
@@ -1302,6 +1410,36 @@ ${mount_args}      \"$image\",
     ]
   }"
         ;;
+      "privileged")
+        # Privileged servers with special system access (Docker socket, networks, etc.)
+        local volumes networks
+        volumes=$(get_server_volumes "$server_id")
+        networks=$(get_server_networks "$server_id")
+
+        json_content="${json_content}
+  \"$server_id\": {
+    \"command\": \"docker\",
+    \"args\": [
+      \"run\", \"--rm\", \"-i\",
+      \"--env-file\", \"$env_file_path\","
+
+        # Add volume mounts
+        while IFS= read -r volume; do
+          [[ -n "$volume" ]] && json_content="${json_content}
+      \"-v\", \"$volume\","
+        done <<< "$volumes"
+
+        # Add network connections
+        while IFS= read -r network; do
+          [[ -n "$network" ]] && json_content="${json_content}
+      \"--network\", \"$network\","
+        done <<< "$networks"
+
+        json_content="${json_content}
+      \"$image\"
+    ]
+  }"
+        ;;
       "api_based" | "standalone" | *)
         # Standard servers using --env-file approach
         json_content="${json_content}
@@ -1419,6 +1557,35 @@ ${mount_args}        \"$image\",
       ]
     }"
         ;;
+      "privileged")
+        # Privileged servers with special system access (Docker socket, networks, etc.)
+        local volumes networks docker_args
+        volumes=$(get_server_volumes "$server_id")
+        networks=$(get_server_networks "$server_id")
+
+        docker_args="      \"run\", \"--rm\", \"-i\","
+        docker_args="${docker_args}\n      \"--env-file\", \"$env_file_path\","
+
+        # Add volume mounts
+        while IFS= read -r volume; do
+          [[ -n "$volume" ]] && docker_args="${docker_args}\n      \"-v\", \"$volume\","
+        done <<< "$volumes"
+
+        # Add network connections
+        while IFS= read -r network; do
+          [[ -n "$network" ]] && docker_args="${docker_args}\n      \"--network\", \"$network\","
+        done <<< "$networks"
+
+        docker_args="${docker_args}\n      \"$image\""
+
+        json_content="${json_content}
+  \"$server_id\": {
+    \"command\": \"docker\",
+    \"args\": [
+${docker_args}
+    ]
+  }"
+        ;;
     esac
   done
 
@@ -1485,6 +1652,27 @@ EOF
         # Standard servers use environment files
         printf '      "run", "--rm", "-i",\n'
         printf '      "--env-file", "%s",\n' "$env_file_path"
+        printf '      "%s"\n' "$image"
+        ;;
+      "privileged")
+        # Privileged servers with special system access (Docker socket, networks, etc.)
+        local volumes networks
+        volumes=$(get_server_volumes "$server_id")
+        networks=$(get_server_networks "$server_id")
+
+        printf '      "run", "--rm", "-i",\n'
+        printf '      "--env-file", "%s",\n' "$env_file_path"
+
+        # Add volume mounts
+        while IFS= read -r volume; do
+          [[ -n "$volume" ]] && printf '      "-v", "%s",\n' "$volume"
+        done <<< "$volumes"
+
+        # Add network connections
+        while IFS= read -r network; do
+          [[ -n "$network" ]] && printf '      "--network", "%s",\n' "$network"
+        done <<< "$networks"
+
         printf '      "%s"\n' "$image"
         ;;
     esac
@@ -1566,6 +1754,27 @@ EOF
         # Standard servers use environment files
         printf '        "run", "--rm", "-i",\n'
         printf '        "--env-file", "%s",\n' "$env_file_path"
+        printf '        "%s"\n' "$image"
+        ;;
+      "privileged")
+        # Privileged servers with special system access (Docker socket, networks, etc.)
+        local volumes networks docker_args
+        volumes=$(get_server_volumes "$server_id")
+        networks=$(get_server_networks "$server_id")
+
+        printf '        "run", "--rm", "-i",\n'
+        printf '        "--env-file", "%s",\n' "$env_file_path"
+
+        # Add volume mounts
+        while IFS= read -r volume; do
+          [[ -n "$volume" ]] && printf '        "-v", "%s",\n' "$volume"
+        done <<< "$volumes"
+
+        # Add network connections
+        while IFS= read -r network; do
+          [[ -n "$network" ]] && printf '        "--network", "%s",\n' "$network"
+        done <<< "$networks"
+
         printf '        "%s"\n' "$image"
         ;;
     esac

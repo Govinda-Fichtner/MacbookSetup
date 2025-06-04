@@ -333,4 +333,65 @@ The status should be success
 The output should include "Filesystem MCP Server"
 End
 End
+
+Describe 'docker server integration'
+It 'includes docker server in available servers list'
+When run zsh "$PWD/mcp_manager.sh" list
+The status should be success
+The output should include "docker"
+End
+
+It 'generates docker server configuration for Cursor'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq '.docker' "$HOME/.cursor/mcp.json"
+The status should be success
+The output should include "docker"
+The output should include "ghcr.io/metorial/mcp-container--quantgeekdev--docker-mcp--docker-mcp:latest"
+End
+
+It 'generates docker server configuration for Claude Desktop'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq '.mcpServers.docker' "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+The status should be success
+The output should include "docker"
+The output should include "ghcr.io/metorial/mcp-container--quantgeekdev--docker-mcp--docker-mcp:latest"
+End
+
+It 'includes docker environment variables in .env_example'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "DOCKER_HOST\|DOCKER_COMPOSE_PROJECT_NAME" "$PWD/.env_example"
+The status should be success
+The output should include "DOCKER_HOST"
+The output should include "DOCKER_COMPOSE_PROJECT_NAME"
+End
+
+It 'docker environment variables include correct placeholders'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "DOCKER_HOST\|DOCKER_COMPOSE_PROJECT_NAME" "$PWD/.env_example"
+The status should be success
+The output should include "unix:///var/run/docker.sock"
+The output should include "macbooksetup"
+End
+
+It 'docker server uses privileged configuration with socket mounting'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq '.docker.args[]' "$HOME/.cursor/mcp.json"
+The status should be success
+The output should include "/var/run/docker.sock:/var/run/docker.sock"
+The output should include "--network"
+The output should include "mcp-network"
+End
+
+It 'docker server can be tested individually'
+When run zsh "$PWD/mcp_manager.sh" test docker
+The status should be success
+The output should include "Docker MCP Server"
+End
+
+It 'docker server supports privileged server type'
+When run zsh "$PWD/mcp_manager.sh" parse docker server_type
+The status should be success
+The output should equal "privileged"
+End
+End
 End

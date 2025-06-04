@@ -109,32 +109,32 @@ servers:
       - "file_metadata"
       - "secure_access"
 
-  # Future servers (commented for future expansion):
-  # figma:
-  #   name: "Figma MCP Server"
-  #   description: "Design collaboration and asset management"
-  #   category: "design"
-  #   source:
-  #     type: "registry"
-  #     image: "mcp/figma-mcp-server:latest"
-  #   environment_variables:
-  #     - "FIGMA_TOKEN"
-  #   health_test:
-  #     parse_mode: "direct"
-  #     timeout: 30
-
-  # linear:
-  #   name: "Linear MCP Server"
-  #   description: "Project management and issue tracking"
-  #   category: "project_management"
-  #   source:
-  #     type: "registry"
-  #     image: "mcp/linear-mcp-server:latest"
-  #   environment_variables:
-  #     - "LINEAR_API_KEY"
-  #   health_test:
-  #     parse_mode: "direct"
-  #     timeout: 30
+  docker:
+    name: "Docker MCP Server (QuantGeekDev)"
+    server_type: "privileged"
+    description: "Docker container and compose management via QuantGeekDev/docker-mcp"
+    category: "infrastructure"
+    source:
+      type: registry
+      image: "ghcr.io/metorial/mcp-container--quantgeekdev--docker-mcp--docker-mcp:latest"
+    environment_variables:
+      - "DOCKER_HOST"
+      - "DOCKER_COMPOSE_PROJECT_NAME"
+    privileged_configuration:
+      docker_socket: true
+      networks:
+        - "mcp-network"
+      volumes:
+        - "/var/run/docker.sock:/var/run/docker.sock"
+    health_test:
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "ok"
+    capabilities:
+      - "container_management"
+      - "compose_stack_deployment"
 
 # Global MCP configuration
 global:

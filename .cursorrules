@@ -92,6 +92,20 @@ When modifying any shell script (*.sh files) OR reorganizing project structure, 
 - `~/.zsh/completions/_mcp_manager` - User's completion symlink (if exists)
 - Any other completion files in the project
 
+### **CRITICAL: New MCP Server Addition Protocol**
+When adding new MCP servers (like docker, slack, etc.), you MUST update shell completion:
+
+1. **Update server list in completion**: Add new server_id to completion options
+2. **Test tab completion**: Verify `./mcp_manager.sh test <TAB>` shows new server
+3. **Update all command contexts**: test, setup, config, inspect commands should all recognize new server
+4. **Validate completion works**: Test in clean shell: `autoload -U compinit && compinit`
+
+**Example**: After adding "docker" server, completion should show:
+```bash
+./mcp_manager.sh test <TAB>  # Should show: github circleci filesystem docker
+./mcp_manager.sh setup <TAB> # Should show: github circleci filesystem docker
+```
+
 ### **Testing Protocol**:
 ```bash
 # 1. Verify completion file exists and is readable
@@ -372,6 +386,311 @@ When making significant changes to the project, you MUST update the README.md fi
 1. **🔴 RED**: Write failing tests first
 2. **🟢 GREEN**: Write minimal code to make tests pass
 3. **🔵 REFACTOR**: Improve code while keeping tests green
+
+## 🎯 **Generalized MCP Server Addition Test Framework**
+
+### **📋 MCP Server Addition Protocol (Based on Docker Experience)**
+
+When adding ANY new MCP server, follow this exact TDD-based protocol:
+
+#### **🔴 Phase 1: RED - Comprehensive Test Writing (Before ANY Implementation)**
+
+**1.1 Registry Integration Tests**
+```bash
+# Add to spec/mcp_manager_spec.sh
+Describe '<server_name> server integration'
+  It 'includes <server_name> server in available servers list'
+    When run zsh "$PWD/mcp_manager.sh" list
+    The status should be success
+    The output should include "<server_name>"
+  End
+
+  It 'supports <server_type> server type parsing'
+    When run zsh "$PWD/mcp_manager.sh" parse <server_name> server_type
+    The status should be success
+    The output should equal "<server_type>"
+  End
+End
+```
+
+**1.2 Configuration Generation Tests**
+```bash
+# Test both Cursor and Claude Desktop configurations
+It 'generates <server_name> configuration for Cursor'
+  zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+  When run jq '.<server_name>' "$HOME/.cursor/mcp.json"
+  The status should be success
+  The output should include "<server_name>"
+  The output should include "<expected_image>"
+End
+
+It 'generates <server_name> configuration for Claude Desktop'
+  zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+  When run jq '.mcpServers.<server_name>' "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+  The status should be success
+  The output should include "<server_name>"
+End
+```
+
+**1.3 Environment Variable Tests**
+```bash
+# Test environment variable generation and placeholders
+It 'includes <server_name> environment variables in .env_example'
+  zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+  When run grep "<ENV_VAR_1>\|<ENV_VAR_2>" "$PWD/.env_example"
+  The status should be success
+  The output should include "<ENV_VAR_1>"
+  The output should include "<ENV_VAR_2>"
+End
+
+It '<server_name> environment variables include correct placeholders'
+  zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+  When run grep "<ENV_VAR_1>\|<ENV_VAR_2>" "$PWD/.env_example"
+  The status should be success
+  The output should include "<expected_placeholder_1>"
+  The output should include "<expected_placeholder_2>"
+End
+```
+
+**1.4 Server Type-Specific Configuration Tests**
+```bash
+# For api_based servers:
+It '<server_name> server uses standard --env-file approach'
+
+# For mount_based servers:
+It '<server_name> server uses mount-based configuration'
+
+# For privileged servers:
+It '<server_name> server uses privileged configuration with special access'
+  # Test for Docker socket, networks, volumes, etc.
+
+# For standalone servers:
+It '<server_name> server requires no external dependencies'
+```
+
+**1.5 Individual Server Testing**
+```bash
+It '<server_name> server can be tested individually'
+  When run zsh "$PWD/mcp_manager.sh" test <server_name>
+  The status should be success
+  The output should include "<Server Display Name>"
+End
+```
+
+**1.6 Integration Testing**
+```bash
+It '<server_name> integrates with existing servers without conflicts'
+  When run zsh "$PWD/mcp_manager.sh" test
+  The status should be success
+  The output should include "<server_name>"
+  The output should include "github"  # Existing server still works
+End
+```
+
+#### **🟢 Phase 2: GREEN - Minimal Implementation (Make Tests Pass)**
+
+**2.1 Registry Entry** (Always first step)
+```yaml
+# Add to mcp_server_registry.yml
+<server_name>:
+  name: "<Display Name>"
+  server_type: "<api_based|mount_based|privileged|standalone>"
+  description: "<Description>"
+  category: "<category>"
+  source:
+    type: registry
+    image: "<image_url>"
+  environment_variables:  # If applicable
+    - "<ENV_VAR_1>"
+    - "<ENV_VAR_2>"
+  # Additional type-specific configuration as needed
+```
+
+**2.2 Environment Variable Placeholders** (If new variables)
+```bash
+# Add to get_env_placeholder() function in mcp_manager.sh
+"<ENV_VAR_1>")
+  echo "<specific_placeholder_value>"
+  ;;
+"<ENV_VAR_2>")
+  echo "<specific_placeholder_value>"
+  ;;
+```
+
+**2.3 Server Type Extension** (If new server type needed)
+```bash
+# Extend all case statements that handle server_type:
+# - Configuration generation (both Cursor and Claude)
+# - Advanced functionality testing
+# - Token detection logic
+# - Preview generation
+
+"<new_server_type>")
+  <type_specific_handling>
+  ;;
+```
+
+**2.4 Function Ordering Verification**
+```bash
+# CRITICAL: Ensure all helper functions are defined BEFORE use
+# Check function call order:
+1. Helper functions (get_*, server_*, etc.)
+2. Test functions (test_*_advanced_functionality)
+3. Configuration functions (generate_*, write_*)
+4. Main command interface
+```
+
+#### **🔵 Phase 3: REFACTOR - Optimization & Documentation**
+
+**3.1 Shell Completion Validation**
+```bash
+# Verify completion works automatically
+awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' mcp_server_registry.yml
+# Should include new server
+
+# Test completion manually
+./mcp_manager.sh test <TAB>  # Should show new server
+```
+
+**3.2 Documentation Updates**
+- Update README.md with new server capabilities
+- Add troubleshooting entries for server-specific issues
+- Update examples and use cases
+
+**3.3 Integration Verification**
+```bash
+# Full integration test suite
+./mcp_manager.sh test                    # All servers work
+./mcp_manager.sh config-write            # All configs generate
+./mcp_manager.sh inspect                 # Inspector integration
+```
+
+### **🏗️ Server Type Classification Quick Reference**
+
+**api_based**: GitHub, CircleCI, Linear, Slack
+- Uses `--env-file` for API tokens
+- Standard Docker configuration
+- Token validation in advanced tests
+
+**mount_based**: Filesystem, Local Development Tools
+- Uses `--mount` for directory access
+- Container path arguments
+- File system operation tests
+
+**privileged**: Docker, Kubernetes, System Tools
+- Requires `--privileged` or special volumes (Docker socket)
+- Network access requirements
+- System-level validation tests
+
+**standalone**: Inspector, Utilities, Converters
+- No external dependencies
+- No authentication required
+- Self-contained functionality tests
+
+### **⚠️ Common Pitfalls to Avoid (Learned from Docker Experience)**
+
+1. **Function Ordering**: Always define helper functions BEFORE they're called
+2. **Missing Test Categories**: Every server needs basic + advanced + integration tests
+3. **Hardcoded Patterns**: Use server_type dispatch, never hardcode server names
+4. **Configuration Gaps**: Test BOTH Cursor AND Claude Desktop configs
+5. **Shell Completion**: Verify tab completion works after addition
+6. **Environment Variables**: Always test placeholder generation
+7. **Interactive Commands**: Use non-interactive flags (`-f`, `--yes`, `cat >`)
+8. **Documentation Sync**: Update README.md with every functional change
+
+### **✅ Definition of Done for MCP Server Addition**
+
+A new MCP server is complete when:
+- [ ] All tests pass (8+ tests minimum covering all aspects)
+- [ ] Configuration generated for both Cursor and Claude Desktop
+- [ ] Environment variables have specific placeholders (not generic)
+- [ ] Shell completion includes new server
+- [ ] Integration with existing servers verified
+- [ ] Documentation updated
+- [ ] Function ordering verified (no "command not found" errors)
+- [ ] Server type classification working correctly
+- [ ] Manual testing completed with real server functionality
+
+### **📋 Copy-Paste Template for New MCP Server Addition**
+
+```bash
+# 🔴 RED: Add these tests to spec/mcp_manager_spec.sh FIRST
+Describe '[SERVER_NAME] server integration'
+  It 'includes [SERVER_NAME] server in available servers list'
+    When run zsh "$PWD/mcp_manager.sh" list
+    The status should be success
+    The output should include "[SERVER_NAME]"
+  End
+
+  It 'generates [SERVER_NAME] configuration for Cursor'
+    zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+    When run jq '.[SERVER_NAME]' "$HOME/.cursor/mcp.json"
+    The status should be success
+    The output should include "[SERVER_NAME]"
+    The output should include "[EXPECTED_IMAGE]"
+  End
+
+  It 'generates [SERVER_NAME] configuration for Claude Desktop'
+    zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+    When run jq '.mcpServers.[SERVER_NAME]' "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+    The status should be success
+    The output should include "[SERVER_NAME]"
+  End
+
+  It 'includes [SERVER_NAME] environment variables in .env_example'
+    zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+    When run grep "[ENV_VAR_1]\\|[ENV_VAR_2]" "$PWD/.env_example"
+    The status should be success
+    The output should include "[ENV_VAR_1]"
+    The output should include "[ENV_VAR_2]"
+  End
+
+  It '[SERVER_NAME] environment variables include correct placeholders'
+    zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+    When run grep "[ENV_VAR_1]\\|[ENV_VAR_2]" "$PWD/.env_example"
+    The status should be success
+    The output should include "[EXPECTED_PLACEHOLDER_1]"
+    The output should include "[EXPECTED_PLACEHOLDER_2]"
+  End
+
+  It '[SERVER_NAME] server uses [SERVER_TYPE] configuration'
+    zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+    When run jq '.[SERVER_NAME].args[]' "$HOME/.cursor/mcp.json"
+    The status should be success
+    # Add server-type specific assertions here
+  End
+
+  It '[SERVER_NAME] server can be tested individually'
+    When run zsh "$PWD/mcp_manager.sh" test [SERVER_NAME]
+    The status should be success
+    The output should include "[DISPLAY_NAME]"
+  End
+
+  It '[SERVER_NAME] server supports [SERVER_TYPE] server type'
+    When run zsh "$PWD/mcp_manager.sh" parse [SERVER_NAME] server_type
+    The status should be success
+    The output should equal "[SERVER_TYPE]"
+  End
+End
+
+# 🟢 GREEN: Run tests (should fail), then implement minimal code to pass
+# 1. Add registry entry
+# 2. Add environment variable placeholders (if needed)
+# 3. Extend server type handling (if new type)
+# 4. Verify function ordering
+
+# 🔵 REFACTOR: Optimize, document, validate integration
+```
+
+**Usage Instructions:**
+1. Replace `[SERVER_NAME]` with actual server ID (e.g., `slack`, `linear`)
+2. Replace `[DISPLAY_NAME]` with human-readable name (e.g., `Slack MCP Server`)
+3. Replace `[SERVER_TYPE]` with classification (e.g., `api_based`, `privileged`)
+4. Replace `[ENV_VAR_1]`, `[ENV_VAR_2]` with actual environment variables
+5. Replace `[EXPECTED_PLACEHOLDER_1]` with specific placeholder values
+6. Replace `[EXPECTED_IMAGE]` with Docker image URL
+
+**Estimated Time per Server**: 15-30 minutes following this protocol vs. hours of debugging without it.
 
 ### **Test-First Development Rules**
 - ❌ **NEVER write production code without a failing test first**
@@ -745,6 +1064,58 @@ At the end of every major development step, you MUST:
 - **Never defer cleanup** to "next time" or "later"
 - **Never commit** without completing the full cleanup checklist
 - **Never push** without verifying all tests pass
+
+## 🚫 Interactive Command Anti-Patterns
+
+### **CRITICAL: Always Use Non-Interactive Flags**
+When using file operations in `run_terminal_cmd`, **ALWAYS** use non-interactive flags to prevent hanging on confirmations:
+
+#### **Required Non-Interactive Patterns**
+```bash
+# ✅ CORRECT - Non-interactive file operations
+cp -f source destination     # Force overwrite without asking
+mv source destination         # Move (usually non-interactive by default)
+rm -f file                    # Force delete without asking
+rm -rf directory              # Force recursive delete without asking
+git add -A                    # Add all changes without interaction
+
+# ❌ NEVER USE - Interactive commands that will hang
+cp source destination         # Will ask "overwrite?" and hang
+rm file                       # Will ask confirmation for protected files
+rm -r directory              # Will ask before removing directory
+```
+
+#### **Shell Command Safety Rules**
+- ✅ **ALWAYS use `-f` flag** for `cp`, `rm` operations
+- ✅ **Test commands locally first** if unsure about interactivity
+- ✅ **Use `|| true`** for commands that might fail safely
+- ❌ **NEVER assume commands are non-interactive** without verification
+- ❌ **NEVER use interactive shells** (`zsh -i`, `bash -i`) in automation
+
+#### **Common Interactive Traps to Avoid**
+```bash
+# These WILL hang and must be avoided:
+cp .env_example .env                    # ❌ Asks overwrite confirmation
+rm important_file                       # ❌ Asks confirmation for write-protected
+mv file existing_file                   # ❌ Asks overwrite confirmation
+git reset --hard                        # ❌ May ask confirmation in some setups
+npm install                             # ❌ May ask for audit fix confirmations
+
+# Use these safe alternatives instead:
+cat source > destination               # ✅ Shell redirection - completely non-interactive
+cp -f .env_example .env                 # ✅ Forces overwrite (but may still prompt on some systems)
+rm -f important_file                    # ✅ Forces deletion
+mv file existing_file 2>/dev/null || true  # ✅ Suppress errors if needed
+git reset --hard HEAD                   # ✅ More specific, less likely to prompt
+npm install --yes                       # ✅ Auto-confirm prompts
+```
+
+#### **Emergency Recovery Protocol**
+If a command hangs due to interactive prompt:
+1. **Recognize the pattern**: Command stops responding, cursor shows waiting
+2. **Document the fix**: Note what flag was missing (`-f`, `--yes`, etc.)
+3. **Update this rule**: Add the specific case to prevent recurrence
+4. **Use force flags**: Always prefer automation over interaction
 
 #### **🔄 Cleanup Failure Recovery**
 If cleanup reveals issues:
