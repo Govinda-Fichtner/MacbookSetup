@@ -111,6 +111,7 @@ When run zsh "$PWD/mcp_manager.sh" list
 The status should be success
 The output should include "github"
 The output should include "circleci"
+The output should include "figma"
 The output should include "filesystem"
 End
 
@@ -175,6 +176,7 @@ When run jq -r '.mcpServers | keys[]' test_home/.cursor/mcp.json
 The status should be success
 The output should include "github"
 The output should include "circleci"
+The output should include "figma"
 The output should include "filesystem"
 End
 End
@@ -294,6 +296,12 @@ The status should be success
 The output should include "GitHub MCP Server"
 End
 
+It 'can test Figma server individually'
+When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test figma'
+The status should be success
+The output should include "Figma Context MCP Server"
+End
+
 It 'can test filesystem server individually'
 When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
@@ -310,6 +318,7 @@ When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_ma
 The status should be success
 The output should include "GitHub MCP Server"
 The output should include "CircleCI MCP Server"
+The output should include "Figma Context MCP Server"
 The output should include "Filesystem MCP Server"
 End
 End
@@ -380,6 +389,7 @@ When run zsh "$PWD/mcp_manager.sh" test
 The status should be success
 The output should include "GitHub MCP Server"
 The output should include "CircleCI MCP Server"
+The output should include "Figma Context MCP Server"
 The output should include "Filesystem MCP Server"
 End
 End

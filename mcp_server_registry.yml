@@ -121,6 +121,35 @@ servers:
     networks:
       - "mcp-network"
 
+  figma:
+    name: "Figma Context MCP Server (GLips)"
+    server_type: "api_based"
+    description: "Figma design data extraction via GLips/Figma-Context-MCP - optimized for AI orchestration with \
+      intelligent design filtering"
+    category: "design"
+    source:
+      type: build
+      repository: https://github.com/GLips/Figma-Context-MCP.git
+      image: local/mcp-server-figma:latest
+      build_context: "."
+      entrypoint: "node"
+      args: ["/app/dist/index.js", "--stdio"]
+    environment_variables:
+      - "FIGMA_API_KEY"
+    health_test:
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "ready"
+    capabilities:
+      - "figma_file_access"
+      - "design_data_extraction"
+      - "layout_information_parsing"
+      - "component_analysis"
+      - "semantic_design_filtering"
+      - "ai_orchestration_optimization"
+
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"

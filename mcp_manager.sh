@@ -436,6 +436,9 @@ test_api_based_advanced_functionality() {
     "circleci")
       test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_followed_projects", "arguments": {"params": {}}}}'
       ;;
+    "figma")
+      test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}'
+      ;;
     *)
       printf "│   │   └── %b[WARNING]%b No advanced test defined for %s\\n" "$YELLOW" "$NC" "$server_id"
       return 0
@@ -1274,6 +1277,9 @@ get_server_entrypoint() {
 get_env_placeholder() {
   local var_name="$1"
   case "$var_name" in
+    "FIGMA_API_KEY")
+      echo "figd_your_figma_token_here"
+      ;;
     "GITHUB_PERSONAL_ACCESS_TOKEN")
       echo "your_github_token_here"
       ;;
@@ -1425,6 +1431,9 @@ get_env_value_or_placeholder() {
         ;;
       "K8S_CONTEXT")
         echo "current-context"
+        ;;
+      "FIGMA_API_KEY")
+        echo "figd_your_figma_token_here"
         ;;
       *)
         echo "YOUR_${var_name}_HERE"
