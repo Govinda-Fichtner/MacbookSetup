@@ -82,6 +82,176 @@ If there's a critical production issue requiring immediate bypass:
 
 **Philosophy**: Pre-commit hooks catch issues before they become problems. Bypassing them creates technical debt and reduces code quality.
 
+## ⚡ Simple Continuous Testing (SCT)
+
+### **🎯 Core Principle**
+**Fast Feedback Loop**: Run quick tests often, comprehensive tests periodically. Keep moving forward with small, tested changes.
+
+### **📊 Two-Tier Testing (Simple)**
+
+#### **🚀 Fast Tests (< 10 seconds)**
+```bash
+# Quick validation - run this often
+sct-fast() {
+  echo "⚡ Fast tests..."
+  zsh -n setup.sh && zsh -n verify_setup.sh                    # Syntax check
+  shellspec spec/mcp_manager_spec.sh --format progress         # Core functionality
+}
+```
+
+#### **🔍 Full Tests (30+ seconds)**
+```bash
+# Comprehensive validation - run this periodically
+sct-full() {
+  echo "🔍 Full test suite..."
+  shellspec spec/ --format documentation                       # All tests
+  ./verify_setup.sh > /dev/null                               # Integration
+  pre-commit run --all-files                                  # Quality checks
+}
+```
+
+### **🔄 Simple Workflow**
+
+#### **The 5-Change Rule**
+```bash
+# Track changes since last full test
+SCT_CHANGE_COUNT_FILE=".sct_changes"
+
+sct-commit() {
+  # 1. Run fast tests
+  sct-fast || { echo "❌ Fast tests failed - fix before committing"; return 1; }
+
+  # 2. Commit the change
+  git add .
+  git commit -m "${1:-feat: incremental change}"
+
+  # 3. Track change count
+  local count
+  count=$(cat "$SCT_CHANGE_COUNT_FILE" 2>/dev/null || echo 0)
+  count=$((count + 1))
+  echo "$count" > "$SCT_CHANGE_COUNT_FILE"
+
+  # 4. Run full tests every 5 changes
+  if [[ $count -ge 5 ]]; then
+    echo "📊 5 changes reached - running full test suite..."
+    if sct-full; then
+      echo "✅ Full tests passed - resetting counter"
+      echo "0" > "$SCT_CHANGE_COUNT_FILE"
+    else
+      echo "❌ Full tests failed - fix before continuing"
+      return 1
+    fi
+  else
+    echo "✅ Change $count/5 committed (full tests at 5)"
+  fi
+}
+```
+
+#### **Development Cycle**
+```bash
+# Simple development workflow
+sct-dev() {
+  echo "🔄 Simple Continuous Testing Development Cycle"
+  echo ""
+  echo "1. Make small change (single function/feature)"
+  echo "2. Run: sct-commit 'description of change'"
+  echo "3. Repeat"
+  echo ""
+  echo "Fast tests run every commit, full tests every 5 commits"
+}
+```
+
+### **⏰ Time-Based Backup**
+```bash
+# Run full tests if it's been too long (15 minutes)
+sct-check-time() {
+  local last_test current_time diff
+  last_test=$(stat -f %m "$SCT_CHANGE_COUNT_FILE" 2>/dev/null || echo 0)
+  current_time=$(date +%s)
+  diff=$((current_time - last_test))
+
+  # 900 seconds = 15 minutes
+  if [[ $diff -gt 900 ]]; then
+    echo "⏰ 15+ minutes since last test - running full suite..."
+    sct-full && touch "$SCT_CHANGE_COUNT_FILE"
+  fi
+}
+```
+
+### **🛠️ Setup (One-Time)**
+```bash
+# Initialize SCT
+sct-setup() {
+  echo "0" > .sct_changes
+  echo "✅ Simple Continuous Testing initialized"
+  echo ""
+  echo "Usage:"
+  echo "  sct-commit 'your change description'  # Fast test + commit"
+  echo "  sct-fast                              # Run fast tests only"
+  echo "  sct-full                              # Run full test suite"
+  echo "  sct-check-time                        # Check if full tests needed"
+}
+```
+
+### **📋 SCT Rules (Simple)**
+
+#### **✅ Do This**
+- **Make small changes** - one function, one feature, one fix at a time
+- **Use `sct-commit`** instead of regular `git commit`
+- **Fix fast test failures immediately** - don't accumulate broken tests
+- **Run `sct-check-time`** when starting work sessions
+- **Keep changes under 50 lines** when possible
+
+#### **❌ Don't Do This**
+- **Skip fast tests** because change seems "trivial"
+- **Batch multiple unrelated changes** in one commit
+- **Ignore full test failures** when they trigger
+- **Work for hours without committing** anything
+
+### **🎯 Value Delivered (80/20)**
+
+#### **Core Benefits Achieved**
+- ✅ **Fast feedback** on every change (< 10 seconds)
+- ✅ **Prevents test debt accumulation** through 5-change rule
+- ✅ **Maintains stability** with regular comprehensive testing
+- ✅ **Simple workflow** that's easy to remember and follow
+- ✅ **Small commits** that are easy to debug and revert
+
+#### **Complexity Avoided**
+- ❌ No complex change size detection algorithms
+- ❌ No sophisticated scheduling systems
+- ❌ No metrics tracking and reporting overhead
+- ❌ No multiple test tier classifications
+- ❌ No background processes or complex hooks
+
+### **📝 Integration with Existing Rules**
+
+#### **Enhanced Testing Pipeline**
+```bash
+# Updated simple pipeline:
+1. sct-commit "description"          # Fast tests + commit (replaces manual process)
+2. (Every 5th commit: full tests)    # Automatic comprehensive validation
+3. git push origin main              # Push when ready
+
+# For major changes, still use full pipeline:
+1. sct-full                          # Full validation
+2. git add . && git commit           # Manual commit for complex changes
+3. git push origin main
+```
+
+#### **Aliases for Convenience**
+```bash
+# Add to .zshrc for easy access
+alias sc='sct-commit'                # Quick commit with fast tests
+alias sf='sct-fast'                  # Fast tests only
+alias sF='sct-full'                  # Full test suite
+alias st='sct-check-time'            # Time check
+```
+
+---
+
+**Philosophy**: *Small changes + Fast tests + Simple rules = Steady progress with confidence*
+
 ### 4. **Visual Consistency Rules**
 - Use tree structure (`├──`, `└──`) for hierarchical output
 - Maintain color coding: `$GREEN` for success, `$YELLOW` for warnings, `$BLUE` for info
