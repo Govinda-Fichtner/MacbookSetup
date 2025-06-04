@@ -79,23 +79,40 @@ feat: add tree structure to setup.sh output for consistency
 ## 🔧 Shell Completion Update Requirement
 
 ### **Mandatory Completion Check**
-When modifying any shell script (*.sh files), you MUST check if shell completion needs updates:
+When modifying any shell script (*.sh files) OR reorganizing project structure, you MUST check if shell completion needs updates:
 
-1. **Check completion file**: `_mcp_manager` for mcp_manager.sh changes
+1. **Check completion file**: `support/completions/_mcp_manager` for mcp_manager.sh changes
 2. **Verify commands match**: Ensure completion options match actual commands
 3. **Test completion**: Verify tab completion works for new/modified commands
 4. **Update if needed**: Add new commands, options, or server IDs to completion
+5. **Validate symlinks**: Check that ~/.zsh/completions/ symlinks point to correct locations
 
 ### **Files to Check**:
-- `_mcp_manager` - Completion for mcp_manager.sh
+- `support/completions/_mcp_manager` - Completion for mcp_manager.sh
+- `~/.zsh/completions/_mcp_manager` - User's completion symlink (if exists)
 - Any other completion files in the project
 
-### **Testing**:
+### **Testing Protocol**:
 ```bash
-# Source completion and test
-source _mcp_manager
+# 1. Verify completion file exists and is readable
+test -r support/completions/_mcp_manager && echo "✅ Completion file readable" || echo "❌ File missing/unreadable"
+
+# 2. Check symlink validity (if user has completion installed)
+if [[ -L ~/.zsh/completions/_mcp_manager ]]; then
+  test -r ~/.zsh/completions/_mcp_manager && echo "✅ Symlink valid" || echo "❌ Broken symlink - needs update"
+fi
+
+# 3. Test completion functionality in clean shell
+autoload -U compinit && compinit
 ./mcp_manager.sh <TAB><TAB>  # Should show available commands
 ```
+
+### **File Relocation Protocol**
+When moving completion files:
+- ✅ **Update all references** in documentation and setup scripts
+- ✅ **Check for existing user symlinks** in ~/.zsh/completions/
+- ✅ **Provide migration guidance** or automatic symlink updates
+- ✅ **Test completion works** after relocation
 
 ## 🚫 Anti-Patterns to Avoid
 
