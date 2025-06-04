@@ -36,6 +36,7 @@ _mcp_commands() {
     'config-write:Write configuration to actual client config files'
     'list:List configured servers from registry'
     'parse:Parse configuration value from registry'
+    'inspect:Inspect and debug MCP server(s)'
     'help:Show help message'
   )
   _describe 'mcp_manager commands' commands
@@ -44,6 +45,12 @@ _mcp_commands() {
 _mcp_server_ids() {
   local server_ids
   local registry_file="mcp_server_registry.yml"
+
+  # Handle inspect subcommands
+  if [[ ${words[2]} == "inspect" ]]; then
+    _mcp_inspect_subcommands
+    return
+  fi
 
   # Only provide server completion if we're after setup/test/config/config-write commands
   if [[ ${words[2]} == "setup" || ${words[2]} == "test" || ${words[2]} == "config" || ${words[2]} == "config-write" || ${words[2]} == "parse" ]]; then
@@ -76,6 +83,39 @@ _mcp_config_keys() {
       'health_test.timeout:Test timeout seconds'
     )
     _describe 'configuration keys' config_keys
+  fi
+}
+
+_mcp_inspect_subcommands() {
+  local inspect_options server_ids registry_file="mcp_server_registry.yml"
+
+  # If no third word yet, show all options (flags + server IDs)
+  if [[ -z ${words[3]} ]]; then
+    inspect_options=(
+      '--ui:Launch visual web interface at localhost:6274'
+      '--stop:Stop Inspector container'
+      '--health:Monitor Inspector health with auto-healing'
+      '--validate-config:Validate client configurations'
+      '--connectivity:Test server connectivity'
+      '--env-check:Check environment variables'
+      '--ci-mode:CI-friendly mode with structured output'
+    )
+    
+    # Add server IDs from registry
+    if [[ -f "$registry_file" ]]; then
+      server_ids=($(awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' "$registry_file" 2>/dev/null))
+      for server in $server_ids; do
+        inspect_options+=("$server:Inspect $server server")
+      done
+    fi
+    
+    _describe 'inspect options' inspect_options
+  # If we have a server ID as third word, offer --debug flag
+  elif [[ -f "$registry_file" ]]; then
+    server_ids=($(awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' "$registry_file" 2>/dev/null))
+    if [[ " ${server_ids[*]} " =~ " ${words[3]} " ]]; then
+      _describe 'debug options' '(--debug:Debug server with detailed logs)'
+    fi
   fi
 }
 
