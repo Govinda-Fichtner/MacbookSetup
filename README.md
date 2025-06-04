@@ -97,6 +97,12 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
   - **Docker Image**: `local/mcp-server-circleci:latest`
   - **Requires**: `CIRCLECI_TOKEN` and `CIRCLECI_BASE_URL`
 
+- **Filesystem MCP Server**: Local file system operations and management
+  - **Features**: File operations, directory management, file search, file metadata, secure access
+  - **Docker Image**: `mcp/filesystem:latest`
+  - **Requires**: `FILESYSTEM_ALLOWED_DIRS` (comma-separated directory paths)
+  - **Security**: Restricts access to explicitly specified directories only
+
 #### MCP Server Management
 
 The setup includes a comprehensive MCP server manager (`mcp_manager.sh`) that provides:
@@ -108,6 +114,7 @@ The setup includes a comprehensive MCP server manager (`mcp_manager.sh`) that pr
 
    # Test specific server
    ./mcp_manager.sh test github
+   ./mcp_manager.sh test filesystem
 
    # Health testing includes:
    # - Basic MCP protocol validation (CI-friendly, no auth required)
@@ -259,7 +266,7 @@ The setup includes comprehensive tab completion for `mcp_manager.sh`:
 ```bash
 # After setup, you can use tab completion for all commands
 ./mcp_manager.sh <TAB><TAB>           # Shows: config, config-write, test, health
-./mcp_manager.sh test <TAB><TAB>      # Shows: github, circleci
+./mcp_manager.sh test <TAB><TAB>      # Shows: github, circleci, filesystem
 ./mcp_manager.sh config <TAB><TAB>    # Shows: cursor, claude, env
 ```
 

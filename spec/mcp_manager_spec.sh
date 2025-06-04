@@ -23,7 +23,7 @@ validate_json() {
 # Helper function to check if file contains expected servers
 has_expected_servers() {
   local file="$1"
-  local expected_servers="github circleci"
+  local expected_servers="github circleci filesystem"
 
   if ! jq . "$file" > /dev/null 2>&1; then
     return 1
@@ -158,6 +158,7 @@ When run cat "$HOME/.cursor/mcp.json"
 The status should be success
 The output should include "mcp/github-mcp-server:latest"
 The output should include "local/mcp-server-circleci:latest"
+The output should include "mcp/filesystem:latest"
 End
 End
 
@@ -177,6 +178,7 @@ The output should include "GITHUB_TOKEN"
 The output should include "GITHUB_PERSONAL_ACCESS_TOKEN"
 The output should include "CIRCLECI_TOKEN"
 The output should include "CIRCLECI_BASE_URL"
+The output should include "FILESYSTEM_ALLOWED_DIRS"
 End
 
 It 'uses placeholder values in .env_example'
@@ -185,6 +187,9 @@ When run cat "$PWD/.env_example"
 The status should be success
 The output should include "your_github_token_here"
 The output should include "your_circleci_token_here"
+The output should include "MacbookSetup"
+The output should include "Desktop"
+The output should include "Downloads"
 End
 End
 
@@ -272,6 +277,59 @@ The output should include "--ui:Launch visual web interface"
 The output should include "--stop:Stop Inspector container"
 The output should include "--health:Monitor Inspector health"
 The output should include "--validate-config:Validate client configurations"
+End
+End
+
+Describe 'filesystem server integration'
+It 'includes filesystem server in available servers list'
+When run zsh "$PWD/mcp_manager.sh" list
+The status should be success
+The output should include "filesystem"
+End
+
+It 'generates filesystem server configuration for Cursor'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq '.filesystem' "$HOME/.cursor/mcp.json"
+The status should be success
+The output should include "docker"
+The output should include "mcp/filesystem:latest"
+End
+
+It 'generates filesystem server configuration for Claude Desktop'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq '.mcpServers.filesystem' "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+The status should be success
+The output should include "docker"
+The output should include "mcp/filesystem:latest"
+End
+
+It 'includes filesystem environment variables in .env_example'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "FILESYSTEM_ALLOWED_DIRS" "$PWD/.env_example"
+The status should be success
+The output should include "FILESYSTEM_ALLOWED_DIRS"
+End
+
+It 'filesystem environment variables include secure directory paths'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "FILESYSTEM_ALLOWED_DIRS" "$PWD/.env_example"
+The status should be success
+The output should include "MacbookSetup"
+The output should include "Desktop"
+The output should include "Downloads"
+End
+
+It 'filesystem server uses --env-file approach'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq '.filesystem.args[]' "$HOME/.cursor/mcp.json"
+The status should be success
+The output should include "--env-file"
+End
+
+It 'filesystem server can be tested individually'
+When run zsh "$PWD/mcp_manager.sh" test filesystem
+The status should be success
+The output should include "Filesystem MCP Server"
 End
 End
 End

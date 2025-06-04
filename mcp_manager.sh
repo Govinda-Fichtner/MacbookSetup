@@ -511,6 +511,9 @@ test_container_environment() {
     "circleci")
       expected_vars=("CIRCLECI_TOKEN" "CIRCLECI_BASE_URL")
       ;;
+    "filesystem")
+      expected_vars=("FILESYSTEM_ALLOWED_DIRS")
+      ;;
   esac
 
   # Test each expected environment variable
@@ -689,6 +692,9 @@ generate_env_file() {
         ;;
       "CIRCLECI_BASE_URL")
         placeholder="https://circleci.com"
+        ;;
+      "FILESYSTEM_ALLOWED_DIRS")
+        placeholder="/Users/$(whoami)/Documents/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
         ;;
       "MCP_AUTO_OPEN_ENABLED")
         placeholder="false"
@@ -884,6 +890,12 @@ server_has_real_tokens() {
       circleci_token=$(grep "^CIRCLECI_TOKEN=" "$env_file" 2> /dev/null | cut -d= -f2-)
       [[ -n "$circleci_token" && "$circleci_token" != "your_circleci_token_here" ]] && return 0
       ;;
+    "filesystem")
+      # Check for filesystem allowed directories in .env file
+      local filesystem_dirs
+      filesystem_dirs=$(grep "^FILESYSTEM_ALLOWED_DIRS=" "$env_file" 2> /dev/null | cut -d= -f2-)
+      [[ -n "$filesystem_dirs" && "$filesystem_dirs" != "/Users/$(whoami)/Documents/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads" ]] && return 0
+      ;;
   esac
   return 1
 }
@@ -905,6 +917,9 @@ get_env_value_or_placeholder() {
         ;;
       "CIRCLECI_BASE_URL")
         echo "https://circleci.com"
+        ;;
+      "FILESYSTEM_ALLOWED_DIRS")
+        echo "/Users/$(whoami)/Documents/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
         ;;
       *)
         echo "YOUR_${var_name}_HERE"
@@ -945,13 +960,13 @@ get_working_servers_with_tokens() {
   local -a all_servers
   local server_line
 
-  # For configuration generation, we want all available servers (with Docker images)
-  # not just those that pass health checks
+  # For configuration generation, we want all configured servers
+  # Users should be able to generate configs before setting up Docker images
   while IFS= read -r server_line; do
     if [[ -n "$server_line" && "$server_line" =~ ^[a-z]+$ ]]; then
       all_servers+=("$server_line")
     fi
-  done < <(get_available_servers)
+  done < <(get_configured_servers)
 
   for server_id in "${all_servers[@]}"; do
     [[ -z "$server_id" ]] && continue
@@ -1835,6 +1850,7 @@ main() {
       echo "  $0 setup              # Set up all servers"
       echo "  $0 setup github       # Set up only GitHub server"
       echo "  $0 test               # Test all servers"
+      echo "  $0 test filesystem    # Test filesystem server"
       echo "  $0 config             # Preview configs for all clients"
       echo "  $0 config cursor      # Preview Cursor-specific config"
       echo "  $0 config-write       # Write configs to actual files (working servers only)"

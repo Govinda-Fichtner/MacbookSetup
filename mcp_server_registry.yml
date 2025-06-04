@@ -79,6 +79,28 @@ servers:
       - "configuration_export"
       - "cli_mode"
 
+  filesystem:
+    name: "Filesystem MCP Server"
+    description: "Official Anthropic filesystem operations server for local file management"
+    category: "filesystem"
+    source:
+      type: registry
+      image: "mcp/filesystem:latest"
+    environment_variables:
+      - "FILESYSTEM_ALLOWED_DIRS"
+    health_test:
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "ok"
+    capabilities:
+      - "file_operations"
+      - "directory_management"
+      - "file_search"
+      - "file_metadata"
+      - "secure_access"
+
   # Future servers (commented for future expansion):
   # figma:
   #   name: "Figma MCP Server"
