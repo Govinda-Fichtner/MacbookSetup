@@ -246,7 +246,7 @@ End
 
 Describe 'shell completion functionality'
 It 'completion file includes inspect command'
-When run grep -c "inspect.*Inspect and debug" "_mcp_manager"
+When run grep -c "inspect.*Inspect and debug" "support/completions/_mcp_manager"
 The status should be success
 The output should equal "1"
 End
@@ -260,13 +260,13 @@ The output should include "inspector"
 End
 
 It 'completion function exists and is properly defined'
-When run grep -c "_mcp_inspect_subcommands" "_mcp_manager"
+When run grep -c "_mcp_inspect_subcommands" "support/completions/_mcp_manager"
 The status should be success
 The output should equal "2"
 End
 
 It 'inspect subcommand completions include expected options'
-When run grep -A20 "_mcp_inspect_subcommands" "_mcp_manager"
+When run grep -A20 "_mcp_inspect_subcommands" "support/completions/_mcp_manager"
 The status should be success
 The output should include "--ui:Launch visual web interface"
 The output should include "--stop:Stop Inspector container"

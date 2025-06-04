@@ -667,8 +667,8 @@ check_completion() {
         fi
         ;;
       mcp_manager)
-        if [[ -f "_mcp_manager" ]]; then
-          if cp "_mcp_manager" "$completion_dir/$completion_file" 2> /dev/null; then
+        if [[ -f "support/completions/_mcp_manager" ]]; then
+          if cp "support/completions/_mcp_manager" "$completion_dir/$completion_file" 2> /dev/null; then
             printf "│   └── %b[COPIED]%b %s completion\n" "$GREEN" "$RESET" "$tool"
             return 0
           fi

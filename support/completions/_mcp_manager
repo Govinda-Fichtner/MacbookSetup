@@ -100,7 +100,7 @@ _mcp_inspect_subcommands() {
       '--env-check:Check environment variables'
       '--ci-mode:CI-friendly mode with structured output'
     )
-    
+
     # Add server IDs from registry
     if [[ -f "$registry_file" ]]; then
       server_ids=($(awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' "$registry_file" 2>/dev/null))
@@ -108,7 +108,7 @@ _mcp_inspect_subcommands() {
         inspect_options+=("$server:Inspect $server server")
       done
     fi
-    
+
     _describe 'inspect options' inspect_options
   # If we have a server ID as third word, offer --debug flag
   elif [[ -f "$registry_file" ]]; then

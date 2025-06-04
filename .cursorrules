@@ -606,6 +606,65 @@ shellspec --trace spec/mcp_inspector_spec.sh
 - ✅ **Test results should be clearly reported**
 - ✅ **Failed tests should provide actionable error messages**
 
+## 🛡️ Major Change Approval Protocol
+
+### **When to Require User Confirmation**
+Any change that falls into these categories **MUST** get explicit user approval before implementation:
+
+#### **Structural Changes**
+- ❌ **NEVER** reorganize directory structure without approval
+- ❌ **NEVER** move files to new locations without confirmation
+- ❌ **NEVER** delete files or directories (even temp files) without asking
+- ❌ **NEVER** rename core scripts or configuration files
+
+#### **Destructive Operations**
+- ❌ **NEVER** use `rm`, `mv`, or `git rm` commands without explicit permission
+- ❌ **ALWAYS** use `rm -f` or `rm -rf` to avoid interactive prompts when removal is approved
+- ❌ **NEVER** remove or modify existing documentation sections
+- ❌ **NEVER** change established workflows or testing pipelines
+- ❌ **NEVER** modify configuration files that affect user environment
+
+#### **Required Approval Process**
+When a major change is needed:
+
+1. **🛑 STOP and present proposal**: "I recommend the following changes: [detailed list]"
+2. **📋 Explain rationale**: Why these changes are needed and what benefits they provide
+3. **⚠️ Highlight risks**: What could go wrong or what will be affected
+4. **🤔 Wait for approval**: "Do you approve this approach?" or "Would you prefer a different solution?"
+5. **✅ Only proceed after explicit confirmation**: User says "yes," "proceed," or "approved"
+
+#### **Example Proposal Format**
+```
+## 📋 PROPOSAL: Directory Restructure
+
+**Problem**: Supporting files are cluttering the root directory
+
+**Proposed Changes**:
+- Create support/ directory structure
+- Move Dockerfile.mcp-inspector → support/docker/mcp-inspector/
+- Move _mcp_manager → support/completions/
+- Remove outdated .envrc_example
+
+**Benefits**: Cleaner root, better organization, scalable for future MCP servers
+
+**Risks**: Need to update references in scripts, potential disruption
+
+**Question**: Do you approve this directory restructure approach?
+```
+
+### **Minor Changes That Don't Need Approval**
+- ✅ Bug fixes in existing functionality
+- ✅ Code formatting and style improvements
+- ✅ Adding tests for existing features
+- ✅ Documentation clarifications and corrections
+- ✅ Performance optimizations that don't change behavior
+
+### **When in Doubt**
+- **Always err on the side of asking for permission**
+- **Present proposals before implementation**
+- **Respect the user's project ownership**
+- **Remember: it's easier to get approval than to fix mistakes**
+
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file
 - Update rules based on what works in practice

@@ -702,7 +702,7 @@ generate_completion_files() {
   echo "├── Development Tools"
   local dev_tools=(
     "rbenv:rbenv completions zsh"
-    "mcp_manager:cp _mcp_manager ${COMPLETION_DIR}/_mcp_manager"
+    "mcp_manager:cp support/completions/_mcp_manager ${COMPLETION_DIR}/_mcp_manager"
   )
 
   local i=0

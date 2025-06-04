@@ -29,7 +29,7 @@ readonly NC='\033[0m' # No Color
 
 # Configuration
 readonly MCP_REGISTRY_FILE="mcp_server_registry.yml"
-readonly MCP_BUILD_DIR="./mcp_builds"
+readonly MCP_BUILD_DIR="./support/docker"
 
 # Parse YAML configuration (simple parser for our structure)
 parse_server_config() {
