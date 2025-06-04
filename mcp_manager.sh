@@ -1622,7 +1622,8 @@ validate_client_configs() {
 
     # Check for placeholder values
     local placeholders
-    placeholders=$(grep -cE "(your_.*_token_here|YOUR_.*_HERE)" "$env_file" 2> /dev/null || echo "0")
+    placeholders=$(grep -cE "(your_.*_token_here|YOUR_.*_HERE)" "$env_file" 2> /dev/null || true)
+    placeholders=${placeholders:-0}
     if [[ "$placeholders" -gt 0 ]]; then
       printf "    └── %b[WARNING]%b %s placeholder value(s) detected - replace with real tokens\\n" "$YELLOW" "$NC" "$placeholders"
     else
@@ -1808,8 +1809,8 @@ main() {
       fi
       ;;
     "inspect")
-      # Handle inspect command and preserve exit code
-      handle_inspect_command "${normalized_args[2]}" "${normalized_args[3]}" "${normalized_args[4]}"
+      # Handle inspect command and preserve exit code, filter debug output
+      handle_inspect_command "${normalized_args[2]}" "${normalized_args[3]}" "${normalized_args[4]}" 2>&1 | grep -v -E '^(container_value=|image=|env_vars=|placeholder=|server_name=|server_count=)'
       ;;
     "help" | *)
       echo "MCP Server Manager"
