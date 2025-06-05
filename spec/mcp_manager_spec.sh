@@ -112,6 +112,7 @@ The status should be success
 The output should include "github"
 The output should include "circleci"
 The output should include "figma"
+The output should include "heroku"
 The output should include "filesystem"
 End
 
@@ -177,6 +178,7 @@ The status should be success
 The output should include "github"
 The output should include "circleci"
 The output should include "figma"
+The output should include "heroku"
 The output should include "filesystem"
 End
 End
@@ -286,6 +288,62 @@ End
 End
 End
 
+Describe 'heroku server integration'
+It 'includes heroku server in available servers list'
+When run zsh "$PWD/mcp_manager.sh" list
+The status should be success
+The output should include "heroku"
+End
+
+It 'supports api_based server type for heroku'
+When run zsh "$PWD/mcp_manager.sh" parse heroku server_type
+The status should be success
+The output should equal "api_based"
+End
+
+It 'generates heroku configuration for Cursor'
+sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.heroku' test_home/.cursor/mcp.json
+The status should be success
+The output should include "heroku"
+The output should include "local/heroku-mcp-server:latest"
+End
+
+It 'generates heroku configuration for Claude Desktop'
+sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.heroku' "test_home/Library/Application Support/Claude/claude_desktop_config.json"
+The status should be success
+The output should include "heroku"
+End
+
+It 'includes HEROKU_API_KEY environment variable in .env_example'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "HEROKU_API_KEY" "$PWD/.env_example"
+The status should be success
+The output should include "HEROKU_API_KEY"
+End
+
+It 'HEROKU_API_KEY environment variable includes correct placeholder'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "HEROKU_API_KEY" "$PWD/.env_example"
+The status should be success
+The output should include "your_heroku_api_key_here"
+End
+
+It 'heroku server uses api_based configuration'
+sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.heroku.args[]' test_home/.cursor/mcp.json
+The status should be success
+The output should include "--env-file"
+End
+
+It 'heroku server can be tested individually'
+When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
+The status should be success
+The output should include "Heroku Platform MCP Server"
+End
+End
+
 Describe 'testing functionality'
 Describe 'individual server testing'
 BeforeEach 'setup_test_environment'
@@ -319,6 +377,7 @@ The status should be success
 The output should include "GitHub MCP Server"
 The output should include "CircleCI MCP Server"
 The output should include "Figma Context MCP Server"
+The output should include "Heroku Platform MCP Server"
 The output should include "Filesystem MCP Server"
 End
 End
@@ -381,6 +440,13 @@ The status should be success
 The output should include "CircleCI MCP Server"
 End
 
+It 'can test Heroku server with real token'
+if ! has_real_tokens; then skip "No real .env present"; fi
+When run zsh "$PWD/mcp_manager.sh" test heroku
+The status should be success
+The output should include "Heroku Platform MCP Server"
+End
+
 It 'can run comprehensive test of all servers with real tokens'
 if ! has_real_tokens; then skip "No real .env present"; fi
 # Skip Docker/Kubernetes if not available in test environment
@@ -390,6 +456,7 @@ The status should be success
 The output should include "GitHub MCP Server"
 The output should include "CircleCI MCP Server"
 The output should include "Figma Context MCP Server"
+The output should include "Heroku Platform MCP Server"
 The output should include "Filesystem MCP Server"
 End
 End

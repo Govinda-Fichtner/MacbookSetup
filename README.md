@@ -97,6 +97,22 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
   - **Docker Image**: `local/mcp-server-circleci:latest`
   - **Requires**: `CIRCLECI_TOKEN` and `CIRCLECI_BASE_URL`
 
+- **Heroku MCP Server**: Manage Heroku apps, pipelines, dynos, and add-ons
+  - **Features**: App management, deployment, dyno scaling, logs, add-on provisioning, pipeline operations, team and space management, PostgreSQL database tools
+  - **Docker Image**: `local/heroku-mcp-server:latest`
+  - **Requires**: `HEROKU_API_KEY` (Heroku API token)
+
+  The Heroku MCP server is built automatically during setup, along with all other MCP servers. To enable Heroku integration, add your Heroku API key to `.env`:
+  ```
+  HEROKU_API_KEY=your_heroku_api_key_here
+  ```
+  Then test the server:
+  ```bash
+  ./mcp_manager.sh test heroku
+  ```
+
+  The Dockerfile for the Heroku MCP server is located at `support/docker/heroku/Dockerfile`.
+
 - **Filesystem MCP Server**: Local file system operations and management
   - **Features**: File operations, directory management, file search, file metadata, secure access
   - **Docker Image**: `mcp/filesystem:latest`

@@ -128,12 +128,10 @@ servers:
       intelligent design filtering"
     category: "design"
     source:
-      type: build
-      repository: https://github.com/GLips/Figma-Context-MCP.git
-      image: local/mcp-server-figma:latest
-      build_context: "."
+      type: registry
+      image: ghcr.io/metorial/mcp-container--glips--figma-context-mcp--figma-context-mcp:latest
       entrypoint: "node"
-      args: ["/app/dist/index.js", "--stdio"]
+      cmd: ["dist/cli.js", "--stdio"]
     environment_variables:
       - "FIGMA_API_KEY"
     health_test:
@@ -149,6 +147,35 @@ servers:
       - "component_analysis"
       - "semantic_design_filtering"
       - "ai_orchestration_optimization"
+
+  heroku:
+    name: "Heroku Platform MCP Server (Official Heroku)"
+    server_type: "api_based"
+    description: "Official Heroku platform management via heroku/heroku-mcp-server - comprehensive app lifecycle, \
+      database operations, and infrastructure automation using bundled Heroku CLI"
+    category: "platform"
+    source:
+      type: build
+      repository: "https://github.com/heroku/heroku-mcp-server.git"
+      image: "local/heroku-mcp-server:latest"
+      build_context: "."
+    environment_variables:
+      - "HEROKU_API_KEY"
+    health_test:
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "healthy"
+    capabilities:
+      - "heroku_app_lifecycle_management"
+      - "heroku_database_operations"
+      - "heroku_addon_management"
+      - "heroku_dyno_scaling"
+      - "heroku_logs_access"
+      - "heroku_pipeline_management"
+      - "heroku_space_management"
+      - "heroku_cli_integration"
 
 # Global MCP configuration
 global:

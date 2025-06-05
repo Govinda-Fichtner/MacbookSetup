@@ -65,3 +65,4 @@ setup.sh.ci
 # MCP Build artifacts
 mcp_builds/
 test_home/
+.sct_changes
