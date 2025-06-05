@@ -533,6 +533,7 @@ server_has_real_tokens() {
 - **Validate environment visibility**: Ensure all expected variables are accessible
 - **Handle mixed output gracefully**: Use `grep -o` to extract JSON from startup messages
 - **Support different parse modes**: Handle both "json" and default parsing
+- **Registry-based image timing**: First test of registry-based servers may take 1+ minutes for image pull (Figma lesson)
 
 ### **MCP Repository Cleanup (Build-Based Servers)**
 **MANDATORY**: After building Docker images from source repositories, always clean up cloned code:
@@ -867,7 +868,24 @@ awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' mcp_server_regist
 
 ### **🏗️ Server Type Classification Quick Reference**
 
-**api_based**: GitHub, CircleCI, Linear, Slack
+#### **🎯 Simple Decision Tree (Figma-Validated)**
+**Question 1**: Does it need API tokens/keys for external services?
+- **YES** → `api_based` (GitHub, CircleCI, Figma, Slack, Linear)
+
+**Question 2**: Does it need to access local files/directories?
+- **YES** → `mount_based` (Filesystem, Local Dev Tools)
+
+**Question 3**: Does it need Docker socket, system networks, or special volumes?
+- **YES** → `privileged` (Docker, Kubernetes, System Tools)
+
+**Question 4**: No external dependencies at all?
+- **YES** → `standalone` (Inspector, Utilities, Converters)
+
+**🚨 Anti-Pattern**: Don't add networks/volumes unless the server truly requires system-level access.
+
+#### **📋 Detailed Classifications**
+
+**api_based**: GitHub, CircleCI, Figma, Linear, Slack
 - Uses `--env-file` for API tokens
 - Standard Docker configuration
 - Token validation in advanced tests
@@ -889,7 +907,7 @@ awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' mcp_server_regist
 - No authentication required
 - Self-contained functionality tests
 
-### **⚠️ Common Pitfalls to Avoid (Learned from Docker & Kubernetes Experience)**
+### **⚠️ Common Pitfalls to Avoid (Learned from Docker, Kubernetes & Figma Experience)**
 
 1. **Function Ordering**: Always define helper functions BEFORE they're called
 2. **Missing Test Categories**: Every server needs basic + advanced + integration tests
@@ -904,6 +922,7 @@ awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' mcp_server_regist
 11. **Privileged Configuration Structure**: Use correct YAML structure for volumes/networks - functions parse these directly
 12. **Container Path Mapping**: Environment variables like KUBECONFIG need container paths, not host paths
 13. **Test Environment Differences**: Manual testing may work while automated tests fail due to environment isolation
+14. **Server Type Over-engineering**: Don't overcomplicate server types - use simple patterns unless truly necessary (Figma lesson: API token services are `api_based`, not `privileged`)
 
 ### **✅ Definition of Done for MCP Server Addition**
 
@@ -1660,33 +1679,38 @@ cp .env_example .env
 - When troubleshooting Claude Desktop integration issues
 - As part of the final validation in TDD cycles
 
-### **🆕 Latest Update: MCP Configuration Format Clarification & Filesystem Directory Testing (Current Iteration)**
+### **🆕 Latest Update: Figma MCP Server Implementation & SCT Methodology Validation (Current Iteration)**
 
 **Key Learnings Captured:**
-1. **🎯 CRITICAL CORRECTION**: Both Cursor and Claude Desktop use **IDENTICAL** `mcpServers` wrapper format
-   - Previous assumption about Cursor flat structure was incorrect
-   - Official documentation confirms unified JSON structure
-   - Our implementation has been correct all along
+1. **🎯 Server Type Over-engineering Anti-Pattern (Figma lesson)**:
+   - Don't overcomplicate server classifications - simple patterns usually work
+   - API token services are `api_based`, not `privileged` (Figma, GitHub, CircleCI pattern)
+   - Added simple decision tree to prevent classification confusion
+   - Avoid adding networks/volumes unless truly required for system-level access
 
-2. **Filesystem Directory Configuration**:
-   - Multiple directories supported via comma-separated FILESYSTEM_ALLOWED_DIRS
-   - First directory used for Docker mount configuration
-   - Test environments without .env show servers as "PLACEHOLDERS" (expected behavior)
+2. **🚀 SCT (Simple Continuous Testing) Methodology Success**:
+   - 5-change rule with fast/full test tiers proved effective for rapid iteration
+   - Small, testable changes caught issues early and maintained stability
+   - End-to-end validation through Cursor's MCP integration confirmed entire pipeline works
+   - Keep automation tooling simple to avoid complexity-induced hangs
 
-3. **Previous Kubernetes Learnings**:
+3. **🐳 Registry-Based Server Timing Considerations**:
+   - First-time Docker image pulls for registry-based servers can take 1+ minutes
+   - Once cached, subsequent tests are fast (< 10 seconds)
+   - Plan for initial setup time in test expectations
+
+4. **Previous Learnings (Kubernetes & Filesystem)**:
    - **Build-from-Source Pattern**: When pre-built images don't exist, use `type: build` with repository URL
-   - **Entrypoint Override Required**: Kubernetes server defaults to SSE mode (`--sse-port 8080`), needs `--entrypoint /app/kubernetes-mcp-server` override
-   - **Critical Bug Found**: `get_server_volumes()` and `get_server_networks()` functions were looking for nested `privileged_configuration.*` but YAML has direct `volumes:` and `networks:` entries
-   - **Container Path Mapping**: Host `KUBECONFIG=/Users/user/.kube/config` → Container `KUBECONFIG=/home/.kube/config`
-   - **Test Environment Isolation**: Manual tests can pass while automated tests fail due to build/environment differences
+   - **Entrypoint Override Required**: Some servers default to SSE mode, need `--entrypoint` override for STDIO
+   - **Container Path Mapping**: Host paths → Container paths for environment variables
+   - **Configuration Format**: Both Cursor and Claude Desktop use identical `mcpServers` wrapper format
 
 **Rules Updated:**
-- Added Docker entrypoint override patterns to Common Pitfalls (#9)
-- Added build dependency requirements to Common Pitfalls (#10)
-- Updated privileged server type description with exact YAML structure requirements
-- Added container path mapping guidance to Common Pitfalls (#12)
-- Enhanced MCP Server Addition Protocol with build-source registry format
-- **NEW**: Added Ultimate Integration Testing methodology for MCP-to-Cursor validation
+- Added Server Type Over-engineering to Common Pitfalls (#14)
+- Added Simple Decision Tree for server type classification
+- Enhanced Container Environment Testing with registry timing considerations
+- Validated SCT methodology through successful Figma implementation
+- Confirmed Ultimate Integration Testing approach with real Figma design analysis
 
 ## 🔄 Continuous Improvement
 - Document successful patterns in this file using the Rule Update Methodology above
