@@ -13,18 +13,18 @@ BeforeAll() {
   export CI="${CI:-false}"
 
   # Aggressively clean up any existing test directories
-  test_root="$PWD/test_home"
+  test_root="$PWD/tmp/test_home"
   rm -rf "$test_root"
   mkdir -p "$test_root"
 
   # Set up trap to clean up on exit (backup cleanup mechanism)
-  trap 'rm -rf "$PWD/test_home" 2>/dev/null || true' EXIT
+  trap 'rm -rf "$PWD/tmp/test_home" 2>/dev/null || true' EXIT
 }
 
 # Global test suite cleanup
 AfterAll() {
   # Global cleanup
-  test_root="$PWD/test_home"
+  test_root="$PWD/tmp/test_home"
   if [ -d "$test_root" ]; then
     rm -rf "$test_root"
   fi
@@ -52,7 +52,7 @@ validate_json() {
 
 # Setup test environment
 setup_test_environment() {
-  TEST_HOME="$PWD/test_home"
+  TEST_HOME="$PWD/tmp/test_home"
   export TEST_HOME
   export HOME="$TEST_HOME"
 
@@ -129,19 +129,19 @@ AfterEach 'cleanup_test_environment'
 
 It 'handles missing .env file gracefully'
 # No .env file created - should use defaults
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
 The status should be success
 The output should include "Client configurations written"
 End
 
 It 'reads environment variables from .env file'
 # Create test .env with placeholder values
-cat > test_home/.env << 'EOF'
+cat > tmp/test_home/.env << 'EOF'
 GITHUB_PERSONAL_ACCESS_TOKEN=test_token_placeholder
 CIRCLECI_TOKEN=test_circleci_placeholder
 FILESYSTEM_ALLOWED_DIRS=/test/path
 EOF
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
 The status should be success
 The output should include "=== MCP Client Configuration Generation ==="
 End
@@ -153,27 +153,27 @@ BeforeEach 'setup_test_environment'
 AfterEach 'cleanup_test_environment'
 
 It 'generates valid JSON configuration files'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
 The status should be success
-The file "test_home/.cursor/mcp.json" should be exist
-The file "test_home/Library/Application Support/Claude/claude_desktop_config.json" should be exist
+The file "tmp/test_home/.cursor/mcp.json" should be exist
+The file "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json" should be exist
 End
 
 It 'generates syntactically valid JSON for Cursor'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When call validate_json "test_home/.cursor/mcp.json"
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When call validate_json "tmp/test_home/.cursor/mcp.json"
 The status should be success
 End
 
 It 'generates syntactically valid JSON for Claude Desktop'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When call validate_json "test_home/Library/Application Support/Claude/claude_desktop_config.json"
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When call validate_json "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
 End
 
 It 'includes expected servers in generated configuration'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When run jq -r '.mcpServers | keys[]' test_home/.cursor/mcp.json
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers | keys[]' tmp/test_home/.cursor/mcp.json
 The status should be success
 The output should include "github"
 The output should include "circleci"
@@ -188,28 +188,28 @@ BeforeEach 'setup_test_environment'
 AfterEach 'cleanup_test_environment'
 
 It 'writes to real Cursor config location'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
 The status should be success
 The output should include "=== MCP Client Configuration Generation ==="
-The file "test_home/.cursor/mcp.json" should be exist
+The file "tmp/test_home/.cursor/mcp.json" should be exist
 End
 
 It 'writes to real Claude Desktop config location'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
 The status should be success
 The output should include "=== MCP Client Configuration Generation ==="
-The file "test_home/Library/Application Support/Claude/claude_desktop_config.json" should be exist
+The file "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json" should be exist
 End
 
 It 'generates valid JSON in real locations'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When call validate_json "test_home/.cursor/mcp.json"
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When call validate_json "tmp/test_home/.cursor/mcp.json"
 The status should be success
 End
 
 It 'generates valid Claude Desktop JSON in real locations'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When call validate_json "test_home/Library/Application Support/Claude/claude_desktop_config.json"
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When call validate_json "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
 End
 End
@@ -233,22 +233,22 @@ Describe 'filesystem directory configuration'
 BeforeEach 'setup_test_environment'
 
 It 'generates filesystem configuration with test directories'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
 The output should include "Filesystem MCP Server"
 End
 
 It 'uses first directory for Docker mount configuration'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When run jq -r '.mcpServers.filesystem.args[]' test_home/.cursor/mcp.json
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers.filesystem.args[]' tmp/test_home/.cursor/mcp.json
 The status should be success
 The output should include "--mount"
 The output should include "type=bind"
 End
 
 It 'includes container path argument'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When run jq -r '.mcpServers.filesystem.args[-1]' test_home/.cursor/mcp.json
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers.filesystem.args[-1]' tmp/test_home/.cursor/mcp.json
 The status should be success
 The output should equal "/project"
 End
@@ -258,17 +258,17 @@ Describe 'filesystem directory validation'
 BeforeEach 'setup_test_environment'
 
 It 'handles existing directories correctly'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
 The output should include "Filesystem MCP Server"
 End
 
 It 'handles missing directories gracefully'
 # Create config with non-existent directory
-cat > test_home/.env << EOF
-FILESYSTEM_ALLOWED_DIRS=$PWD/test_home/nonexistent_dir
+cat > tmp/test_home/.env << EOF
+FILESYSTEM_ALLOWED_DIRS=$PWD/tmp/test_home/nonexistent_dir
 EOF
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should not be success
 The output should include "Filesystem MCP Server"
 The output should include "Filesystem test failed"
@@ -276,12 +276,12 @@ End
 
 It 'handles directories with special characters'
 # Create directories with spaces in test environment
-mkdir -p "test_home/My Documents"
-mkdir -p "test_home/Desktop Items"
-cat > test_home/.env << EOF
-FILESYSTEM_ALLOWED_DIRS=$PWD/test_home/My Documents,$PWD/test_home/Desktop Items
+mkdir -p "tmp/test_home/My Documents"
+mkdir -p "tmp/test_home/Desktop Items"
+cat > tmp/test_home/.env << EOF
+FILESYSTEM_ALLOWED_DIRS=$PWD/tmp/test_home/My Documents,$PWD/tmp/test_home/Desktop Items
 EOF
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
 The output should include "Filesystem MCP Server"
 End
@@ -302,16 +302,16 @@ The output should equal "api_based"
 End
 
 It 'generates heroku configuration for Cursor'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When run jq '.mcpServers.heroku' test_home/.cursor/mcp.json
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.heroku' tmp/test_home/.cursor/mcp.json
 The status should be success
 The output should include "heroku"
 The output should include "local/heroku-mcp-server:latest"
 End
 
 It 'generates heroku configuration for Claude Desktop'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When run jq '.mcpServers.heroku' "test_home/Library/Application Support/Claude/claude_desktop_config.json"
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.heroku' "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
 The output should include "heroku"
 End
@@ -331,14 +331,14 @@ The output should include "your_heroku_api_key_here"
 End
 
 It 'heroku server uses api_based configuration'
-sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
-When run jq '.mcpServers.heroku.args[]' test_home/.cursor/mcp.json
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.heroku.args[]' tmp/test_home/.cursor/mcp.json
 The status should be success
 The output should include "--env-file"
 End
 
 It 'heroku server can be tested individually'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
 The status should be success
 The output should include "Heroku Platform MCP Server"
 End
@@ -349,19 +349,19 @@ Describe 'individual server testing'
 BeforeEach 'setup_test_environment'
 
 It 'can test GitHub server individually'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test github'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test github'
 The status should be success
 The output should include "GitHub MCP Server"
 End
 
 It 'can test Figma server individually'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test figma'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test figma'
 The status should be success
 The output should include "Figma Context MCP Server"
 End
 
 It 'can test filesystem server individually'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
 The output should include "Filesystem MCP Server"
 End
@@ -372,7 +372,7 @@ BeforeEach 'setup_test_environment'
 
 It 'can run comprehensive test of all servers'
 if ! has_real_tokens; then skip "No real .env present"; fi
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test'
 The status should be success
 The output should include "GitHub MCP Server"
 The output should include "CircleCI MCP Server"
@@ -388,13 +388,13 @@ Describe 'invalid input handling'
 BeforeEach 'setup_test_environment'
 
 It 'handles invalid server names gracefully'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test nonexistent_server'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test nonexistent_server'
 The status should not be success
 The output should include "Unknown server"
 End
 
 It 'handles invalid commands gracefully'
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" invalid_command'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" invalid_command'
 The status should not be success
 The stderr should include "Unknown command"
 The stderr should include "help"
@@ -405,20 +405,20 @@ Describe 'environment edge cases'
 BeforeEach 'setup_test_environment'
 
 It 'handles empty FILESYSTEM_ALLOWED_DIRS'
-cat > test_home/.env << 'EOF'
+cat > tmp/test_home/.env << 'EOF'
 FILESYSTEM_ALLOWED_DIRS=
 EOF
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
 The status should be success
 The output should include "=== MCP Client Configuration Generation ==="
 End
 
 It 'handles malformed environment file'
-cat > test_home/.env << 'EOF'
+cat > tmp/test_home/.env << 'EOF'
 INVALID_SYNTAX_HERE=
 GITHUB_PERSONAL_ACCESS_TOKEN=test
 EOF
-When run sh -c 'cd "$PWD/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write'
 The status should be success
 The output should include "=== MCP Client Configuration Generation ==="
 End

@@ -151,8 +151,8 @@ servers:
   heroku:
     name: "Heroku Platform MCP Server (Official Heroku)"
     server_type: "api_based"
-    description: "Official Heroku platform management via heroku/heroku-mcp-server - comprehensive app lifecycle, \
-      database operations, and infrastructure automation using bundled Heroku CLI"
+    description: "Official Heroku platform management via local/heroku-mcp-server - comprehensive app lifecycle, \
+      database operations, and infrastructure automation using Docker container with bundled Heroku CLI"
     category: "platform"
     source:
       type: build

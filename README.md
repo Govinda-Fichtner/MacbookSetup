@@ -111,7 +111,7 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
   ./mcp_manager.sh test heroku
   ```
 
-  The Dockerfile for the Heroku MCP server is located at `support/docker/heroku/Dockerfile`.
+  The Dockerfile for the Heroku MCP server is located at `support/docker/mcp-server-heroku/Dockerfile`.
 
 - **Filesystem MCP Server**: Local file system operations and management
   - **Features**: File operations, directory management, file search, file metadata, secure access
@@ -509,6 +509,24 @@ The project implements consistent output formatting across all verification scri
    - Clear separation between test categories
 
 This standardization ensures CI logs are readable and maintainable, making it easier to identify actual issues versus expected environment limitations.
+
+## 🧹 Maintenance
+
+### Cleaning Temporary Files
+
+The project uses organized temporary directories for builds and testing. To clean up temporary files and directories:
+
+```bash
+# Clean all temporary directories (repositories, test files, etc.)
+support/scripts/clean_tmp.sh
+```
+
+This script cleans:
+- `tmp/repositories/` - Git repositories cloned during MCP server builds
+- `tmp/test_home/` - Test environment directories from ShellSpec tests
+- Any other temporary files in the `tmp/` directory
+
+The script is safe to run anytime and will show what it's cleaning up.
 
 ## 📄 License
 

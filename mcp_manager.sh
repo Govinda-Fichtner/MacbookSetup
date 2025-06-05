@@ -115,17 +115,37 @@ apply_docker_patches() {
 
   case "$server_id" in
     "heroku")
-      # Apply Heroku Docker fixes: CLI installation, correct entrypoint, proper file copying
-      if [[ -f "support/patches/heroku-dockerfile.patch" ]]; then
-        cp "support/patches/heroku-dockerfile.patch" "$repo_dir/Dockerfile"
+      # Use our custom Dockerfile with Heroku CLI installation and proper STDIO configuration
+      if [[ -f "support/docker/mcp-server-heroku/Dockerfile" ]]; then
+        cp "support/docker/mcp-server-heroku/Dockerfile" "$repo_dir/Dockerfile"
         return 0
       else
-        printf "│   ├── %b[WARNING]%b Heroku Dockerfile patch not found\n" "$YELLOW" "$NC"
+        printf "│   ├── %b[WARNING]%b Heroku custom Dockerfile not found\n" "$YELLOW" "$NC"
+        return 1
+      fi
+      ;;
+    "circleci")
+      # Use our custom Dockerfile (may be improvement or replacement of original)
+      if [[ -f "support/docker/mcp-server-circleci/Dockerfile" ]]; then
+        cp "support/docker/mcp-server-circleci/Dockerfile" "$repo_dir/Dockerfile"
+        return 0
+      else
+        printf "│   ├── %b[WARNING]%b CircleCI custom Dockerfile not found\n" "$YELLOW" "$NC"
+        return 1
+      fi
+      ;;
+    "kubernetes")
+      # Use our custom Dockerfile (may be improvement or created from scratch)
+      if [[ -f "support/docker/mcp-server-kubernetes/Dockerfile" ]]; then
+        cp "support/docker/mcp-server-kubernetes/Dockerfile" "$repo_dir/Dockerfile"
+        return 0
+      else
+        printf "│   ├── %b[WARNING]%b Kubernetes custom Dockerfile not found\n" "$YELLOW" "$NC"
         return 1
       fi
       ;;
     *)
-      # No patches needed for other servers
+      # No custom Dockerfile needed for other servers
       return 1
       ;;
   esac
@@ -211,40 +231,41 @@ setup_build_server() {
 
   printf "│   ├── %b[CLONING]%b Repository: %s\n" "$BLUE" "$NC" "$(basename "$repository" .git)"
 
-  # Create build directory if it doesn't exist
-  mkdir -p "$MCP_BUILD_DIR"
-
+  # Use standardized temporary directory for repositories
   local repo_basename
   repo_basename=$(basename "$repository" .git)
-  local repo_dir="$MCP_BUILD_DIR/$repo_basename"
+  local temp_dir="./tmp/repositories"
+  local repo_dir="$temp_dir/$repo_basename"
 
-  # Clone or update repository
-  if [[ -d "$repo_dir" ]]; then
-    printf "│   ├── %b[UPDATING]%b Existing repository\n" "$BLUE" "$NC"
-    (cd "$repo_dir" && git pull origin main > /dev/null 2>&1)
+  # Clone repository to temporary location
+  mkdir -p "$temp_dir"
+  if git clone "$repository" "$repo_dir" > /dev/null 2>&1; then
+    printf "│   ├── %b[SUCCESS]%b Repository cloned to temporary directory\n" "$GREEN" "$NC"
   else
-    if git clone "$repository" "$repo_dir" > /dev/null 2>&1; then
-      printf "│   ├── %b[SUCCESS]%b Repository cloned\n" "$GREEN" "$NC"
-    else
-      printf "│   └── %b[WARNING]%b Failed to clone repository\n" "$YELLOW" "$NC"
-      return 0
-    fi
+    printf "│   └── %b[WARNING]%b Failed to clone repository\n" "$YELLOW" "$NC"
+    rm -rf "$temp_dir"
+    return 0
   fi
 
   # Apply Docker fixes for specific servers
   if apply_docker_patches "$server_id" "$repo_dir"; then
-    printf "│   ├── %b[PATCHED]%b Applied Docker containerization fixes\n" "$GREEN" "$NC"
+    printf "│   ├── %b[PATCHED]%b Applied custom Dockerfile for containerization\n" "$GREEN" "$NC"
   fi
 
   # Build Docker image (skip if Docker not available)
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   └── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\n" "$YELLOW" "$NC"
+    printf "│   ├── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\n" "$YELLOW" "$NC"
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\n" "$BLUE" "$NC"
+    rm -rf "$repo_dir"
+    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\n" "$GREEN" "$NC"
     return 0
   fi
 
   # Check if Docker image already exists
   if docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
     printf "│   ├── %b[FOUND]%b Docker image already exists: %s\n" "$GREEN" "$NC" "$image"
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\n" "$BLUE" "$NC"
+    rm -rf "$repo_dir"
     printf "│   └── %b[SUCCESS]%b Using existing Docker image\n" "$GREEN" "$NC"
     return 0
   fi
@@ -256,10 +277,16 @@ setup_build_server() {
   build_context="${build_context:-.}"
 
   if (cd "$repo_dir/$build_context" && docker build -t "$image" . > /dev/null 2>&1); then
-    printf "│   └── %b[SUCCESS]%b Docker image built\n" "$GREEN" "$NC"
+    printf "│   ├── %b[SUCCESS]%b Docker image built\n" "$GREEN" "$NC"
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\n" "$BLUE" "$NC"
+    rm -rf "$repo_dir"
+    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\n" "$GREEN" "$NC"
     return 0
   else
-    printf "│   └── %b[WARNING]%b Failed to build Docker image (Docker may not be running)\n" "$YELLOW" "$NC"
+    printf "│   ├── %b[WARNING]%b Failed to build Docker image (Docker may not be running)\n" "$YELLOW" "$NC"
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\n" "$BLUE" "$NC"
+    rm -rf "$repo_dir"
+    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\n" "$GREEN" "$NC"
     return 0
   fi
 }

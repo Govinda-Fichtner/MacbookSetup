@@ -258,6 +258,40 @@ alias st='sct-check-time'            # Time check
 - Group related operations under section headers: `=== Section Name ===`
 - Keep consistent indentation patterns across both scripts
 
+## 📁 Project Directory Structure Standards
+
+### **Temporary Directory Convention**
+All temporary files and directories MUST be organized under `./tmp/`:
+
+- `./tmp/repositories/` - Git repositories cloned during MCP server builds (auto-cleaned after Docker build)
+- `./tmp/test_home/` - Test environment home directories for ShellSpec tests
+- **✅ Benefits**: Centralized cleanup, clear organization, .gitignore simplicity
+- **❌ Never use**: Scattered temp directories like `/tmp/random-name-$$` or `test_home/`
+
+### **Temporary Directory Rules**
+- ✅ **ALWAYS use `./tmp/repositories/` for git clones** in `setup_build_server()`
+- ✅ **ALWAYS use `./tmp/test_home/` for test environments** in ShellSpec tests
+- ✅ **ALWAYS clean up repositories** after Docker image builds (see cleanup protocol)
+- ❌ **NEVER leave repositories** after successful Docker builds
+- ❌ **NEVER use system /tmp/** for project-specific temporary files
+
+## 📁 Project Directory Structure Standards
+
+### **Temporary Directory Convention**
+All temporary files and directories MUST be organized under `./tmp/`:
+
+- `./tmp/repositories/` - Git repositories cloned during MCP server builds (auto-cleaned after Docker build)
+- `./tmp/test_home/` - Test environment home directories for ShellSpec tests
+- **✅ Benefits**: Centralized cleanup, clear organization, .gitignore simplicity
+- **❌ Never use**: Scattered temp directories like `/tmp/random-name-$$` or `test_home/`
+
+### **Temporary Directory Rules**
+- ✅ **ALWAYS use `./tmp/repositories/` for git clones** in `setup_build_server()`
+- ✅ **ALWAYS use `./tmp/test_home/` for test environments** in ShellSpec tests
+- ✅ **ALWAYS clean up repositories** after Docker image builds (see cleanup protocol)
+- ❌ **NEVER leave repositories** after successful Docker builds
+- ❌ **NEVER use system /tmp/** for project-specific temporary files
+
 ## 🔧 Code Modification Guidelines
 
 ### **Output Formatting Standards**
@@ -538,24 +572,94 @@ server_has_real_tokens() {
 ### **MCP Repository Cleanup (Build-Based Servers)**
 **MANDATORY**: After building Docker images from source repositories, always clean up cloned code:
 
-#### **Build Process Pattern**
+#### **Build Process Pattern (Custom Dockerfile Approach)**
 ```bash
 # 1. Clone repository to temporary location
 git clone https://github.com/server/repo support/docker/server-name/
 
-# 2. Build Docker image using cloned source
+# 2. Apply our custom Dockerfile (improvement or creation from scratch)
+apply_docker_patches "$server_id" "$repo_dir"
+# This copies our custom Dockerfile from support/docker/server-name/Dockerfile
+# to replace/improve the original repository's Dockerfile
+
+# 3. Build Docker image using our custom Dockerfile
 docker build -t local/server-name:latest support/docker/server-name/
 
-# 3. MANDATORY CLEANUP: Remove cloned repository
+# 4. MANDATORY CLEANUP: Remove cloned repository
 rm -rf support/docker/server-name/
+```
+
+#### **🚨 SOLUTION: Use Temporary Directory for Repository Cloning**
+**PROBLEM**: Permanent custom Dockerfiles and temporary cloned repositories used same directory names
+- ✅ **Permanent**: `support/docker/mcp-server-circleci/Dockerfile` (KEEP FOREVER)
+- ❌ **Previous Issue**: Cloned into `support/docker/mcp-server-circleci/` (DELETE after build)
+
+**CLEAN SOLUTION**: Clone repositories into separate temporary directory
+- ✅ **Clone into**: `/tmp/mcp-build-server-name/` (no naming collision)
+- ✅ **Keep permanent**: `support/docker/server-name/Dockerfile` (untouched)
+- ✅ **Simple cleanup**: `rm -rf /tmp/mcp-build-*` (no confusion possible)
+
+#### **Custom Dockerfile Strategy**
+- **For all build-type servers**: We use our own Dockerfiles from `support/docker/server-name/Dockerfile`
+- **Not always "improvements"**: Sometimes original repo has no Dockerfile, we create from scratch
+- **Sometimes "improvements"**: Original repo has Dockerfile, we improve/fix it for our needs
+- **Consistent approach**: All build-type servers use our custom Dockerfiles regardless of whether they improve or create
+- **apply_docker_patches() function**: Handles copying our custom Dockerfile to cloned repository before build
+
+#### **Build-Type Servers Examples**
+```bash
+# Current build-type servers using custom Dockerfiles:
+- circleci: Uses support/docker/mcp-server-circleci/Dockerfile
+- kubernetes: Uses support/docker/mcp-server-kubernetes/Dockerfile
+- heroku: Uses support/docker/mcp-server-heroku/Dockerfile
+
+# Function handles all build-type servers:
+apply_docker_patches() {
+  case "$server_id" in
+    "heroku"|"circleci"|"kubernetes")
+      cp "support/docker/$server_mapping/Dockerfile" "$repo_dir/Dockerfile"
+      ;;
+  esac
+}
 ```
 
 #### **Cleanup Requirements**
 - ✅ **ALWAYS remove cloned repositories**: Full `.git/` directories, source code, documentation
-- ✅ **Keep only essential files**: Dockerfile, build scripts if needed for debugging
+- ✅ **Keep our custom Dockerfiles**: Maintain `support/docker/server-name/Dockerfile` permanently
 - ✅ **Verify image exists**: Confirm `docker images | grep server-name` shows built image
 - ✅ **Test functionality**: Ensure built image works before cleanup
 - ❌ **NEVER commit cloned repositories**: Prevents repository bloat and licensing issues
+
+#### **🚨 CRITICAL: Naming Collision Prevention (CircleCI Deletion Lesson)**
+**PROBLEM**: Permanent custom Dockerfiles and temporary cloned repositories use same directory names
+
+**Conflicting Paths**:
+- ✅ **Permanent**: `support/docker/mcp-server-circleci/Dockerfile` (KEEP FOREVER)
+- ❌ **Temporary**: `support/docker/mcp-server-circleci/` (DELETE after build)
+
+**MANDATORY PREVENTION PROTOCOL**:
+```bash
+# 🛡️ SAFE CLEANUP PATTERN (REQUIRED FOR ALL BUILD SERVERS)
+# 1. Backup custom Dockerfile before any cleanup
+cp "support/docker/$server_mapping/Dockerfile" "/tmp/${server_id}-dockerfile-backup"
+
+# 2. Cleanup cloned repository
+rm -rf "support/docker/$server_mapping/"
+
+# 3. Restore permanent custom Dockerfile structure
+mkdir -p "support/docker/$server_mapping"
+cp "/tmp/${server_id}-dockerfile-backup" "support/docker/$server_mapping/Dockerfile"
+
+# 4. Verify restoration succeeded
+test -f "support/docker/$server_mapping/Dockerfile" && echo "✅ Custom Dockerfile preserved"
+```
+
+**PREVENTION RULES**:
+1. **🛑 NEVER use `rm -rf support/docker/server-name/` without backup**
+2. **✅ ALWAYS backup custom Dockerfiles before ANY directory deletion**
+3. **✅ ALWAYS restore custom Dockerfiles after cleanup**
+4. **✅ ALWAYS verify custom Dockerfiles exist after cleanup**: `ls -la support/docker/*/Dockerfile`
+5. **🔍 CONSIDER: Using different naming** for cloned vs permanent directories in future
 
 #### **Detection and Verification**
 ```bash
@@ -568,6 +672,7 @@ find . -name ".git" -type d | grep -v "^\\./.git$"
 #### **Emergency Recovery**
 If cleanup removed necessary files:
 - Built Docker images remain available even after source cleanup
+- Our custom Dockerfiles remain in support/docker/ permanently
 - Re-clone repository if debugging or modification needed
 - Use `docker history image-name` to understand image layers if issues arise
 
@@ -923,6 +1028,8 @@ awk '/^  [a-z].*:$/ { gsub(/:/, ""); gsub(/^  /, ""); print }' mcp_server_regist
 12. **Container Path Mapping**: Environment variables like KUBECONFIG need container paths, not host paths
 13. **Test Environment Differences**: Manual testing may work while automated tests fail due to environment isolation
 14. **Server Type Over-engineering**: Don't overcomplicate server types - use simple patterns unless truly necessary (Figma lesson: API token services are `api_based`, not `privileged`)
+15. **Custom Dockerfile Assumption**: For build-type servers, ALWAYS use our custom Dockerfiles from `support/docker/`, whether they're improvements or created from scratch - never assume original repos have usable Dockerfiles
+16. **Naming Collision During Cleanup**: NEVER delete `support/docker/server-name/` without backing up permanent custom Dockerfiles first - use safe cleanup pattern from .cursorrules to preserve our custom Dockerfiles
 
 ### **✅ Definition of Done for MCP Server Addition**
 
