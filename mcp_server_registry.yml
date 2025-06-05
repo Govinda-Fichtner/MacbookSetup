@@ -177,6 +177,29 @@ servers:
       - "heroku_space_management"
       - "heroku_cli_integration"
 
+  terraform:
+    name: "Terraform MCP Server (Official HashiCorp)"
+    server_type: "standalone"
+    description: "Terraform Registry API access via official HashiCorp MCP server - \
+      provider documentation, module discovery, and registry information for Infrastructure as Code development"
+    category: "infrastructure"
+    source:
+      type: registry
+      image: "hashicorp/terraform-mcp-server:latest"
+    health_test:
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "healthy"
+    capabilities:
+      - "terraform_registry_api"
+      - "provider_documentation_access"
+      - "module_discovery"
+      - "terraform_registry_search"
+      - "provider_resource_documentation"
+      - "module_details_retrieval"
+
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"
