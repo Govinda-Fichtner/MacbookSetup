@@ -322,18 +322,223 @@ printf "    └── %b[SUCCESS]%b Deeply nested item\n" "$GREEN" "$NC"
 
 ## 📝 Commit Message Standards
 
-### **Format**: `<type>: <description> - <details>`
+### **🎯 Core Principles**
+Based on [Tim Pope's Git Commit Guidelines](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html) and [Conventional Commits Specification](https://www.conventionalcommits.org/en/v1.0.0/)
 
-**Types**: `feat`, `fix`, `refactor`, `style`, `docs`, `test`, `chore`
+#### **✅ MANDATORY Format Requirements**
+```
+<type>[optional scope]: <description>
 
-**Example**:
+[optional body]
+
+[optional footer(s)]
 ```
-feat: add tree structure to setup.sh output for consistency
-- Apply hierarchical tree output to match verify_setup.sh visual style
-- Group operations under sections: Installing Packages, Language Environments
-- Use minimal code changes, reusing existing tree patterns
-- Maintain clean visual flow throughout setup process
+
+#### **📏 Length & Formatting Rules (ENFORCED)**
+- **Subject Line**: 50 characters or less (HARD LIMIT)
+- **Body Lines**: Wrap at 72 characters (for readability in `git log`)
+- **Blank Line**: REQUIRED between subject and body
+- **Capitalization**: First letter of subject line MUST be capitalized
+- **No Period**: Subject line MUST NOT end with a period
+
+#### **🔤 Writing Style Requirements**
+- **Imperative Mood**: "Fix bug" NOT "Fixed bug" or "Fixes bug"
+- **Present Tense**: Write as if completing the sentence "If applied, this commit will..."
+- **Clear & Concise**: Subject line must be self-explanatory
+
+### **📋 Conventional Commits Types (STANDARDIZED)**
+
+#### **Core Types (REQUIRED)**
+- **`feat:`** - New feature for the user (correlates with MINOR in SemVer)
+- **`fix:`** - Bug fix for the user (correlates with PATCH in SemVer)
+- **`docs:`** - Documentation changes
+- **`style:`** - Formatting, missing semicolons, etc; no code change
+- **`refactor:`** - Code change that neither fixes bug nor adds feature
+- **`test:`** - Adding missing tests or correcting existing tests
+- **`chore:`** - Build process or auxiliary tool changes
+
+#### **Extended Types (OPTIONAL)**
+- **`perf:`** - Performance improvements
+- **`ci:`** - CI configuration changes
+- **`build:`** - Build system or external dependencies
+- **`revert:`** - Reverting a previous commit
+
+#### **Breaking Changes**
+- **`BREAKING CHANGE:`** footer for major changes (correlates with MAJOR in SemVer)
+- **`!`** after type/scope to indicate breaking change: `feat!:` or `feat(api)!:`
+
+### **🎨 Message Examples (GOOD)**
+
+#### **Simple Feature Addition**
 ```
+feat: add MCP server configuration validation
+
+Validate environment variables and Docker images before
+generating client configurations. Prevents invalid configs
+from being written to Cursor and Claude Desktop.
+
+- Check for placeholder tokens in environment variables
+- Verify Docker image accessibility before config generation
+- Add comprehensive error messages for missing dependencies
+```
+
+#### **Bug Fix with Scope**
+```
+fix(mcp-manager): resolve Docker image cleanup after builds
+
+Repository directories were not being removed after successful
+Docker image builds, causing disk space issues.
+
+Closes #123
+```
+
+#### **Breaking Change**
+```
+feat!: restructure temporary directory organization
+
+BREAKING CHANGE: Temporary files now organized under ./tmp/
+instead of scattered locations. Update any scripts that
+reference old temporary directory paths.
+
+- Standardize all temp files under ./tmp/repositories/ and ./tmp/test_home/
+- Update .gitignore to use single tmp/ entry
+- Add cleanup utilities in support/scripts/
+```
+
+#### **Documentation Update**
+```
+docs: update README with MCP server addition protocol
+
+Add step-by-step instructions for adding new MCP servers
+including registry configuration and testing requirements.
+```
+
+### **❌ BAD Examples (AVOID)**
+
+```
+❌ Update stuff                           # Too vague, no type
+❌ Fixed the bug in mcp manager           # Past tense, no type
+❌ feat: adding new feature for users.    # Ends with period, wrong tense
+❌ FIX: BROKEN CODE                       # All caps, unclear
+❌ refactor: change some code here and there and also update docs and fix a bug  # Too long (>50 chars)
+```
+
+### **🔧 Enforcement & Quality Controls**
+
+#### **Pre-Commit Validation (REQUIRED)**
+- **Length Check**: Subject line ≤ 50 characters
+- **Format Check**: Starts with valid type (feat:, fix:, etc.)
+- **Style Check**: Imperative mood, proper capitalization
+- **No trailing periods**: Subject line validation
+
+#### **Commit Message Template**
+Add to `.gitmessage` for consistent formatting:
+```
+# <type>[optional scope]: <description>
+#
+# [optional body]
+#
+# [optional footer(s)]
+#
+# Type: feat, fix, docs, style, refactor, test, chore, perf, ci, build
+# Scope: component/area affected (optional)
+# Description: imperative mood, ≤50 chars, capitalized, no period
+#
+# Body: explain what and why (wrap at 72 chars)
+# Footer: references, breaking changes, etc.
+```
+
+#### **Git Configuration Setup**
+```bash
+# Set commit message template
+git config commit.template .gitmessage
+
+# Enable verbose commits to see diffs
+git config commit.verbose true
+```
+
+### **🎯 Subject Line Optimization**
+
+#### **Good Subject Line Patterns**
+- `feat: add user authentication system`
+- `fix: resolve memory leak in data processing`
+- `docs: update API documentation for v2.0`
+- `refactor: extract shared utility functions`
+- `test: add integration tests for MCP servers`
+
+#### **Subject Line Anti-Patterns**
+- ❌ `feat: add user authentication system.` (ends with period)
+- ❌ `feat: added user authentication system` (past tense)
+- ❌ `feat: adding user authentication system` (wrong tense)
+- ❌ `feat: adds user authentication system` (wrong tense)
+- ❌ `add user authentication system` (no type)
+
+### **📄 Body & Footer Guidelines**
+
+#### **When to Include Body**
+- **Complex Changes**: Multiple files or components affected
+- **Context Needed**: Why the change was necessary
+- **Implementation Details**: Non-obvious technical decisions
+- **Breaking Changes**: Impact on existing functionality
+
+#### **Body Formatting**
+- **Line Length**: Wrap at 72 characters
+- **Paragraphs**: Separate with blank lines
+- **Lists**: Use `-` or `*` for bullet points
+- **Code**: Use backticks for inline code or file names
+
+#### **Footer Usage**
+- **Issue References**: `Closes #123`, `Fixes #456`, `Refs #789`
+- **Breaking Changes**: `BREAKING CHANGE: describe the change`
+- **Co-authors**: `Co-authored-by: Name <email@example.com>`
+- **Reviewers**: `Reviewed-by: Name <email@example.com>`
+
+### **🔄 Integration with Project Workflow**
+
+#### **Testing Pipeline Integration**
+```bash
+# Enhanced testing pipeline includes commit message validation:
+1. Write failing test first (TDD)
+2. zsh -n setup.sh && zsh -n verify_setup.sh    # Syntax check
+3. shellspec spec/                               # Run all tests
+4. Write minimal code to pass the test
+5. shellspec spec/                               # Verify test passes
+6. ./verify_setup.sh > /dev/null                 # Integration test
+7. pre-commit run --all-files                    # Code quality + commit msg validation
+8. git add . && git commit                       # Use proper commit message format
+9. git push origin main
+```
+
+#### **Commit Message Validation Hooks**
+- **commit-msg Hook**: Validate format, length, and style
+- **Pre-commit Hook**: Check for conventional commits compliance
+- **CI Validation**: Ensure all commits follow standards
+
+### **📚 References & Tools**
+
+#### **Essential Reading**
+- [Tim Pope's Git Commit Messages](https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html) - Classic formatting guidelines
+- [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) - Standardized commit format specification
+
+#### **Helpful Tools**
+- **commitizen**: Interactive commit message helper
+- **conventional-changelog**: Automatic changelog generation
+- **semantic-release**: Automated versioning based on commit types
+- **commitlint**: Lint commit messages for compliance
+
+### **💡 Benefits Achieved**
+
+#### **Automated Tooling**
+- **Changelog Generation**: Automatic release notes from commit history
+- **Semantic Versioning**: Automatic version bumps based on commit types
+- **Release Automation**: Trigger builds and deployments
+- **Issue Tracking**: Link commits to issue resolution
+
+#### **Team Collaboration**
+- **Clear History**: Understand changes without reading code
+- **Review Efficiency**: Quickly assess impact of changes
+- **Debugging Aid**: Use `git log` to trace when features/bugs were introduced
+- **Onboarding**: New team members can understand project evolution
 
 ## 🔧 Shell Completion Update Requirement
 
