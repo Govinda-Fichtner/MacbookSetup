@@ -62,6 +62,10 @@ setup_test_environment() {
   mkdir -p "$TEST_HOME/.cursor"
   mkdir -p "$TEST_HOME/Library/Application Support/Claude"
 
+  # Create .cargo/env to prevent zsh warnings in test environment
+  mkdir -p "$TEST_HOME/.cargo"
+  touch "$TEST_HOME/.cargo/env"
+
   # Create a test .env file with placeholders and real directories for filesystem testing
   cat > "$TEST_HOME/.env" << EOF
 GITHUB_PERSONAL_ACCESS_TOKEN=test_github_token_placeholder
@@ -305,7 +309,7 @@ It 'generates terraform-cli-controller configuration for Cursor'
 sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
 When run jq '.mcpServers."terraform-cli-controller"' tmp/test_home/.cursor/mcp.json
 The status should be success
-The output should include "nwiizo/tfmcp:latest"
+The output should include "local/terraform-cli-controller:latest"
 The output should include "docker"
 End
 
@@ -313,7 +317,7 @@ It 'generates terraform-cli-controller configuration for Claude Desktop'
 sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
 When run jq '.mcpServers."terraform-cli-controller"' "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
-The output should include "nwiizo/tfmcp:latest"
+The output should include "local/terraform-cli-controller:latest"
 The output should include "docker"
 End
 
@@ -322,7 +326,7 @@ sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager
 When run jq '.mcpServers."terraform-cli-controller".args[]' tmp/test_home/.cursor/mcp.json
 The status should be success
 The output should include "-v"
-The output should include "nwiizo/tfmcp:latest"
+The output should include "local/terraform-cli-controller:latest"
 End
 
 It 'terraform-cli-controller server can be tested individually'

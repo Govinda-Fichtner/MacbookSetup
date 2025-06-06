@@ -207,8 +207,10 @@ servers:
       Terraform environments with configuration analysis, plan execution, and state management"
     category: "infrastructure"
     source:
-      type: registry
-      image: "nwiizo/tfmcp:latest"
+      type: build
+      repository: "https://github.com/nwiizo/tfmcp.git"
+      image: "local/terraform-cli-controller:latest"
+      build_context: "."
       cmd: ["mcp"]
     environment_variables:
       - "TERRAFORM_DIR"
