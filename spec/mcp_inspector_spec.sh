@@ -148,7 +148,7 @@ BeforeEach 'setup_inspector_test_environment'
 AfterEach 'cleanup_inspector_test_environment'
 
 It 'should indicate UI startup'
-Skip if "Docker not available in CI" docker version > /dev/null 2>&1
+Skip unless "Docker is available" docker version > /dev/null 2>&1
 When run ./mcp_manager.sh inspect --ui
 The output should include "Inspector UI"
 The output should include "localhost:6274"
@@ -191,7 +191,7 @@ BeforeEach 'setup_inspector_test_environment'
 AfterEach 'cleanup_inspector_test_environment'
 
 It 'should test connectivity to running servers'
-Skip if "Docker not available in CI" docker version > /dev/null 2>&1
+Skip unless "Docker is available" docker version > /dev/null 2>&1
 When run ./mcp_manager.sh inspect --connectivity
 The output should include "Testing server connectivity"
 The status should be success

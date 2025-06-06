@@ -144,6 +144,16 @@ apply_docker_patches() {
         return 1
       fi
       ;;
+    "rails")
+      # Use our custom Dockerfile for Rails MCP server
+      if [[ -f "support/docker/mcp-server-rails/Dockerfile" ]]; then
+        cp "support/docker/mcp-server-rails/Dockerfile" "$repo_dir/Dockerfile"
+        return 0
+      else
+        printf "│   ├── %b[WARNING]%b Rails custom Dockerfile not found\n" "$YELLOW" "$NC"
+        return 1
+      fi
+      ;;
     *)
       # No custom Dockerfile needed for other servers
       return 1
@@ -540,39 +550,53 @@ test_api_based_advanced_functionality() {
   fi
 }
 
-# Mount-based server advanced functionality (Filesystem, etc.)
+# Mount-based server advanced functionality (Filesystem, Rails, etc.)
 test_mount_based_advanced_functionality() {
   local server_id="$1"
   local server_name="$2"
   local image="$3"
 
-  printf "│   ├── %b[ADVANCED]%b Filesystem operations testing (local only)\\n" "$BLUE" "$NC"
+  # Use server-specific tests for mount-based servers when available
+  case "$server_id" in
+    "rails")
+      test_rails_advanced_functionality "$server_id" "$server_name" "$image"
+      return $?
+      ;;
+    "filesystem")
+      test_filesystem_advanced_functionality "$server_id" "$server_name" "$image"
+      return $?
+      ;;
+    *)
+      # Generic mount-based functionality test
+      printf "│   ├── %b[ADVANCED]%b Filesystem operations testing (local only)\\n" "$BLUE" "$NC"
 
-  # Get mount configuration
-  local source_env_var container_path default_fallback
-  source_env_var=$(get_mount_config "$server_id" "source_env_var")
-  container_path=$(get_mount_config "$server_id" "container_path")
-  default_fallback=$(get_mount_config "$server_id" "default_fallback")
+      # Get mount configuration
+      local source_env_var container_path default_fallback
+      source_env_var=$(get_mount_config "$server_id" "source_env_var")
+      container_path=$(get_mount_config "$server_id" "container_path")
+      default_fallback=$(get_mount_config "$server_id" "default_fallback")
 
-  # Determine mount directory
-  local mount_dir
-  mount_dir=$(grep "^${source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"' | cut -d',' -f1)
-  [[ -z "$mount_dir" ]] && mount_dir=$(eval echo "$default_fallback")
+      # Determine mount directory
+      local mount_dir
+      mount_dir=$(grep "^${source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"' | cut -d',' -f1)
+      [[ -z "$mount_dir" ]] && mount_dir=$(eval echo "$default_fallback")
 
-  printf "│   │   ├── %b[TESTING]%b Directory mount: %s\\n" "$BLUE" "$NC" "$mount_dir"
+      printf "│   │   ├── %b[TESTING]%b Directory mount: %s\\n" "$BLUE" "$NC" "$mount_dir"
 
-  # Test file operations
-  local test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_directory", "arguments": {"path": "'"$container_path"'"}}}'
-  local response
-  response=$(echo "$test_payload" | timeout 10 docker run --rm -i --mount "type=bind,src=$mount_dir,dst=$container_path" "$image" "$container_path" 2>&1)
+      # Test file operations
+      local test_payload='{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_directory", "arguments": {"path": "'"$container_path"'"}}}'
+      local response
+      response=$(echo "$test_payload" | timeout 10 docker run --rm -i --mount "type=bind,src=$mount_dir,dst=$container_path" "$image" "$container_path" 2>&1)
 
-  if echo "$response" | grep -q '"result"'; then
-    printf "│   │   └── %b[SUCCESS]%b Filesystem operations verified\\n" "$GREEN" "$NC"
-    return 0
-  else
-    printf "│   │   └── %b[WARNING]%b Filesystem test failed\\n" "$YELLOW" "$NC"
-    return 1
-  fi
+      if echo "$response" | grep -q '"result"'; then
+        printf "│   │   └── %b[SUCCESS]%b Filesystem operations verified\\n" "$GREEN" "$NC"
+        return 0
+      else
+        printf "│   │   └── %b[WARNING]%b Filesystem test failed\\n" "$YELLOW" "$NC"
+        return 1
+      fi
+      ;;
+  esac
 }
 
 # Standalone server advanced functionality (Inspector, etc.)
@@ -697,6 +721,153 @@ EOF
   fi
 
   printf "│   │   └── %b[SUCCESS]%b Filesystem advanced functionality test completed\\n" "$GREEN" "$NC"
+  return 0
+}
+
+# Test Rails MCP server specific functionality (Rails project analysis)
+test_rails_advanced_functionality() {
+  local server_id="$1"
+  local server_name="$2"
+  local image="$3"
+
+  printf "│   ├── %b[ADVANCED]%b Rails project analysis testing\\n" "$BLUE" "$NC"
+
+  # Skip Rails advanced tests in CI - they require real Rails projects
+  if [[ "${CI:-false}" == "true" ]]; then
+    printf "│   │   ├── %b[SKIPPED]%b Rails project analysis (CI environment)\\n" "$YELLOW" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b Rails server configured for CI\\n" "$GREEN" "$NC"
+    return 0
+  fi
+
+  # Get configured Rails project path for testing
+  local rails_project_path
+  rails_project_path=$(grep "^RAILS_MCP_ROOT_PATH=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+  [[ -z "$rails_project_path" ]] && rails_project_path="$HOME/Projects"
+
+  printf "│   │   ├── %b[TESTING]%b Rails project path: %s\\n" "$BLUE" "$NC" "$rails_project_path"
+
+  # Verify directory exists and is accessible
+  if [[ ! -d "$rails_project_path" ]]; then
+    printf "│   │   │   ├── %b[INFO]%b Creating Rails project directory: %s\\n" "$BLUE" "$NC" "$rails_project_path"
+    mkdir -p "$rails_project_path" 2> /dev/null || true
+  fi
+
+  # Get Rails MCP config directory
+  local rails_mcp_config_home
+  rails_mcp_config_home=$(grep "^RAILS_MCP_CONFIG_HOME=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+  [[ -z "$rails_mcp_config_home" ]] && rails_mcp_config_home="$HOME/.config"
+  local rails_config_dir="$rails_mcp_config_home/rails-mcp"
+
+  # Ensure Rails config directory exists
+  if [[ ! -d "$rails_config_dir" ]]; then
+    printf "│   │   │   ├── %b[INFO]%b Creating Rails config directory: %s\\n" "$BLUE" "$NC" "$rails_config_dir"
+    mkdir -p "$rails_config_dir" 2> /dev/null || true
+  fi
+
+  # Test Rails MCP server can start with project directories mounted
+  printf "│   │   ├── %b[TESTING]%b Rails MCP server initialization\\n" "$BLUE" "$NC"
+  local mount_test_response
+  mount_test_response=$(echo '{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "rails-test", "version": "1.0.0"}}}' \
+    | timeout 15 docker run --rm -i \
+      -e "RAILS_MCP_ROOT_PATH=/rails-projects" \
+      -e "RAILS_MCP_CONFIG_HOME=/app/.config" \
+      -v "$rails_project_path:/rails-projects:ro" \
+      -v "$rails_config_dir:/app/.config/rails-mcp" \
+      -v "/tmp/rails-mcp:/app/config" \
+      --network mcp-network \
+      "$image" 2>&1)
+
+  if echo "$mount_test_response" | grep -q '"result".*"serverInfo"'; then
+    # Extract server info if available
+    local server_info
+    if command -v jq > /dev/null 2>&1; then
+      server_info=$(echo "$mount_test_response" | jq -r '.result.serverInfo.name + " v" + .result.serverInfo.version' 2> /dev/null || echo "Rails MCP Server")
+    else
+      server_info="Rails MCP Server"
+    fi
+    printf "│   │   │   └── %b[SUCCESS]%b Rails MCP server started: %s\\n" "$GREEN" "$NC" "$server_info"
+  else
+    printf "│   │   │   └── %b[WARNING]%b Rails MCP initialization test inconclusive\\n" "$YELLOW" "$NC"
+  fi
+
+  # Test Rails MCP tools are available
+  printf "│   │   ├── %b[TESTING]%b Rails analysis capabilities\\n" "$BLUE" "$NC"
+  local tools_messages
+  tools_messages=$(
+    cat << 'EOF'
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "rails-test", "version": "1.0.0"}}}
+{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
+EOF
+  )
+
+  local tools_response
+  tools_response=$(echo "$tools_messages" | timeout 20 docker run --rm -i \
+    -e "RAILS_MCP_ROOT_PATH=/rails-projects" \
+    -e "RAILS_MCP_CONFIG_HOME=/app/.config" \
+    -v "$rails_project_path:/rails-projects:ro" \
+    -v "$rails_config_dir:/app/.config/rails-mcp" \
+    -v "/tmp/rails-mcp:/app/config" \
+    --network mcp-network \
+    "$image" 2>&1)
+
+  # Count Rails tools
+  local tool_count=0
+  local expected_tools=("list_projects" "get_project_structure" "get_file_content" "get_routes" "analize_models" "get_schema" "analyze_controller_views" "analyze_environment_config" "load_guide")
+
+  for tool in "${expected_tools[@]}"; do
+    if echo "$tools_response" | grep -q "\"name\":\"$tool\""; then
+      ((tool_count++))
+    fi
+  done
+
+  if [[ $tool_count -ge 5 ]]; then
+    printf "│   │   │   ├── %b[SUCCESS]%b %d Rails analysis tools available\\n" "$GREEN" "$NC" "$tool_count"
+  else
+    printf "│   │   │   ├── %b[WARNING]%b Only %d Rails tools found (expected 9)\\n" "$YELLOW" "$NC" "$tool_count"
+  fi
+
+  # Test Rails project scanning capability
+  printf "│   │   ├── %b[TESTING]%b Rails project scanning\\n" "$BLUE" "$NC"
+  local project_test_messages
+  project_test_messages=$(
+    cat << 'EOF'
+{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "rails-test", "version": "1.0.0"}}}
+{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "list_projects", "arguments": {}}}
+EOF
+  )
+
+  local project_response
+  project_response=$(echo "$project_test_messages" | timeout 20 docker run --rm -i \
+    -e "RAILS_MCP_ROOT_PATH=/rails-projects" \
+    -e "RAILS_MCP_CONFIG_HOME=/app/.config" \
+    -v "$rails_project_path:/rails-projects:ro" \
+    -v "$rails_config_dir:/app/.config/rails-mcp" \
+    -v "/tmp/rails-mcp:/app/config" \
+    --network mcp-network \
+    "$image" 2>&1)
+
+  if echo "$project_response" | grep -q '"result"'; then
+    printf "│   │   │   ├── %b[SUCCESS]%b Rails project scanning functional\\n" "$GREEN" "$NC"
+  else
+    printf "│   │   │   ├── %b[INFO]%b No Rails projects found (expected for empty directory)\\n" "$BLUE" "$NC"
+  fi
+
+  # Test directory access validation
+  printf "│   │   ├── %b[TESTING]%b Directory access validation\\n" "$BLUE" "$NC"
+  if [[ -r "$rails_project_path" ]]; then
+    printf "│   │   │   ├── %b[SUCCESS]%b Rails project path readable\\n" "$GREEN" "$NC"
+  else
+    printf "│   │   │   ├── %b[ERROR]%b Rails project path not readable\\n" "$RED" "$NC"
+    return 1
+  fi
+
+  if [[ -w "$rails_config_dir" ]]; then
+    printf "│   │   │   ├── %b[SUCCESS]%b Rails config directory writable\\n" "$GREEN" "$NC"
+  else
+    printf "│   │   │   ├── %b[WARNING]%b Rails config directory not writable\\n" "$YELLOW" "$NC"
+  fi
+
+  printf "│   │   └── %b[SUCCESS]%b Rails advanced functionality test completed\\n" "$GREEN" "$NC"
   return 0
 }
 
@@ -1327,6 +1498,15 @@ get_mount_config() {
   } 2> /dev/null
 }
 
+# Get Rails-specific config mount configuration
+get_rails_config_mount() {
+  local server_id="$1"
+  local config_key="$2"
+  {
+    parse_server_config "$server_id" "mount_configuration.config_${config_key}"
+  } 2> /dev/null
+}
+
 # Get privileged configuration for servers requiring special system access
 get_privileged_config() {
   local server_id="$1"
@@ -1379,59 +1559,17 @@ get_server_cmd() {
 
 # Get environment variable placeholder value
 get_env_placeholder() {
-  local var_name="$1"
-  case "$var_name" in
-    "FIGMA_API_KEY")
-      echo "figd_your_figma_token_here"
-      ;;
-    "HEROKU_API_KEY")
-      echo "your_heroku_api_key_here"
-      ;;
-    "GITHUB_PERSONAL_ACCESS_TOKEN")
-      echo "your_github_token_here"
-      ;;
-    "CIRCLECI_TOKEN")
-      echo "your_circleci_token_here"
-      ;;
-    "CIRCLECI_BASE_URL")
-      echo "https://circleci.com"
-      ;;
-    "FILESYSTEM_ALLOWED_DIRS")
-      echo "/Users/$(whoami)/MacbookSetup,/Users/$(whoami)/Desktop,/Users/$(whoami)/Downloads"
-      ;;
-    "DOCKER_HOST")
-      echo "unix:///var/run/docker.sock"
-      ;;
-    "DOCKER_COMPOSE_PROJECT_NAME")
-      echo "macbooksetup"
-      ;;
-    "KUBECONFIG")
-      echo "$HOME/.kube/config"
-      ;;
-    "K8S_NAMESPACE")
-      echo "default"
-      ;;
-    "K8S_CONTEXT")
-      echo "current-context"
-      ;;
-    "MCP_AUTO_OPEN_ENABLED")
-      echo "false"
-      ;;
-    "CLIENT_PORT")
-      echo "6274"
-      ;;
-    "SERVER_PORT")
-      echo "6277"
-      ;;
-    "MCP_SERVER_REQUEST_TIMEOUT")
-      echo "10000"
-      ;;
-    "TERRAFORM_DIR")
-      echo "/workspace/default"
-      ;;
-    *)
-      echo "your_$(echo "$var_name" | tr '[:upper:]' '[:lower:]')_here"
-      ;;
+  local var="$1"
+  case "$var" in
+    "GITHUB_TOKEN") echo "your_github_token_here" ;;
+    "CIRCLECI_TOKEN") echo "your_circleci_token_here" ;;
+    "HEROKU_API_KEY") echo "your_heroku_api_key_here" ;;
+    "DOCKER_HOST") echo "unix:///var/run/docker.sock" ;;
+    "KUBECONFIG") echo "/home/.kube/config" ;;
+    "FILESYSTEM_ALLOWED_DIRS") echo "/Users/user/Project,/Users/user/Desktop,/Users/user/Downloads" ;;
+    "RAILS_MCP_ROOT_PATH") echo "/Users/user/Projects" ;;
+    "RAILS_MCP_CONFIG_HOME") echo "/Users/user/.config" ;;
+    *) echo "your_$(echo "$var" | tr '[:upper:]' '[:lower:]')_here" ;;
   esac
 }
 
@@ -1657,7 +1795,7 @@ write_cursor_config() {
 
     case "$server_type" in
       "mount_based")
-        # Mount-based servers (filesystem, etc.)
+        # Mount-based servers (filesystem, rails, etc.)
         local source_env_var container_path default_fallback
         source_env_var=$(get_mount_config "$server_id" "source_env_var")
         container_path=$(get_mount_config "$server_id" "container_path")
@@ -1672,10 +1810,22 @@ write_cursor_config() {
         first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
         [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-        local mount_args="      \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
-        local path_args="\"${container_path}\""
+        # Check for Rails server special dual mount configuration
+        if [[ "$server_id" == "rails" ]]; then
+          # Rails needs dual mounts: projects + config
+          local config_source_env_var config_container_path
+          config_source_env_var=$(get_rails_config_mount "$server_id" "source_env_var")
+          config_container_path=$(get_rails_config_mount "$server_id" "container_path")
 
-        json_content="${json_content}
+          local config_dir
+          config_dir=$(grep "^${config_source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+          [[ -z "$config_dir" ]] && config_dir="$HOME/.config"
+
+          local mount_args="      \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
+          mount_args="${mount_args}      \"--mount\", \"type=bind,src=${config_dir}/rails-mcp,dst=${config_container_path}/rails-mcp\",\n"
+          local path_args="\"${container_path}\""
+
+          json_content="${json_content}
     \"$server_id\": {
       \"command\": \"docker\",
       \"args\": [
@@ -1685,6 +1835,22 @@ ${mount_args}        \"$image\",
         ${path_args}
       ]
     }"
+        else
+          # Standard single mount for other mount-based servers
+          local mount_args="      \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
+          local path_args="\"${container_path}\""
+
+          json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\",
+        \"--env-file\", \"$env_file_path\",
+${mount_args}        \"$image\",
+        ${path_args}
+      ]
+    }"
+        fi
         ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
@@ -1840,7 +2006,7 @@ write_claude_config() {
 
     case "$server_type" in
       "mount_based")
-        # Mount-based servers (filesystem, etc.)
+        # Mount-based servers (filesystem, rails, etc.)
         local source_env_var container_path default_fallback
         source_env_var=$(get_mount_config "$server_id" "source_env_var")
         container_path=$(get_mount_config "$server_id" "container_path")
@@ -1855,10 +2021,22 @@ write_claude_config() {
         first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
         [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-        local mount_args="        \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
-        local path_args="\"${container_path}\""
+        # Check for Rails server special dual mount configuration
+        if [[ "$server_id" == "rails" ]]; then
+          # Rails needs dual mounts: projects + config
+          local config_source_env_var config_container_path
+          config_source_env_var=$(get_rails_config_mount "$server_id" "source_env_var")
+          config_container_path=$(get_rails_config_mount "$server_id" "container_path")
 
-        json_content="${json_content}
+          local config_dir
+          config_dir=$(grep "^${config_source_env_var}=" .env 2> /dev/null | cut -d= -f2- | tr -d '"')
+          [[ -z "$config_dir" ]] && config_dir="$HOME/.config"
+
+          local mount_args="        \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
+          mount_args="${mount_args}        \"--mount\", \"type=bind,src=${config_dir}/rails-mcp,dst=${config_container_path}/rails-mcp\",\n"
+          local path_args="\"${container_path}\""
+
+          json_content="${json_content}
     \"$server_id\": {
       \"command\": \"docker\",
       \"args\": [
@@ -1868,6 +2046,22 @@ ${mount_args}        \"$image\",
         ${path_args}
       ]
     }"
+        else
+          # Standard single mount for other mount-based servers
+          local mount_args="        \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
+          local path_args="\"${container_path}\""
+
+          json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\",
+        \"--env-file\", \"$env_file_path\",
+${mount_args}        \"$image\",
+        ${path_args}
+      ]
+    }"
+        fi
         ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)

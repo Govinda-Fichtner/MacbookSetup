@@ -198,7 +198,38 @@ servers:
       - "module_discovery"
       - "terraform_registry_search"
       - "provider_resource_documentation"
-      - "module_details_retrieval"
+
+  rails:
+    name: "Rails MCP Server"
+    server_type: "mount_based"
+    description: "MCP server for Rails project analysis and development assistance"
+    category: "development"
+    source:
+      type: build
+      repository: "https://github.com/maquina-app/rails-mcp-server.git"
+      image: "local/mcp-server-rails:latest"
+      build_context: "."
+    environment_variables:
+      - "RAILS_MCP_ROOT_PATH"
+      - "RAILS_MCP_CONFIG_HOME"
+    mount_configuration:
+      # Mount parent directory containing all Rails projects
+      source_env_var: "RAILS_MCP_ROOT_PATH"
+      container_path: "/rails-projects"
+      default_fallback: "$HOME/Projects"
+      # Mount config directory for projects.yml configuration
+      config_source_env_var: "RAILS_MCP_CONFIG_HOME"
+      config_container_path: "/app/.config"
+    capabilities:
+      - "rails_project_analysis"
+      - "model_inspection"
+      - "route_analysis"
+      - "gem_management"
+      - "database_schema_analysis"
+      - "test_generation"
+      - "controller_analysis"
+      - "view_templates"
+      - "migration_assistance"
 
   terraform-cli-controller:
     name: "Terraform CLI Controller"

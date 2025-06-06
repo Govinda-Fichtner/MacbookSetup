@@ -275,7 +275,7 @@ EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should not be success
 The output should include "Filesystem MCP Server"
-The output should include "Filesystem test failed"
+The output should include "Directory not found"
 End
 
 It 'handles directories with special characters'
