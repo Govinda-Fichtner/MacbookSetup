@@ -1,6 +1,6 @@
 # MacbookSetup
 
-
+[![CircleCI](https://dl.circleci.com/status-badge/img/circleci/Nbcyu2F7rJ4pmU9Bk5nmUi/47yWoqvLZ54GqPdNEnuU4V/tree/main.svg?style=shield)](https://app.circleci.com/pipelines/circleci/Nbcyu2F7rJ4pmU9Bk5nmUi)
 
 A streamlined, automated setup script for macOS development environments. Get your Mac ready for development in minutes, not hours.
 
@@ -619,7 +619,7 @@ cask "your-app-name"
 
 ### Testing Strategy
 
-The CI pipeline employs a focused testing strategy to efficiently validate the core functionality:
+The testing employs a focused strategy to efficiently validate the core functionality:
 
 #### What We Test
 
@@ -649,7 +649,7 @@ The CI testing differentiates between several types of components:
    - While valuable for users, they're not essential for validating the setup process
 
 This targeted testing approach ensures that:
-- CI runs remain efficient (typically under 15 minutes)
+- Test runs remain efficient
 - Core functionality is thoroughly validated
 - The setup script's reliability is maintained
 
