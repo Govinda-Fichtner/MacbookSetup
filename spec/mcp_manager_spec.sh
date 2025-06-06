@@ -220,6 +220,8 @@ End
 
 Describe 'filesystem server functionality'
 Describe 'basic filesystem server operations'
+BeforeEach 'setup_test_environment'
+
 It 'recognizes filesystem as mount_based server type'
 When run zsh "$PWD/mcp_manager.sh" parse filesystem server_type
 The status should be success
@@ -293,6 +295,8 @@ End
 End
 
 Describe 'terraform-cli-controller server integration'
+BeforeEach 'setup_test_environment'
+
 It 'includes terraform-cli-controller server in available servers list'
 When run zsh "$PWD/mcp_manager.sh" list
 The status should be success
@@ -337,6 +341,8 @@ End
 End
 
 Describe 'heroku server integration'
+BeforeEach 'setup_test_environment'
+
 It 'includes heroku server in available servers list'
 When run zsh "$PWD/mcp_manager.sh" list
 The status should be success
