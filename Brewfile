@@ -33,6 +33,7 @@ brew "antidote"      # Plugin manager for zsh
 brew "coreutils"     # GNU core utilities (provides gtimeout for macOS)
 brew "jq"            # JSON processing for MCP configurations
 brew "yq"            # YAML processing for configurations
+brew "gitleaks"      # Secret scanner for Git repositories
 
 # Casks (GUI applications)
 cask "cursor"
