@@ -288,6 +288,50 @@ End
 End
 End
 
+Describe 'terraform-cli-controller server integration'
+It 'includes terraform-cli-controller server in available servers list'
+When run zsh "$PWD/mcp_manager.sh" list
+The status should be success
+The output should include "terraform-cli-controller"
+End
+
+It 'supports privileged server type for terraform-cli-controller'
+When run zsh "$PWD/mcp_manager.sh" parse terraform-cli-controller server_type
+The status should be success
+The output should equal "privileged"
+End
+
+It 'generates terraform-cli-controller configuration for Cursor'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers."terraform-cli-controller"' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "nwiizo/tfmcp:latest"
+The output should include "docker"
+End
+
+It 'generates terraform-cli-controller configuration for Claude Desktop'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers."terraform-cli-controller"' "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json"
+The status should be success
+The output should include "nwiizo/tfmcp:latest"
+The output should include "docker"
+End
+
+It 'terraform-cli-controller server uses privileged configuration'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers."terraform-cli-controller".args[]' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "-v"
+The output should include "nwiizo/tfmcp:latest"
+End
+
+It 'terraform-cli-controller server can be tested individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test terraform-cli-controller'
+The status should be success
+The output should include "Terraform CLI Controller"
+End
+End
+
 Describe 'heroku server integration'
 It 'includes heroku server in available servers list'
 When run zsh "$PWD/mcp_manager.sh" list
@@ -379,6 +423,7 @@ The output should include "CircleCI MCP Server"
 The output should include "Figma Context MCP Server"
 The output should include "Heroku Platform MCP Server"
 The output should include "Filesystem MCP Server"
+The output should include "Terraform CLI Controller"
 End
 End
 End
@@ -458,5 +503,6 @@ The output should include "CircleCI MCP Server"
 The output should include "Figma Context MCP Server"
 The output should include "Heroku Platform MCP Server"
 The output should include "Filesystem MCP Server"
+The output should include "Terraform CLI Controller"
 End
 End

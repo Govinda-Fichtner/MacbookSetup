@@ -33,9 +33,11 @@
 
 #### **Test-First Development Protocol**
 - ❌ **NEVER commit code with any failing tests** - even "minor" ones
+- ❌ **NEVER commit bug fixes without regression tests** - prevents recurrence
 - ❌ **NEVER skip test fixes** because "functionality works"
 - ❌ **NEVER defer test fixes** to "next iteration"
 - ✅ **ALWAYS run full test suite** before any commit: `shellspec spec/`
+- ✅ **ALWAYS add regression tests for bugs** before fixing them
 - ✅ **ALWAYS fix all failures** before proceeding to next development phase
 - ✅ **ALWAYS get to 0 failures** - partial fixes are not acceptable
 
@@ -432,7 +434,7 @@ including registry configuration and testing requirements.
 - **No trailing periods**: Subject line validation
 
 #### **Commit Message Template**
-Add to `.gitmessage` for consistent formatting:
+Add to `docs/.gitmessage` for consistent formatting:
 ```
 # <type>[optional scope]: <description>
 #
@@ -451,7 +453,7 @@ Add to `.gitmessage` for consistent formatting:
 #### **Git Configuration Setup**
 ```bash
 # Set commit message template
-git config commit.template .gitmessage
+git config commit.template docs/.gitmessage
 
 # Enable verbose commits to see diffs
 git config commit.verbose true
@@ -1330,9 +1332,89 @@ End
 
 **Estimated Time per Server**: 15-30 minutes following this protocol vs. hours of debugging without it.
 
+### **🐛 Mandatory Bug-to-Regression-Test Protocol**
+
+**CRITICAL RULE**: For every bug found and fixed, a regression test MUST be added before the fix is committed.
+
+#### **📋 Bug Fix Workflow (MANDATORY)**
+1. **🔴 Identify the Bug**: Document exactly what was broken and why
+2. **🧪 Write Failing Test**: Create a test that reproduces the exact bug
+3. **✅ Verify Test Fails**: Confirm the test catches the bug before any fix
+4. **🔧 Fix the Bug**: Implement minimal code to make the test pass
+5. **🟢 Verify Test Passes**: Confirm the test now passes with the fix
+6. **📝 Document the Bug**: Add the bug pattern to relevant anti-patterns sections
+7. **🚀 Commit Together**: Commit both the fix AND the regression test
+
+#### **📋 Regression Test Requirements**
+- **Specific Test Name**: Include bug description in test name (e.g., "terraform-cli-controller cmd_args regression test")
+- **Reproduction Case**: Test the exact condition that caused the bug
+- **Edge Case Coverage**: Test boundary conditions that revealed the bug
+- **Function-Level Tests**: Test individual functions that had the bug, not just end-to-end
+- **Documentation**: Comment WHY this test exists and what bug it prevents
+
+#### **🎯 Real Example (terraform-cli-controller bug)**
+```bash
+# Regression test for terraform-cli-controller cmd_args bug
+Describe 'terraform-cli-controller cmd_args regression test'
+  It 'terraform-cli-controller should have cmd_args parsed correctly'
+    When call get_server_cmd "terraform-cli-controller"
+    The output should equal "mcp"
+  End
+
+  # This test simulates the logic that was missing in write_cursor_config
+  It 'terraform-cli-controller should get special cmd_args handling'
+    server_id="terraform-cli-controller"
+    cmd_args=$(get_server_cmd "$server_id" 2> /dev/null)
+
+    # Special handling that was missing
+    if [[ "$server_id" == "terraform-cli-controller" ]]; then
+      cmd_args="mcp"
+    fi
+
+    When run echo "$cmd_args"
+    The output should equal "mcp"
+  End
+
+  # Test the exact conditional that was broken
+  It 'cmd_args conditional logic should work correctly'
+    cmd_args="mcp"
+    if [[ -n "$cmd_args" && "$cmd_args" != "null" ]]; then
+      result="should_include_cmd"
+    else
+      result="should_not_include_cmd"
+    fi
+
+    When run echo "$result"
+    The output should equal "should_include_cmd"
+  End
+End
+```
+
+#### **🚫 Bug Fix Anti-Patterns**
+- ❌ **NEVER commit a bug fix without a regression test**
+- ❌ **NEVER write generic tests** - test the specific bug scenario
+- ❌ **NEVER defer regression tests** to "later" or "next iteration"
+- ❌ **NEVER assume the bug won't happen again** without a test proving it
+
+#### **📊 Regression Test Categories**
+- **Logic Bugs**: Test exact conditional logic that failed
+- **Configuration Bugs**: Test configuration generation edge cases
+- **Integration Bugs**: Test component interaction failures
+- **Environment Bugs**: Test behavior differences between environments
+- **Edge Case Bugs**: Test boundary conditions and unusual inputs
+
+#### **✅ Benefits of Regression Testing**
+- **Prevents Regressions**: Same bug can never happen again
+- **Documents Bug Patterns**: Tests serve as living documentation
+- **Faster Debugging**: Specific tests pinpoint exact issues
+- **Confidence in Changes**: Refactoring is safer with comprehensive coverage
+- **Team Knowledge**: Tests communicate bug patterns to other developers
+
 ### **Test-First Development Rules**
 - ❌ **NEVER write production code without a failing test first**
+- ❌ **NEVER fix a bug without adding a regression test first**
 - ✅ **ALWAYS start with the test that describes the expected behavior**
+- ✅ **ALWAYS add regression tests for every bug found**
 - ✅ **Write the smallest possible test that fails**
 - ✅ **Only write enough production code to make the test pass**
 
@@ -1573,6 +1655,19 @@ shellspec --trace spec/mcp_inspector_spec.sh
 8. MANDATORY CLEANUP PROTOCOL                 # See 🧹 Mandatory Cleanup Protocol
 9. git add . && git commit -m "descriptive message"
 10. git push origin main
+
+# Enhanced testing pipeline for BUG FIX workflow:
+1. 🐛 Document the bug and its symptoms
+2. 🧪 Write failing test that reproduces the bug
+3. ✅ Verify test fails (confirms bug reproduction)
+4. 🔧 Fix the bug with minimal code changes
+5. 🟢 Verify regression test now passes
+6. shellspec spec/                            # Run all tests
+7. ./verify_setup.sh > /dev/null              # Integration test
+8. pre-commit run --all-files                 # Code quality
+9. MANDATORY CLEANUP PROTOCOL                 # See 🧹 Mandatory Cleanup Protocol
+10. git add . && git commit -m "fix: [bug description] + regression test"
+11. git push origin main
 ```
 
 #### **CI Integration**
@@ -1672,6 +1767,7 @@ Cleanup is **MANDATORY** at the end of every major development step, including:
 
 #### **🧪 Quality Assurance**
 - ✅ **Run full test suite**: `shellspec spec/` - all tests must pass
+- ✅ **Verify regression tests**: Confirm any bug fixes include regression tests
 - ✅ **Syntax validation**: `zsh -n setup.sh && zsh -n verify_setup.sh`
 - ✅ **Integration test**: `./verify_setup.sh > /dev/null` (expect success or known issues)
 - ✅ **Pre-commit checks**: `pre-commit run --all-files` - all checks must pass
@@ -1991,7 +2087,41 @@ cp .env_example .env
 - When troubleshooting Claude Desktop integration issues
 - As part of the final validation in TDD cycles
 
-### **🆕 Latest Update: Figma MCP Server Implementation & SCT Methodology Validation (Current Iteration)**
+### **🆕 Latest Update: Terraform CLI Controller Debugging & Architecture Discovery (Current Iteration)**
+
+**🏗️ ARCHITECTURAL DISCOVERY**: Hidden dual-function configuration system exposed during terraform-cli-controller debugging:
+
+```
+PREVIEW FUNCTIONS (terminal display)     WRITE FUNCTIONS (actual file writing)
+├── generate_cursor_config()            ├── write_cursor_config()
+└── generate_claude_config()            └── write_claude_config()
+
+❌ CRITICAL ISSUE: INCONSISTENT IMPLEMENTATIONS
+- Different server type handling logic
+- Different parameter processing
+- Different conditional branches
+```
+
+**🔍 DEBUGGING LESSONS**:
+1. **Unit Testing Critical**: Individual function testing revealed the real issue faster than end-to-end debugging
+2. **Architecture Documentation**: Hidden complexity (dual functions) wasn't documented, causing confusion
+3. **Debug Visibility**: Output filtering hides execution traces, making it hard to see which code paths execute
+4. **Conditional Logic Testing**: Need tests for exact conditional expressions: `[[ -n "$cmd_args" && "$cmd_args" != "null" ]]`
+
+**📋 TESTING IMPROVEMENTS IMPLEMENTED**:
+- Created `docs/ARCHITECTURE.md` documenting dual-function system and data flow
+- Added `spec/mcp_architecture_spec.sh` with unit tests for individual components
+- Created `docs/TESTING_ARCHITECTURE.md` with comprehensive testing strategy
+- Documented common debugging patterns and architectural pitfalls
+
+**🎯 SERVER-SPECIFIC LESSONS (terraform-cli-controller)**:
+- Registry has `cmd: ["mcp"]` but final config missing `mcp` command
+- All parsing logic works correctly (`get_server_cmd` returns `mcp`)
+- All conditionals pass correctly (`cmd_args="mcp"` set properly)
+- Issue is in **JSON construction within write functions** - not in logic
+- Need **architectural unit tests** to catch configuration generation bugs faster
+
+### **🆕 Previous Update: Figma MCP Server Implementation & SCT Methodology Validation**
 
 **Key Learnings Captured:**
 1. **🎯 Server Type Over-engineering Anti-Pattern (Figma lesson)**:

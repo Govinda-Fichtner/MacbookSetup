@@ -134,6 +134,214 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
 
   **Note**: The filesystem server operates differently from other MCP servers - it requires directory paths as command line arguments rather than environment variables. Our Docker configuration automatically mounts the current project directory (`$(pwd)`) to `/project` inside the container.
 
+- **Terraform MCP Server (HashiCorp Official)**: Registry API access and documentation
+  - **Features**: Provider documentation access, module discovery, registry search, resource documentation
+  - **Docker Image**: `hashicorp/terraform-mcp-server:latest`
+  - **Type**: Standalone (no authentication required)
+  - **Purpose**: Research and discovery phase of infrastructure development
+
+- **Terraform CLI Controller (Custom)**: Direct Terraform CLI execution and state management
+  - **Features**: Terraform CLI execution, state management, infrastructure provisioning, plan generation, workspace management, Docker provider support
+  - **Docker Image**: `local/terraform-cli-controller:latest`
+  - **Type**: Privileged (Docker socket + credential access)
+  - **Purpose**: Actual infrastructure deployment and management
+
+#### Terraform Infrastructure Workflow
+
+The MacbookSetup project includes **two complementary Terraform MCP servers** that work together to provide a complete Infrastructure as Code development experience:
+
+##### 🔍 **Discovery & Research Phase**
+Use the **HashiCorp Terraform MCP Server** for:
+- **Provider Documentation**: Get detailed documentation for AWS, Azure, GCP, and other providers
+- **Module Discovery**: Find and explore community modules from the Terraform Registry
+- **Resource Documentation**: Understand resource schemas, arguments, and attributes
+- **Best Practices**: Access HashiCorp's official documentation and examples
+
+```bash
+# Test the discovery server
+./mcp_manager.sh test terraform
+```
+
+##### 🚀 **Development & Deployment Phase**
+Use the **Terraform CLI Controller** for:
+- **Infrastructure Provisioning**: Actually deploy resources to cloud providers
+- **State Management**: Track and manage Terraform state files
+- **Plan Generation**: Create and review execution plans before applying changes
+- **Workspace Management**: Manage multiple environments (dev, staging, prod)
+- **Docker Integration**: Deploy containerized applications alongside cloud infrastructure
+
+```bash
+# Test the CLI controller
+./mcp_manager.sh test terraform-cli-controller
+```
+
+##### 🔗 **Multi-Cloud Credential Management**
+
+The **Terraform CLI Controller** uses a sophisticated mount strategy to provide secure access to cloud provider credentials:
+
+**Current Mount Points:**
+```bash
+# AWS Credentials (read-only)
+$HOME/.aws:/root/.aws:ro
+
+# Terraform Configuration and Cache
+$HOME/.terraform.d:/root/.terraform.d
+
+# Docker Socket for Container Management
+/var/run/docker.sock:/var/run/docker.sock
+```
+
+**Extending to Other Cloud Providers:**
+
+For **DigitalOcean**:
+```bash
+# Add to your .env file
+DIGITALOCEAN_TOKEN=your_digitalocean_token_here
+
+# Or mount credential file
+$HOME/.config/doctl:/root/.config/doctl:ro
+```
+
+For **Azure**:
+```bash
+# Mount Azure credentials
+$HOME/.azure:/root/.azure:ro
+
+# Environment variables in .env
+AZURE_CLIENT_ID=your_client_id
+AZURE_CLIENT_SECRET=your_client_secret
+AZURE_TENANT_ID=your_tenant_id
+AZURE_SUBSCRIPTION_ID=your_subscription_id
+```
+
+For **Google Cloud Platform**:
+```bash
+# Mount service account key
+$HOME/.config/gcloud:/root/.config/gcloud:ro
+
+# Environment variable in .env
+GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/service-account-key.json
+```
+
+**Multi-Provider Terraform Example:**
+```hcl
+# terraform/multi-cloud-infrastructure.tf
+
+# AWS Resources
+provider "aws" {
+  region = "us-east-1"
+  # Uses mounted ~/.aws/credentials
+}
+
+# DigitalOcean Resources
+provider "digitalocean" {
+  token = var.digitalocean_token  # From .env file
+}
+
+# Docker Resources (Local)
+provider "docker" {
+  host = "unix:///var/run/docker.sock"  # Uses mounted Docker socket
+}
+
+# Deploy across multiple providers
+resource "aws_s3_bucket" "backups" {
+  bucket = "my-app-backups"
+}
+
+resource "digitalocean_droplet" "web" {
+  image  = "ubuntu-20-04-x64"
+  name   = "web-server"
+  region = "nyc1"
+  size   = "s-1vcpu-1gb"
+}
+
+resource "docker_container" "monitoring" {
+  image = "grafana/grafana:latest"
+  name  = "monitoring-dashboard"
+}
+```
+
+##### 💡 **Best Practices for Combined Usage**
+
+1. **Start with Discovery**: Use the HashiCorp server to research providers and modules
+2. **Plan with CLI Controller**: Use the CLI controller to create and test infrastructure plans
+3. **Secure Credentials**: Store sensitive credentials in mounted directories or environment files
+4. **Multi-Environment**: Use Terraform workspaces for different deployment environments
+5. **Version Control**: Keep Terraform files in Git, exclude sensitive state files
+
+**Example Workflow:**
+```bash
+# 1. Research AWS provider documentation (HashiCorp server)
+# Ask AI: "Show me AWS S3 bucket resource documentation"
+
+# 2. Create infrastructure (CLI controller)
+# Ask AI: "Create an S3 bucket with versioning enabled"
+
+# 3. Test locally with Docker (CLI controller)
+# Ask AI: "Deploy a local monitoring stack with Docker containers"
+
+# 4. Deploy to multiple clouds (CLI controller)
+# Ask AI: "Apply this infrastructure to both AWS and DigitalOcean"
+```
+
+This dual-server approach provides comprehensive infrastructure development capabilities, from initial research to production deployment across multiple cloud providers.
+
+##### 🔧 **Extending Multi-Cloud Support**
+
+To add support for additional cloud providers, you can extend the **Terraform CLI Controller** configuration by modifying the `mcp_server_registry.yml` file:
+
+**Example: Adding Google Cloud Platform Support**
+```yaml
+# Add to mcp_server_registry.yml under terraform-cli-controller volumes:
+volumes:
+  - "/var/run/docker.sock:/var/run/docker.sock"
+  - "$HOME/.terraform.d:/root/.terraform.d"
+  - "$HOME/.aws:/root/.aws:ro"
+  - "$HOME/.config/gcloud:/root/.config/gcloud:ro"  # Add GCP credentials
+  - "$HOME/.azure:/root/.azure:ro"                  # Add Azure credentials
+```
+
+**Example: Adding DigitalOcean Support**
+```yaml
+# Add to mcp_server_registry.yml under terraform-cli-controller environment_variables:
+environment_variables:
+  - "DIGITALOCEAN_TOKEN"     # Add DigitalOcean token
+  - "LINODE_TOKEN"           # Add Linode token
+  - "HETZNER_TOKEN"          # Add Hetzner token
+```
+
+After modifying the registry, rebuild the configuration:
+```bash
+# Regenerate configurations with new mount points
+./mcp_manager.sh config-write
+
+# Test the updated controller
+./mcp_manager.sh test terraform-cli-controller
+```
+
+**Credential Strategy Options:**
+
+1. **File-based (Recommended for CLI tools)**:
+   - Mount provider-specific credential directories
+   - Uses each provider's standard credential location
+   - Examples: `~/.aws`, `~/.config/gcloud`, `~/.azure`
+
+2. **Environment Variables (Recommended for API tokens)**:
+   - Add tokens to `.env` file
+   - Suitable for simple token-based authentication
+   - Examples: `DIGITALOCEAN_TOKEN`, `LINODE_TOKEN`
+
+3. **Hybrid Approach (Best of both)**:
+   - Use file mounts for complex authentication (AWS, GCP, Azure)
+   - Use environment variables for simple tokens (DigitalOcean, Linode)
+
+**Security Considerations:**
+- Always use `:ro` (read-only) for credential mounts
+- Store tokens in `.env` file, never in configuration files
+- Use IAM roles and service accounts when possible
+- Regularly rotate access keys and tokens
+- Consider using temporary credentials for production deployments
+
 #### MCP Server Management
 
 The setup includes a comprehensive MCP server manager (`mcp_manager.sh`) that provides:

@@ -52,9 +52,9 @@ servers:
       - "environment_variables"
 
   # inspector:
-    # NOTE: MCP Inspector is NOT an MCP server - it's a debugging tool
-    # Use it as: npx @modelcontextprotocol/inspector <mcp-server-command>
-    # Do not include in Cursor/Claude Desktop configurations
+  # NOTE: MCP Inspector is NOT an MCP server - it's a debugging tool
+  # Use it as: npx @modelcontextprotocol/inspector <mcp-server-command>
+  # Do not include in Cursor/Claude Desktop configurations
 
   filesystem:
     name: "Filesystem MCP Server"
@@ -199,6 +199,39 @@ servers:
       - "terraform_registry_search"
       - "provider_resource_documentation"
       - "module_details_retrieval"
+
+  terraform-cli-controller:
+    name: "Terraform CLI Controller"
+    server_type: "privileged"
+    description: "Terraform MCP Tool (nwiizo/tfmcp) - Rust-based CLI tool for AI assistants to manage \
+      Terraform environments with configuration analysis, plan execution, and state management"
+    category: "infrastructure"
+    source:
+      type: registry
+      image: "nwiizo/tfmcp:latest"
+      cmd: ["mcp"]
+    environment_variables:
+      - "TERRAFORM_DIR"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "$HOME/.aws:/root/.aws:ro"
+      - "$HOME/terraform-projects:/workspace"
+    networks:
+      - "host"
+    health_test:
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        status: "ready"
+    capabilities:
+      - "terraform_cli_execution"
+      - "terraform_state_management"
+      - "infrastructure_provisioning"
+      - "terraform_plan_generation"
+      - "terraform_apply_execution"
+      - "terraform_workspace_management"
+      - "docker_provider_support"
 
 # Global MCP configuration
 global:
