@@ -1,6 +1,7 @@
 # MacbookSetup
 
 [![CircleCI](https://dl.circleci.com/status-badge/img/circleci/Nbcyu2F7rJ4pmU9Bk5nmUi/47yWoqvLZ54GqPdNEnuU4V/tree/main.svg?style=shield)](https://app.circleci.com/pipelines/circleci/Nbcyu2F7rJ4pmU9Bk5nmUi)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Govinda-Fichtner_MacbookSetup&metric=alert_status)](https://sonarcloud.io/project/overview?id=Govinda-Fichtner_MacbookSetup)
 
 A streamlined, automated setup script for macOS development environments. Get your Mac ready for development in minutes, not hours.
 
