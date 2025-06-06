@@ -1,6 +1,6 @@
 # MacbookSetup
 
-[![Build Status](https://api.cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup.svg)](https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup)
+
 
 A streamlined, automated setup script for macOS development environments. Get your Mac ready for development in minutes, not hours.
 
@@ -615,15 +615,7 @@ cask "your-app-name"
 - Internet connection
 - For Apple Silicon Macs (M1/M2/M3): Rosetta 2 is recommended (`softwareupdate --install-rosetta`)
 
-## 🧪 Continuous Integration
-
-This project uses Cirrus CI to validate the setup script on real macOS environments:
-
-- Every commit is tested on macOS ARM (Apple Silicon) virtual machines
-- The setup script is executed in a clean environment
-- Installation of tools and configuration is verified
-
-You can view CI build history on the [Cirrus CI dashboard](https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup).
+## 🧪 Testing
 
 ### Testing Strategy
 

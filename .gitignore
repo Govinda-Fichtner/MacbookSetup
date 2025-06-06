@@ -67,3 +67,6 @@ mcp_builds/
 
 # Temporary directories - organized under ./tmp/
 tmp/
+
+# Development history (local development notes)
+development_history.md

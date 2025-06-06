@@ -94,16 +94,7 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-## Continuous Integration
 
-This project uses Cirrus CI to validate changes:
-
-- Every PR is automatically tested on macOS ARM virtual machines
-- The setup script is run in a clean environment
-- All tool installations and configurations are verified
-- Tests must pass before a PR can be merged
-
-The CI configuration is in `.cirrus.yml`. If your changes require modifications to the CI process, please update this file accordingly.
 
 ## Questions?
 

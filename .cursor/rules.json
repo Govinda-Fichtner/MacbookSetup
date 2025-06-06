@@ -93,7 +93,7 @@
       "description": "Ensure alignment between CI and pre-commit configurations",
       "patterns": [
         {
-          "pattern": "\\.cirrus\\.yml$|\\.pre-commit-config\\.yaml$",
+          "pattern": "\\.pre-commit-config\\.yaml$",
           "checks": [
             {
               "type": "regex",
@@ -117,65 +117,7 @@
         }
       ],
       "actions": {
-        "on-save": "validate",
-        "on-commit": {
-          "command": "cirrus validate && open https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup",
-          "message": "Opening Cirrus CI dashboard for build monitoring. Please ensure the build passes before proceeding with further changes."
-        }
-      }
-    },
-    {
-      "name": "ci-monitoring",
-      "description": "Enforce CI monitoring practices and handle failures",
-      "patterns": [
-        {
-          "pattern": ".*",
-          "checks": [
-            {
-              "type": "commit",
-              "options": {
-                "require-ci-check": true,
-                "wait-for-completion": true,
-                "auto-fix-attempts": 3,
-                "monitor-url": "https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup",
-                "post-commit-actions": [
-                  {
-                    "command": "cirrus validate",
-                    "message": "Validating configuration locally before CI run."
-                  },
-                  {
-                    "command": "open https://cirrus-ci.com/github/Govinda-Fichtner/MacbookSetup",
-                    "message": "Opening Cirrus CI dashboard. Monitor the build and address any failures."
-                  }
-                ],
-                "failure-actions": [
-                  {
-                    "command": "./scripts/ci_notify.sh failure",
-                    "message": "Notifying of CI build failure"
-                  }
-                ],
-                "success-actions": [
-                  {
-                    "command": "./scripts/ci_notify.sh success",
-                    "message": "Notifying of CI build success"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      ],
-      "documentation": {
-        "description": "Rules to ensure proper CI monitoring and failure handling",
-        "guidelines": [
-          "Monitor CI runs after each commit via web interface and notifications",
-          "Check verification logs for specific errors",
-          "Address failing checks immediately",
-          "Ensure all required tools are installed via Brewfile",
-          "Keep build status green",
-          "Run local validation before pushing",
-          "Review build failure logs in ~/.cirrus/logs/build_failures.log"
-        ]
+        "on-save": "validate"
       }
     }
   ],
@@ -187,27 +129,6 @@
     "ci-pre-commit-alignment": {
       "enabled": true,
       "autofix": false
-    },
-    "ci-monitoring": {
-      "enabled": true,
-      "autofix": false,
-      "web-monitoring": true,
-      "notification": {
-        "enabled": true,
-        "sounds": true,
-        "log-failures": true
-      },
-      "verify-checks": [
-        "docker",
-        "orb",
-        "kubectl",
-        "helm",
-        "docker_completion",
-        "orb_completion",
-        "kubectl_completion",
-        "helm_completion",
-        "terraform_completion"
-      ]
     }
   }
 }

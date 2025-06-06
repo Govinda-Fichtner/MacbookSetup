@@ -3,7 +3,7 @@
 # To use this file for installation, run: brew bundle
 
 # Taps (Third-party repositories)
-tap "cirruslabs/cli"  # Added for Cirrus CI tooling
+
 
 # Formulae (Command-line packages)
 brew "git"
@@ -52,4 +52,3 @@ cask "font-fira-code-nerd-font"         # Popular coding font with Nerd Font ico
 cask "font-jetbrains-mono-nerd-font"    # Clean, crisp font with Nerd Font icons, excellent for terminal use
 
 # CI/CD Tools
-brew "cirruslabs/cli/cirrus"  # Cirrus CI CLI for local validation and monitoring
