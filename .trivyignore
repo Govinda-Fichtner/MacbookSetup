@@ -1,0 +1,8 @@
+# Trivy Ignore File
+# Temporarily ignore known issues during initial setup
+
+# AVD-DS-0002: USER command in Dockerfile
+# Known issue: All MCP server Dockerfiles run as root
+# Status: Under evaluation - need to test non-root user compatibility with MCP servers
+# Target: Address in dedicated security hardening phase
+AVD-DS-0002

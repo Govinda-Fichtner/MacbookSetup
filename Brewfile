@@ -34,6 +34,7 @@ brew "coreutils"     # GNU core utilities (provides gtimeout for macOS)
 brew "jq"            # JSON processing for MCP configurations
 brew "yq"            # YAML processing for configurations
 brew "gitleaks"      # Secret scanner for Git repositories
+brew "trivy"         # Vulnerability scanner for containers and IaC
 
 # Casks (GUI applications)
 cask "cursor"
