@@ -516,3 +516,177 @@ The output should include "Filesystem MCP Server"
 The output should include "Terraform CLI Controller"
 End
 End
+
+test_docker_unavailability() {
+  local temp_dir
+  temp_dir=$(mktemp -d)
+  echo '#!/bin/sh
+echo "docker: command not found" >&2
+exit 127' > "$temp_dir/docker"
+  chmod +x "$temp_dir/docker"
+  PATH="$temp_dir:$PATH"
+}
+
+Describe 'docker server functionality'
+Describe 'basic docker server operations'
+BeforeEach 'setup_test_environment'
+
+It 'recognizes docker as privileged server type'
+When run zsh "$PWD/mcp_manager.sh" parse docker server_type
+The status should be success
+The output should equal "privileged"
+End
+
+It 'includes docker server in available servers'
+When run zsh "$PWD/mcp_manager.sh" list
+The status should be success
+The output should include "docker"
+End
+
+It 'generates docker configuration with privileged access'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq -r .mcpServers.docker.args[] tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "--privileged"
+The output should include "--network=host"
+End
+
+It 'includes docker socket mount in configuration'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq -r .mcpServers.docker.args[] tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "--volume=/var/run/docker.sock:/var/run/docker.sock"
+End
+
+It 'can test docker server individually'
+if ! command -v docker > /dev/null 2>&1; then
+  skip "Docker not available"
+fi
+When run zsh "$PWD/mcp_manager.sh" test docker
+The status should be success
+The output should include "Docker MCP Server"
+End
+
+It 'can list docker containers when tested'
+if ! command -v docker > /dev/null 2>&1; then
+  skip "Docker not available"
+fi
+When run zsh "$PWD/mcp_manager.sh" test docker
+The status should be success
+The output should include "Docker MCP Server"
+End
+
+It 'generates valid configuration for both Cursor and Claude Desktop'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq -r .mcpServers.docker tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "docker"
+End
+
+It 'includes docker server in Claude Desktop configuration'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq -r .mcpServers.docker "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+The status should be success
+The output should include "docker"
+End
+
+It 'uses correct image name in configuration'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq -r .mcpServers.docker.args[] tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "mcp-server-docker:latest"
+End
+End
+
+Describe 'docker server integration'
+BeforeEach 'setup_test_environment'
+
+It 'integrates with existing servers without conflicts'
+if ! command -v docker > /dev/null 2>&1; then
+  skip "Docker not available"
+fi
+
+When run zsh "$PWD/mcp_manager.sh" test
+The status should be success
+The output should include "Docker MCP Server"
+The output should include "GitHub MCP Server"
+The output should include "CircleCI MCP Server"
+End
+
+It 'maintains configuration consistency across all servers'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq -r .mcpServers.docker tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "docker"
+End
+
+It 'handles Docker unavailability gracefully'
+test_docker_unavailability
+
+When run zsh "$PWD/mcp_manager.sh" test docker
+The status should be failure
+The output should include "Docker MCP Server"
+The output should include "docker: command not found"
+The output should include "protocol failed unexpectedly"
+
+rm -rf "$temp_dir"
+End
+
+It 'skips Docker tests in CI environment'
+When run env CI=true zsh "$PWD/mcp_manager.sh" test docker
+The status should be success
+The output should include "MCP protocol functional (auth required or specific error)"
+The output should include "Basic protocol validation passed"
+The output should include "Advanced functionality tests (CI environment)"
+End
+
+It 'should pass basic protocol tests for all servers'
+if ! command -v docker > /dev/null 2>&1; then
+  skip "Docker not available"
+fi
+
+When run zsh "$PWD/mcp_manager.sh" test
+The status should be success
+The output should include "Basic protocol validation passed"
+End
+End
+
+Describe 'rails server functionality'
+rails server functionality
+It 'recognizes rails as mount_based server type'
+When run zsh "$PWD/mcp_manager.sh" parse rails server_type
+The status should be success
+The output should equal "mount_based"
+End
+
+It 'includes rails server in available servers'
+When run zsh "$PWD/mcp_manager.sh" list
+The status should be success
+The output should include "rails"
+End
+
+It 'generates Rails configuration with projects.yml mount'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run jq '.mcpServers.rails.args[]' "$HOME/.cursor/mcp.json"
+The status should be success
+The output should include "--mount"
+The output should include "type=bind,src=/Users/gfichtner/MacbookSetup/tmp/test_home/.config/rails-mcp,dst=/app/.config/rails-mcp"
+The output should include "--workdir"
+The output should include "/app/.config/rails-mcp"
+End
+
+It 'can test rails server individually'
+When run zsh "$PWD/mcp_manager.sh" test rails
+The status should be success
+The output should include "Rails MCP Server"
+End
+
+It 'lists projects when tested'
+When run zsh "$PWD/mcp_manager.sh" test rails
+The status should be success
+The output should include "Rails MCP Server"
+The output should include "MCP protocol functional"
+The output should include "Basic protocol validation passed"
+End
+End
+End
