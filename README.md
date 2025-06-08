@@ -810,3 +810,23 @@ The test suite includes several focused categories:
    - Ensures proper args array formatting
 
 This comprehensive testing ensures reliability and prevents regressions in MCP server configuration generation.
+
+## Docker MCP Server Implementation
+
+### Overview
+The Docker MCP server has been implemented and tested using a Test-Driven Development (TDD) approach. This server allows for privileged access to Docker, enabling operations such as listing containers and managing Docker resources.
+
+### Key Features
+- **Privileged Configuration**: The server is configured with privileged access to Docker, allowing for advanced operations.
+- **Socket Mounting**: The Docker socket is mounted to enable communication with the Docker daemon.
+- **Network Settings**: The server is configured to use the host network for seamless integration.
+
+### Testing
+- **Unit Tests**: Comprehensive tests have been added to ensure the server's functionality, including handling Docker unavailability gracefully.
+- **Integration Tests**: The server integrates seamlessly with existing MCP servers, maintaining configuration consistency.
+
+### Usage
+To use the Docker MCP server, ensure Docker is installed and running on your system. The server can be tested using the `./mcp_manager.sh test docker` command.
+
+### Documentation
+For more details, refer to the `spec/mcp_manager_spec.sh` file for test cases and the `mcp_server_registry.yml` for configuration details.

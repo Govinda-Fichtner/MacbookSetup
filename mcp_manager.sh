@@ -936,25 +936,39 @@ test_privileged_advanced_functionality() {
   local server_name="$2"
   local image="$3"
 
-  printf "│   ├── %b[ADVANCED]%b Privileged functionality testing (requires system access)\\n" "$BLUE" "$NC"
+  printf "│   ├── %b[ADVANCED]%b Privileged functionality testing (requires system access)\n" "$BLUE" "$NC"
 
   # Get privileged configuration
-  local volumes networks cmd_args
+  local volumes networks cmd_args privileged network_mode
   volumes=$(get_server_volumes "$server_id")
   networks=$(get_server_networks "$server_id")
   cmd_args=$(get_server_cmd "$server_id")
+  privileged=$(parse_server_config "$server_id" "privileged_configuration.privileged")
+  network_mode=$(parse_server_config "$server_id" "privileged_configuration.network_mode")
 
   # Build Docker command with privileged features
   local docker_cmd="docker run --rm -i --env-file .env"
+
+  # Add --privileged if specified
+  if [[ "$privileged" == "true" ]]; then
+    docker_cmd="$docker_cmd --privileged"
+  fi
+
+  # Add --network=host if specified
+  if [[ "$network_mode" == "host" ]]; then
+    docker_cmd="$docker_cmd --network=host"
+  fi
 
   # Add volume mounts
   while IFS= read -r volume; do
     [[ -n "$volume" ]] && docker_cmd="$docker_cmd -v $volume"
   done <<< "$volumes"
 
-  # Add network connections
+  # Add network connections (other than host)
   while IFS= read -r network; do
-    [[ -n "$network" ]] && docker_cmd="$docker_cmd --network $network"
+    if [[ -n "$network" && "$network" != "host" ]]; then
+      docker_cmd="$docker_cmd --network $network"
+    fi
   done <<< "$networks"
 
   # Add server-specific arguments
@@ -965,13 +979,13 @@ test_privileged_advanced_functionality() {
     [[ -n "$cmd_arg" ]] && docker_cmd="$docker_cmd $cmd_arg"
   done <<< "$cmd_args"
 
-  printf "│   │   ├── %b[TESTING]%b System access and privilege validation\\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b System access and privilege validation\n" "$BLUE" "$NC"
 
   # Special handling for servers that require complex initialization
   if [[ "$server_id" == "terraform-cli-controller" ]]; then
     # terraform-cli-controller requires MCP initialization handshake and responds with JSON-RPC properly
     # Manual testing confirmed privileged volumes and network access work correctly
-    printf "│   │   └── %b[SUCCESS]%b Privileged functionality verified (complex MCP server)\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b Privileged functionality verified (complex MCP server)\n" "$GREEN" "$NC"
     return 0
   fi
 
@@ -981,10 +995,10 @@ test_privileged_advanced_functionality() {
   response=$(echo "$test_payload" | timeout 15 "$docker_cmd" 2>&1)
 
   if echo "$response" | grep -q '"tools"'; then
-    printf "│   │   └── %b[SUCCESS]%b Privileged functionality verified\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b Privileged functionality verified\n" "$GREEN" "$NC"
     return 0
   else
-    printf "│   │   └── %b[WARNING]%b Privileged test failed (check system access)\\n" "$YELLOW" "$NC"
+    printf "│   │   └── %b[WARNING]%b Privileged test failed (check system access)\n" "$YELLOW" "$NC"
     return 0 # Changed: Warnings are not failures
   fi
 }
@@ -1533,11 +1547,16 @@ get_server_networks() {
 # Get volumes required by privileged servers
 get_server_volumes() {
   local server_id="$1"
-  {
-    parse_server_config "$server_id" "volumes" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' | while IFS= read -r volume; do
-      [[ -n "$volume" ]] && eval echo "$volume"
-    done
-  } 2> /dev/null
+  local volumes
+  # Try privileged_configuration.volumes first
+  volumes=$(parse_server_config "$server_id" "privileged_configuration.volumes" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+  # If empty, try top-level volumes
+  if [[ -z "$volumes" ]]; then
+    volumes=$(parse_server_config "$server_id" "volumes" | grep -E '^- "' | sed 's/^- "//' | sed 's/"$//' 2> /dev/null)
+  fi
+  if [[ -n "$volumes" ]]; then
+    echo "$volumes"
+  fi
 }
 
 # Get server entrypoint override if specified
@@ -1822,8 +1841,8 @@ write_cursor_config() {
           [[ -z "$config_dir" ]] && config_dir="$HOME/.config"
 
           local mount_args="      \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
-          mount_args="${mount_args}      \"--mount\", \"type=bind,src=${config_dir}/rails-mcp,dst=${config_container_path}/rails-mcp\",\n"
-          local path_args="\"${container_path}\""
+          mount_args="${mount_args}      \"--mount\", \"type=bind,src=${config_dir}/rails-mcp,dst=${config_container_path}\",\n"
+          mount_args="${mount_args}      \"--workdir\", \"${container_path}\",\n"
 
           json_content="${json_content}
     \"$server_id\": {
@@ -1832,7 +1851,7 @@ write_cursor_config() {
         \"run\", \"--rm\", \"-i\",
         \"--env-file\", \"$env_file_path\",
 ${mount_args}        \"$image\",
-        ${path_args}
+        \"${container_path}\"
       ]
     }"
         else
@@ -1854,56 +1873,54 @@ ${mount_args}        \"$image\",
         ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
-        local volumes networks entrypoint cmd_args
-        volumes=$(get_server_volumes "$server_id" 2> /dev/null)
-        networks=$(get_server_networks "$server_id" 2> /dev/null)
-        entrypoint=$(get_server_entrypoint "$server_id" 2> /dev/null)
-        cmd_args=$(get_server_cmd "$server_id" 2> /dev/null)
+        local privileged network_mode entrypoint cmd_args
+        privileged=$(get_privileged_config "$server_id" "privileged")
+        network_mode=$(get_privileged_config "$server_id" "network_mode")
+        entrypoint=$(get_server_entrypoint "$server_id")
+        cmd_args=$(get_server_cmd "$server_id")
 
-        # Special handling for terraform-cli-controller
-        if [[ "$server_id" == "terraform-cli-controller" ]]; then
-          cmd_args="mcp"
-        fi
+        # Get volumes without using mapfile
+        local volumes
+        volumes=$(get_server_volumes "$server_id")
 
         json_content="${json_content}
     \"$server_id\": {
       \"command\": \"docker\",
       \"args\": [
-        \"run\", \"--rm\", \"-i\",
-        \"--env-file\", \"$env_file_path\","
-
-        # Add volume mounts
-        while IFS= read -r volume; do
-          [[ -n "$volume" ]] && json_content="${json_content}
-        \"-v\", \"$volume\","
-        done <<< "$volumes"
-
-        # Add network connections
-        while IFS= read -r network; do
-          [[ -n "$network" ]] && json_content="${json_content}
-        \"--network\", \"$network\","
-        done <<< "$networks"
-
-        # Add server-specific environment variable overrides
-        if [[ "$server_id" == "kubernetes" ]]; then
+        \"run\", \"--rm\", \"-i\","
+        # Add privileged flag if specified
+        if [[ "$privileged" == "true" ]]; then
           json_content="${json_content}
-        \"-e\", \"KUBECONFIG=/home/.kube/config\","
+        \"--privileged\","
         fi
-
+        # Add network_mode if specified
+        if [[ "$network_mode" == "host" ]]; then
+          json_content="${json_content}
+        \"--network=host\","
+        fi
+        # Add volumes
+        if [[ -n "$volumes" ]]; then
+          while IFS= read -r volume; do
+            [[ -n "$volume" ]] && json_content="${json_content}
+        \"--volume=$volume\","
+          done <<< "$volumes"
+        fi
+        # Add env-file
+        json_content="${json_content}
+        \"--env-file\", \"$env_file_path\","
         # Add entrypoint override if specified and not null
         [[ -n "$entrypoint" && "$entrypoint" != "null" ]] && json_content="${json_content}
         \"--entrypoint\", \"$entrypoint\","
-
-        # Add image and cmd arguments
-        if [[ -n "$cmd_args" && "$cmd_args" != "null" ]]; then
-          json_content="${json_content}
-        \"$image\",
-        \"$cmd_args\""
-        else
-          json_content="${json_content}
+        # Add image
+        json_content="${json_content}
         \"$image\""
+        # Add cmd arguments if specified and not null
+        if [[ -n "$cmd_args" && "$cmd_args" != "null" ]]; then
+          while IFS= read -r cmd_arg; do
+            [[ -n "$cmd_arg" ]] && json_content="${json_content},
+        \"$cmd_arg\""
+          done <<< "$cmd_args"
         fi
-
         json_content="${json_content}
       ]
     }"
@@ -1911,8 +1928,10 @@ ${mount_args}        \"$image\",
       "api_based" | "standalone" | *)
         # Standard servers using --env-file approach with optional entrypoint/cmd overrides
         local entrypoint cmd_args
-        entrypoint=$(get_server_entrypoint "$server_id" 2> /dev/null)
-        cmd_args=$(get_server_cmd "$server_id" 2> /dev/null)
+        {
+          entrypoint=$(get_server_entrypoint "$server_id")
+          cmd_args=$(get_server_cmd "$server_id")
+        } 2> /dev/null
 
         json_content="${json_content}
     \"$server_id\": {
@@ -2033,8 +2052,8 @@ write_claude_config() {
           [[ -z "$config_dir" ]] && config_dir="$HOME/.config"
 
           local mount_args="        \"--mount\", \"type=bind,src=${first_dir},dst=${container_path}\",\n"
-          mount_args="${mount_args}        \"--mount\", \"type=bind,src=${config_dir}/rails-mcp,dst=${config_container_path}/rails-mcp\",\n"
-          local path_args="\"${container_path}\""
+          mount_args="${mount_args}        \"--mount\", \"type=bind,src=${config_dir}/rails-mcp,dst=${config_container_path}\",\n"
+          mount_args="${mount_args}        \"--workdir\", \"${container_path}\",\n"
 
           json_content="${json_content}
     \"$server_id\": {
@@ -2043,7 +2062,7 @@ write_claude_config() {
         \"run\", \"--rm\", \"-i\",
         \"--env-file\", \"$env_file_path\",
 ${mount_args}        \"$image\",
-        ${path_args}
+        \"${container_path}\"
       ]
     }"
         else
@@ -2065,59 +2084,47 @@ ${mount_args}        \"$image\",
         ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
-        local volumes networks entrypoint cmd_args docker_args
-        volumes=$(get_server_volumes "$server_id" 2> /dev/null)
-        networks=$(get_server_networks "$server_id" 2> /dev/null)
-        entrypoint=$(get_server_entrypoint "$server_id" 2> /dev/null)
-        cmd_args=$(get_server_cmd "$server_id" 2> /dev/null)
-
-        # Special handling for terraform-cli-controller
-        if [[ "$server_id" == "terraform-cli-controller" ]]; then
-          cmd_args="mcp"
-        fi
-
+        local privileged network_mode entrypoint cmd_args docker_args
+        privileged=$(get_privileged_config "$server_id" "privileged")
+        network_mode=$(get_privileged_config "$server_id" "network_mode")
+        entrypoint=$(get_server_entrypoint "$server_id")
+        cmd_args=$(get_server_cmd "$server_id")
+        local -a volumes
+        mapfile -t volumes < <(get_server_volumes "$server_id")
         docker_args="      \"run\", \"--rm\", \"-i\","
-        docker_args="${docker_args}\n      \"--env-file\", \"$env_file_path\","
-
-        # Add volume mounts
-        while IFS= read -r volume; do
-          [[ -n "$volume" ]] && docker_args="${docker_args}\n      \"-v\", \"$volume\","
-        done <<< "$volumes"
-
-        # Add network connections
-        while IFS= read -r network; do
-          [[ -n "$network" ]] && docker_args="${docker_args}\n      \"--network\", \"$network\","
-        done <<< "$networks"
-
-        # Add server-specific environment variable overrides
-        if [[ "$server_id" == "kubernetes" ]]; then
-          docker_args="${docker_args}\n      \"-e\", \"KUBECONFIG=/home/.kube/config\","
+        # Add privileged flag if specified
+        if [[ "$privileged" == "true" ]]; then
+          docker_args="${docker_args}\n      \"--privileged\","
         fi
-
+        # Add network_mode if specified
+        if [[ "$network_mode" == "host" ]]; then
+          docker_args="${docker_args}\n      \"--network=host\","
+        fi
+        # Add volumes
+        for vol in "${volumes[@]}"; do
+          docker_args="${docker_args}\n      \"--volume=$vol\","
+        done
+        # Add env-file
+        docker_args="${docker_args}\n      \"--env-file\", \"$env_file_path\","
         # Add entrypoint override if specified and not null
         [[ -n "$entrypoint" && "$entrypoint" != "null" ]] && docker_args="${docker_args}\n      \"--entrypoint\", \"$entrypoint\","
-
-        # Add image and cmd arguments
+        # Add image
+        docker_args="${docker_args}\n      \"$image\""
+        # Add cmd arguments if specified and not null
         if [[ -n "$cmd_args" && "$cmd_args" != "null" ]]; then
-          docker_args="${docker_args}\n      \"$image\","
-          docker_args="${docker_args}\n      \"$cmd_args\""
-        else
-          docker_args="${docker_args}\n      \"$image\""
+          while IFS= read -r cmd_arg; do
+            [[ -n "$cmd_arg" ]] && docker_args="${docker_args},\n      \"$cmd_arg\""
+          done <<< "$cmd_args"
         fi
-
-        json_content="${json_content}
-  \"$server_id\": {
-    \"command\": \"docker\",
-    \"args\": [
-${docker_args}
-    ]
-  }"
+        json_content="${json_content}\n    \"$server_id\": {\n      \"command\": \"docker\",\n      \"args\": [\n${docker_args}\n      ]\n    }"
         ;;
       "api_based" | "standalone" | *)
         # Standard servers using --env-file approach with optional entrypoint/cmd overrides
         local entrypoint cmd_args
-        entrypoint=$(get_server_entrypoint "$server_id" 2> /dev/null)
-        cmd_args=$(get_server_cmd "$server_id" 2> /dev/null)
+        {
+          entrypoint=$(get_server_entrypoint "$server_id")
+          cmd_args=$(get_server_cmd "$server_id")
+        } 2> /dev/null
 
         json_content="${json_content}
     \"$server_id\": {
@@ -2332,44 +2339,52 @@ EOF
         ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
-        local volumes networks entrypoint cmd_args
-        volumes=$(get_server_volumes "$server_id" 2> /dev/null)
-        networks=$(get_server_networks "$server_id" 2> /dev/null)
-        entrypoint=$(get_server_entrypoint "$server_id" 2> /dev/null)
+        local privileged network_mode entrypoint cmd_args
+        privileged=$(get_privileged_config "$server_id" "privileged")
+        network_mode=$(get_privileged_config "$server_id" "network_mode")
+        entrypoint=$(get_server_entrypoint "$server_id")
         cmd_args=$(get_server_cmd "$server_id")
-        # Special handling for terraform-cli-controller
-        if [[ "$server_id" == "terraform-cli-controller" ]]; then
-          cmd_args="mcp"
+        local -a volumes
+        mapfile -t volumes < <(get_server_volumes "$server_id")
+        json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\","
+        # Add privileged flag if specified
+        if [[ "$privileged" == "true" ]]; then
+          json_content="${json_content}
+        \"--privileged\","
         fi
-
-        printf '        "run", "--rm", "-i",\n'
-        printf '        "--env-file", "%s",\n' "$env_file_path"
-
-        # Add volume mounts
-        while IFS= read -r volume; do
-          [[ -n "$volume" ]] && printf '        "-v", "%s",\n' "$volume"
-        done <<< "$volumes"
-
-        # Add network connections
-        while IFS= read -r network; do
-          [[ -n "$network" ]] && printf '        "--network", "%s",\n' "$network"
-        done <<< "$networks"
-
-        # Add server-specific environment variable overrides
-        if [[ "$server_id" == "kubernetes" ]]; then
-          printf '        "-e", "KUBECONFIG=/home/.kube/config",\n'
+        # Add network_mode if specified
+        if [[ "$network_mode" == "host" ]]; then
+          json_content="${json_content}
+        \"--network=host\","
         fi
-
-        # Add entrypoint override if specified
-        [[ -n "$entrypoint" ]] && printf '        "--entrypoint", "%s",\n' "$entrypoint"
-
-        # Add image and cmd arguments
-        if [[ -n "$cmd_args" ]]; then
-          printf '        "%s",\n' "$image"
-          printf '        "%s"\n' "$cmd_args"
-        else
-          printf '        "%s"\n' "$image"
+        # Add volumes
+        for vol in "${volumes[@]}"; do
+          json_content="${json_content}
+        \"--volume=$vol\","
+        done
+        # Add env-file
+        json_content="${json_content}
+        \"--env-file\", \"$env_file_path\","
+        # Add entrypoint override if specified and not null
+        [[ -n "$entrypoint" && "$entrypoint" != "null" ]] && json_content="${json_content}
+        \"--entrypoint\", \"$entrypoint\","
+        # Add image
+        json_content="${json_content}
+        \"$image\""
+        # Add cmd arguments if specified and not null
+        if [[ -n "$cmd_args" && "$cmd_args" != "null" ]]; then
+          while IFS= read -r cmd_arg; do
+            [[ -n "$cmd_arg" ]] && json_content="${json_content},
+        \"$cmd_arg\""
+          done <<< "$cmd_args"
         fi
+        json_content="${json_content}
+      ]
+    }"
         ;;
       "api_based" | "standalone" | *)
         # Standard servers use environment files

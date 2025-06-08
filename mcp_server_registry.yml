@@ -84,21 +84,29 @@ servers:
       - "secure_access"
 
   docker:
-    name: "Docker MCP Server (QuantGeekDev)"
+    name: "Docker MCP Server"
     server_type: "privileged"
-    description: "Docker container management and orchestration via QuantGeekDev docker-mcp server with direct \
-      Docker API access"
-    category: "infrastructure"
+    description: "Docker container management and inspection"
+    category: "system"
     source:
-      type: registry
-      image: "ghcr.io/metorial/mcp-container--quantgeekdev--docker-mcp--docker-mcp:latest"
-    environment_variables:
-      - "DOCKER_HOST"
-      - "DOCKER_COMPOSE_PROJECT_NAME"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-    networks:
-      - "mcp-network"
+      type: "build"
+      repository: "https://github.com/ckreiling/mcp-server-docker"
+      build_context: "."
+      image: "mcp-server-docker:latest"
+    privileged_configuration:
+      privileged: true
+      network_mode: "host"
+      docker_socket: true
+      volumes:
+        - "/var/run/docker.sock:/var/run/docker.sock"
+    capabilities:
+      - "container_management"
+      - "image_management"
+      - "network_management"
+      - "volume_management"
+      - "container_exec"
+      - "container_logs"
+      - "container_restart"
 
   kubernetes:
     name: "Kubernetes MCP Server (manusa)"
@@ -202,34 +210,26 @@ servers:
   rails:
     name: "Rails MCP Server"
     server_type: "mount_based"
-    description: "MCP server for Rails project analysis and development assistance"
+    description: "Rails project management and inspection"
     category: "development"
     source:
-      type: build
-      repository: "https://github.com/maquina-app/rails-mcp-server.git"
-      image: "local/mcp-server-rails:latest"
-      build_context: "."
-    environment_variables:
-      - "RAILS_MCP_ROOT_PATH"
-      - "RAILS_MCP_CONFIG_HOME"
+      type: registry
+      image: "mcp/rails-mcp-server:latest"
     mount_configuration:
-      # Mount parent directory containing all Rails projects
-      source_env_var: "RAILS_MCP_ROOT_PATH"
-      container_path: "/rails-projects"
-      default_fallback: "$HOME/Projects"
-      # Mount config directory for projects.yml configuration
-      config_source_env_var: "RAILS_MCP_CONFIG_HOME"
-      config_container_path: "/app/.config"
+      source_env_var: "RAILS_CONFIG_DIR"
+      container_path: "/app/.config/rails-mcp"
+      default_fallback: "${PWD}/tmp/test_home/.config/rails-mcp"
+    health_test:
+      basic:
+        command: "mcp"
+        expected_output: "Rails MCP Server"
+      advanced:
+        command: "list_projects"
+        expected_output: "Projects:"
     capabilities:
-      - "rails_project_analysis"
-      - "model_inspection"
-      - "route_analysis"
-      - "gem_management"
-      - "database_schema_analysis"
-      - "test_generation"
-      - "controller_analysis"
-      - "view_templates"
-      - "migration_assistance"
+      - "Project management"
+      - "Rails inspection"
+      - "Development tools"
 
   terraform-cli-controller:
     name: "Terraform CLI Controller"
