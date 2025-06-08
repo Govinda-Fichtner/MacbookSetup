@@ -144,6 +144,16 @@ apply_docker_patches() {
         return 1
       fi
       ;;
+    "docker")
+      # Use our custom Dockerfile for Docker MCP server
+      if [[ -f "support/docker/mcp-server-docker/Dockerfile" ]]; then
+        cp "support/docker/mcp-server-docker/Dockerfile" "$repo_dir/Dockerfile"
+        return 0
+      else
+        printf "│   ├── %b[WARNING]%b Docker custom Dockerfile not found\n" "$YELLOW" "$NC"
+        return 1
+      fi
+      ;;
     "rails")
       # Use our custom Dockerfile for Rails MCP server
       if [[ -f "support/docker/mcp-server-rails/Dockerfile" ]]; then
