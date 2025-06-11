@@ -127,7 +127,7 @@ servers:
     volumes:
       - "$HOME/.kube:/home/.kube:ro"
     networks:
-      - "mcp-network"
+      - "host"
 
   figma:
     name: "Figma Context MCP Server (GLips)"

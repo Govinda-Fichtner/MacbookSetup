@@ -928,7 +928,7 @@ test_kubernetes_advanced_functionality() {
   # Quick test to verify server is functional
   local init_payload='{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "kubernetes-test", "version": "1.0.0"}}}'
   local init_response
-  init_response=$(echo "$init_payload" | timeout 10 docker run --rm -i --env-file .env -v "$real_home_dir/.kube:/home/.kube:ro" --network mcp-network -e KUBECONFIG=/home/.kube/config --entrypoint /app/kubernetes-mcp-server "$image" 2>&1)
+  init_response=$(echo "$init_payload" | timeout 10 docker run --rm -i --env-file .env -v "$real_home_dir/.kube:/home/.kube:ro" --network host -e KUBECONFIG=/home/.kube/config --entrypoint /app/kubernetes-mcp-server "$image" 2>&1)
 
   if echo "$init_response" | grep -q '"serverInfo".*"kubernetes-mcp-server"'; then
     printf "│   │   │   └── %b[SUCCESS]%b Kubernetes MCP server functional with %s tools\\n" "$GREEN" "$NC" "18+"
