@@ -35,6 +35,11 @@ brew "jq"            # JSON processing for MCP configurations
 brew "yq"            # YAML processing for configurations
 brew "gitleaks"      # Secret scanner for Git repositories
 brew "trivy"         # Vulnerability scanner for containers and IaC
+brew "aider"         # AI-powered coding assistant
+brew "block-goose-cli" # Block Goose CLI
+brew "gh"             # GitHub CLI
+brew "codex"          # Codex CLI
+
 
 # Casks (GUI applications)
 cask "cursor"
@@ -47,6 +52,7 @@ cask "orbstack"         # Fast, light Docker & Linux on macOS with Kubernetes su
 cask "claude"           # Anthropic's official Claude AI desktop app
 cask "figma@beta"       # Collaborative design tool (beta version)
 cask "figma-agent"      # Font installers for Figma desktop app
+cask "block-goose"      # Block Goose Desktop App
 
 # Fonts - These Nerd Fonts are required for Starship prompt to display special icons correctly
 # These fonts are now available through the main Homebrew cask repository (no special tap needed)
