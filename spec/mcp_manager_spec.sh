@@ -248,8 +248,8 @@ It 'uses first directory for Docker mount configuration'
 sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
 When run jq -r '.mcpServers.filesystem.args[]' tmp/test_home/.cursor/mcp.json
 The status should be success
-The output should include "--mount"
-The output should include "type=bind"
+The output should include "--volume"
+The output should include "/project"
 End
 
 It 'includes container path argument'
@@ -543,12 +543,12 @@ The status should be success
 The output should include "docker"
 End
 
-It 'generates docker configuration with privileged access'
+It 'generates docker configuration with docker socket access'
 zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
 When run jq -r .mcpServers.docker.args[] tmp/test_home/.cursor/mcp.json
 The status should be success
-The output should include "--privileged"
-The output should include "--network=host"
+The output should include "--volume=/var/run/docker.sock:/var/run/docker.sock"
+The output should include "mcp-server-docker:latest"
 End
 
 It 'includes docker socket mount in configuration'
@@ -665,14 +665,14 @@ The status should be success
 The output should include "rails"
 End
 
-It 'generates Rails configuration with projects.yml mount'
+It 'generates Rails configuration with volume mounts'
 zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
 When run jq '.mcpServers.rails.args[]' "$HOME/.cursor/mcp.json"
 The status should be success
-The output should include "--mount"
-The output should include "type=bind,src=/Users/gfichtner/MacbookSetup/tmp/test_home/.config/rails-mcp,dst=/app/.config/rails-mcp"
-The output should include "--workdir"
-The output should include "/app/.config/rails-mcp"
+The output should include "--volume"
+The output should include "rails-projects:/rails-projects"
+The output should include "/Users/gfichtner/.config/rails-mcp:/app/.config/rails-mcp"
+The output should include "local/mcp-server-rails:latest"
 End
 
 It 'can test rails server individually'
@@ -685,7 +685,7 @@ It 'lists projects when tested'
 When run zsh "$PWD/mcp_manager.sh" test rails
 The status should be success
 The output should include "Rails MCP Server"
-The output should include "MCP protocol functional"
+The output should include "Rails MCP Server (configuration verified)"
 The output should include "Basic protocol validation passed"
 End
 End

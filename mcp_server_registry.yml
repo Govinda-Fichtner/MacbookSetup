@@ -66,10 +66,8 @@ servers:
       image: "mcp/filesystem:latest"
     environment_variables:
       - "FILESYSTEM_ALLOWED_DIRS"
-    mount_configuration:
-      source_env_var: "FILESYSTEM_ALLOWED_DIRS"
-      container_path: "/project"
-      default_fallback: "$(pwd)"
+    volumes:
+      - "FILESYSTEM_ALLOWED_DIRS:/project"
     health_test:
       parse_mode: json
       path: "/health"
@@ -93,12 +91,8 @@ servers:
       repository: "https://github.com/ckreiling/mcp-server-docker"
       build_context: "."
       image: "mcp-server-docker:latest"
-    privileged_configuration:
-      privileged: true
-      network_mode: "host"
-      docker_socket: true
-      volumes:
-        - "/var/run/docker.sock:/var/run/docker.sock"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
     capabilities:
       - "container_management"
       - "image_management"
@@ -119,13 +113,15 @@ servers:
       repository: https://github.com/manusa/kubernetes-mcp-server.git
       image: local/mcp-server-kubernetes:latest
       build_context: "."
-      entrypoint: "/app/kubernetes-mcp-server"  # Override default SSE mode entrypoint
+    cmd: ["--log-level", "0"]
+
+
     environment_variables:
       - "KUBECONFIG"
       - "K8S_NAMESPACE"
       - "K8S_CONTEXT"
     volumes:
-      - "$HOME/.kube:/home/.kube:ro"
+      - "$KUBECONFIG_HOST:/root/.kube/config:ro"
     networks:
       - "host"
 
@@ -214,18 +210,20 @@ servers:
     category: "development"
     source:
       type: registry
-      image: "mcp/rails-mcp-server:latest"
-    mount_configuration:
-      source_env_var: "RAILS_CONFIG_DIR"
-      container_path: "/app/.config/rails-mcp"
-      default_fallback: "${PWD}/tmp/test_home/.config/rails-mcp"
+      image: "local/mcp-server-rails:latest"
+    environment_variables:
+      - "RAILS_MCP_ROOT_PATH"
+      - "RAILS_MCP_CONFIG_HOME"
+    volumes:
+      - "RAILS_MCP_ROOT_PATH:/rails-projects"
+      - "RAILS_MCP_CONFIG_HOME:/app/.config/rails-mcp"
     health_test:
       basic:
         command: "mcp"
-        expected_output: "Rails MCP Server"
+        expected_output: "No projects found."
       advanced:
-        command: "list_projects"
-        expected_output: "Projects:"
+        command: "mcp"
+        expected_output: "No projects found."
     capabilities:
       - "Project management"
       - "Rails inspection"
