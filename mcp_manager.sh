@@ -3061,7 +3061,7 @@ handle_config_write() {
   local all_servers=()
   while IFS= read -r server_name; do
     # Filter out debug variable assignments that shouldn't be treated as server names
-    if [[ "$server_name" =~ ^[a-z-]+$ ]]; then
+    if [[ "$server_name" =~ ^[a-z0-9-]+$ ]]; then
       all_servers+=("$server_name")
     fi
   done < <(get_available_servers)

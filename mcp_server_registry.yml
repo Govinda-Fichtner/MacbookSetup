@@ -203,6 +203,33 @@ servers:
       - "terraform_registry_search"
       - "provider_resource_documentation"
 
+  context7:
+    name: "Context7 Documentation MCP Server"
+    server_type: "standalone"
+    description: "Context7 library documentation server by Upstash - provides up-to-date documentation, \
+      code examples, and library ID resolution for any programming library without requiring API tokens"
+    category: "documentation"
+    source:
+      type: build
+      repository: "https://github.com/upstash/context7.git"
+      image: "local/context7-mcp:latest"
+      build_context: "."
+    health_test:
+      parse_mode: json
+      path: "/health"
+      expected_status: 200
+      expected_response:
+        result:
+          serverInfo:
+            name: "Context7"
+    capabilities:
+      - "library_documentation_access"
+      - "current_code_examples"
+      - "library_id_resolution"
+      - "topic_focused_docs"
+      - "version_specific_documentation"
+      - "no_authentication_required"
+
   rails:
     name: "Rails MCP Server"
     server_type: "mount_based"

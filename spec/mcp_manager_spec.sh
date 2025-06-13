@@ -118,6 +118,7 @@ The output should include "circleci"
 The output should include "figma"
 The output should include "heroku"
 The output should include "filesystem"
+The output should include "context7"
 End
 
 It 'parses server configuration correctly'
@@ -184,6 +185,7 @@ The output should include "circleci"
 The output should include "figma"
 The output should include "heroku"
 The output should include "filesystem"
+The output should include "context7"
 End
 End
 
@@ -395,6 +397,61 @@ It 'heroku server can be tested individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
 The status should be success
 The output should include "Heroku Platform MCP Server"
+End
+End
+
+Describe 'context7 server integration'
+BeforeEach 'setup_test_environment'
+
+It 'includes context7 server in available servers list'
+When run zsh "$PWD/mcp_manager.sh" list
+The status should be success
+The output should include "context7"
+End
+
+It 'supports standalone server type for context7'
+When run zsh "$PWD/mcp_manager.sh" parse context7 server_type
+The status should be success
+The output should equal "standalone"
+End
+
+It 'generates context7 configuration for Cursor'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.context7' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "context7"
+The output should include "local/context7-mcp:latest"
+End
+
+It 'generates context7 configuration for Claude Desktop'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.context7' "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json"
+The status should be success
+The output should include "context7"
+End
+
+It 'context7 server uses standalone configuration'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq '.mcpServers.context7' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include '"command": "docker"'
+The output should include '"run"'
+The output should include '"--rm"'
+The output should include '"-i"'
+The output should include '"local/context7-mcp:latest"'
+End
+
+It 'context7 server can be tested individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test context7'
+The status should be success
+The output should include "Context7 Documentation MCP Server"
+End
+
+It 'context7 server supports setup command for building'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup context7'
+The status should be success
+The output should include "Context7 Documentation MCP Server"
+The output should include "[SUCCESS]"
 End
 End
 
