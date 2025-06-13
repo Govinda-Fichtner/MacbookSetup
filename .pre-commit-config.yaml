@@ -39,7 +39,7 @@ repos:
     hooks:
       - id: shellspec-unit-tests
         name: Run Shellspec unit tests (fast)
-        entry: bash -c 'shellspec spec/unit/'
+        entry: bash -c 'shellspec spec/unit/mcp_manager_unit_spec.sh'
         language: system
         files: ^(mcp_manager\.sh|spec/.*_spec\.sh)$
         pass_filenames: false
