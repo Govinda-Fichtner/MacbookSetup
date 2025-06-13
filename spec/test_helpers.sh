@@ -73,7 +73,7 @@ mock_yq_command() {
         echo "filesystem"
         echo "docker"
         echo "kubernetes"
-        echo "mcp-rails"
+        echo "rails"
         echo "inspector"
         ;;
       "eval '.servers.github.name' mcp_server_registry.yml")

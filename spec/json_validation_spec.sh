@@ -437,6 +437,9 @@ End
 End
 
 Describe 'Cross-platform JSON Consistency'
+BeforeEach 'setup_json_test_environment'
+AfterEach 'cleanup_json_test_environment'
+
 It 'Cursor and Claude configs should have identical server entries'
 cursor_servers=$(jq -r '.mcpServers | keys[]' "$TEST_HOME/.cursor/mcp.json" | sort)
 claude_servers=$(jq -r '.mcpServers | keys[]' "$TEST_HOME/Library/Application Support/Claude/claude_desktop_config.json" | sort)

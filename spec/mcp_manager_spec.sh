@@ -652,7 +652,6 @@ End
 End
 
 Describe 'rails server functionality'
-rails server functionality
 It 'recognizes rails as mount_based server type'
 When run zsh "$PWD/mcp_manager.sh" parse rails server_type
 The status should be success
