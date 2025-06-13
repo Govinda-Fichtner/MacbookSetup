@@ -1789,8 +1789,12 @@ get_available_servers() {
   while IFS= read -r server_id_line; do
     [[ -z "$server_id_line" ]] && continue
 
+    # Suppress all debug output during image parsing
     local image
-    image=$(parse_server_config "$server_id_line" "source.image" 2> /dev/null)
+    {
+      set +x +v 2> /dev/null || true
+      image=$(parse_server_config "$server_id_line" "source.image" 2> /dev/null)
+    } 2> /dev/null
 
     # Skip if we couldn't get a valid image
     [[ -z "$image" ]] && continue
@@ -1799,7 +1803,7 @@ get_available_servers() {
     if docker images | grep -q "$(echo "$image" | cut -d: -f1)" 2> /dev/null; then
       echo "$server_id_line"
     fi
-  done < <(get_configured_servers)
+  done < <(get_configured_servers 2> /dev/null) 2> /dev/null
 }
 
 # Get working servers with token status
@@ -2248,7 +2252,6 @@ EOF
 
     local server_type
     server_type=$(get_server_type "$server_id")
-    echo "DEBUG-CONFIG: Processing server_id=$server_id with server_type=$server_type" >&2
 
     case "$server_type" in
       "mount_based")
@@ -3046,7 +3049,69 @@ normalize_args() {
 
 # Filter debug output consistently across all commands
 filter_debug_output() {
-  grep -v -E '^(container_value=|image=|env_vars=|placeholder=|server_name=|server_count=|server_type=|volumes=|networks=|entrypoint=|docker_args=)'
+  grep -v -E '^(container_value=|image=|env_vars=|placeholder=|server_name=|server_count=|server_type=|volumes=|networks=|entrypoint=|docker_args=|cmd_args=|source_env_var=|container_path=|default_fallback=|mount_dirs=|first_dir=)'
+}
+
+# Handle config-write command with debug output suppression
+handle_config_write() {
+  echo -e "\n=== MCP Client Configuration Generation ==="
+  printf "├── %b[INFO]%b Generating configuration for Docker-based MCP servers\\n" "$BLUE" "$NC"
+
+  # Get all available servers first
+  local all_servers=()
+  while IFS= read -r server_name; do
+    # Filter out debug variable assignments that shouldn't be treated as server names
+    if [[ "$server_name" =~ ^[a-z-]+$ ]]; then
+      all_servers+=("$server_name")
+    fi
+  done < <(get_available_servers)
+
+  # Generate .env_example file with all server environment variables
+  generate_env_file "${all_servers[@]}"
+
+  # Categorize servers by token status (but include ALL servers in configuration)
+  local active_servers=("${all_servers[@]}") # Include all available servers
+  local servers_with_tokens=()
+  local servers_with_placeholders=()
+
+  for server_id in "${all_servers[@]}"; do
+    if server_has_real_tokens "$server_id"; then
+      servers_with_tokens+=("$server_id")
+    else
+      servers_with_placeholders+=("$server_id")
+    fi
+  done
+
+  # Report server status
+  if [[ ${#servers_with_tokens[@]} -gt 0 ]]; then
+    printf "├── %b[TOKENS]%b Servers with authentication: %s\\n" "$GREEN" "$NC" "${servers_with_tokens[*]}"
+  fi
+  if [[ ${#servers_with_placeholders[@]} -gt 0 ]]; then
+    printf "├── %b[PLACEHOLDERS]%b Servers using placeholders: %s\\n" "$YELLOW" "$NC" "${servers_with_placeholders[*]}"
+  fi
+
+  # Write configurations with debug output suppressed
+  printf "├── %b[WRITING]%b Cursor configuration\\n" "$BLUE" "$NC"
+  {
+    # Disable all debug output for the duration of config writing
+    set +x +v 2> /dev/null || true
+    write_cursor_config "${active_servers[@]}" 2> /dev/null
+  }
+
+  printf "└── %b[WRITING]%b Claude Desktop configuration\\n" "$BLUE" "$NC"
+  {
+    # Disable all debug output for the duration of config writing
+    set +x +v 2> /dev/null || true
+    write_claude_config "${active_servers[@]}" 2> /dev/null
+  }
+
+  # Success message and next steps
+  echo
+  printf "%b[SUCCESS]%b Client configurations written to files!\\n" "$GREEN" "$NC"
+  echo "[NEXT STEPS]"
+  echo "  1. Copy .env_example to .env: cp .env_example .env"
+  echo "  2. Update .env with your real API tokens"
+  echo "  3. Restart Claude Desktop/Cursor to pick up the new configuration"
 }
 
 # Command-line interface
@@ -3077,7 +3142,7 @@ main() {
       generate_client_configs "${normalized_args[2]:-all}" "preview" 2>&1 | filter_debug_output
       ;;
     "config-write")
-      generate_client_configs "${normalized_args[2]:-all}" "write" 2>&1 | filter_debug_output
+      handle_config_write 2>&1 | filter_debug_output
       ;;
     "list")
       echo "Configured MCP servers:"
@@ -3159,35 +3224,3 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]] || [[ "${0}" == "${ZSH_ARGZERO}" ]]; then
   main "$@"
   exit $?
 fi
-
-# Generate MCP configuration for both Cursor and Claude Desktop
-generate_mcp_config() {
-  local cursor_config claude_config
-
-  echo "=== MCP Client Configuration Generation ==="
-  echo "├── [INFO] Generating configuration for Docker-based MCP servers"
-
-  # Generate Cursor config
-  cursor_config=$(generate_cursor_config) || {
-    echo "│   └── [ERROR] Failed to generate Cursor configuration"
-    return 1
-  }
-
-  # Generate Claude config
-  claude_config=$(generate_claude_config) || {
-    echo "│   └── [ERROR] Failed to generate Claude Desktop configuration"
-    return 1
-  }
-
-  # Write both configs
-  write_config_files "$cursor_config" "$claude_config" || {
-    echo "│   └── [ERROR] Failed to write configuration files"
-    return 1
-  }
-
-  echo "└── [SUCCESS] Client configurations written to files!"
-  echo "[NEXT STEPS]"
-  echo "  1. Copy .env_example to .env: cp .env_example .env"
-  echo "  2. Update .env with your real API tokens"
-  echo "  3. Restart Claude Desktop/Cursor to pick up the new configuration"
-}
