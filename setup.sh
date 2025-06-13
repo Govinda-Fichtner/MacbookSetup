@@ -329,22 +329,49 @@ install_homebrew() {
 
   printf "├── %b[INSTALLING]%b Homebrew (this may take a few minutes)\n" "$BLUE" "$NC"
 
+  # Set CI-friendly environment variables for Homebrew installation
+  export HOMEBREW_NO_AUTO_UPDATE=1
+  export HOMEBREW_NO_INSTALL_CLEANUP=1
+  export HOMEBREW_NO_ENV_HINTS=1
+  export HOMEBREW_NO_ANALYTICS=1
+  export HOMEBREW_NO_INSECURE_REDIRECT=1
+  export GIT_TERMINAL_PROMPT=0
+
   # Install Homebrew with minimal output
   local brew_install_log="/tmp/homebrew_install.log"
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > "$brew_install_log" 2>&1 || {
+
+  # The Homebrew installer may fail on update step in CI, but we'll check if it actually works
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > "$brew_install_log" 2>&1
+  local installer_exit_code=$?
+
+  # Configure Homebrew PATH based on architecture first
+  if [[ "$(uname -m)" == "arm64" ]]; then
+    export PATH="/opt/homebrew/bin:$PATH"
+    eval "$(/opt/homebrew/bin/brew shellenv)" 2> /dev/null || true
+  else
+    export PATH="/usr/local/bin:$PATH"
+    eval "$(/usr/local/bin/brew shellenv)" 2> /dev/null || true
+  fi
+
+  # Check if Homebrew actually works, regardless of installer exit code
+  if check_command brew && brew --version > /dev/null 2>&1; then
+    printf "│   └── %b[SUCCESS]%b Homebrew installation successful\n" "$GREEN" "$NC"
+
+    # Add to shell configuration if not already present
+    if [[ "$(uname -m)" == "arm64" ]]; then
+      if ! grep -q 'eval "$(/opt/homebrew/bin/brew shellenv)"' "$ZSHRC_PATH" 2> /dev/null; then
+        # shellcheck disable=SC2016
+        echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$ZSHRC_PATH"
+      fi
+    else
+      if ! grep -q 'eval "$(/usr/local/bin/brew shellenv)"' "$ZSHRC_PATH" 2> /dev/null; then
+        # shellcheck disable=SC2016
+        echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$ZSHRC_PATH"
+      fi
+    fi
+  else
     printf "└── %b[ERROR]%b Failed to install Homebrew. See %s for details.\n" "$RED" "$NC" "$brew_install_log"
     return 1
-  }
-
-  # Configure Homebrew PATH based on architecture
-  if [[ "$(uname -m)" == "arm64" ]]; then
-    # shellcheck disable=SC2016
-    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$ZSHRC_PATH"
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  else
-    # shellcheck disable=SC2016
-    echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$ZSHRC_PATH"
-    eval "$(/usr/local/bin/brew shellenv)"
   fi
 
   printf "└── %b[SUCCESS]%b Homebrew installation complete\n" "$GREEN" "$NC"
