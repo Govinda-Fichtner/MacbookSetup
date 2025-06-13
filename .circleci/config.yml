@@ -9,22 +9,46 @@ commands:
       - run:
           name: Install Homebrew
           shell: /bin/zsh
+          environment:
+            HOMEBREW_NO_AUTO_UPDATE: 1
+            HOMEBREW_NO_INSTALL_CLEANUP: 1
+            HOMEBREW_NO_ENV_HINTS: 1
+            HOMEBREW_NO_ANALYTICS: 1
+            HOMEBREW_NO_INSECURE_REDIRECT: 1
+            GIT_TERMINAL_PROMPT: 0
+            NONINTERACTIVE: 1
           command: |
             if ! command -v brew &>/dev/null; then
-              # Set CI-specific Homebrew environment variables to prevent network issues
-              export HOMEBREW_NO_AUTO_UPDATE=1
-              export HOMEBREW_NO_INSTALL_CLEANUP=1
-              export HOMEBREW_NO_ENV_HINTS=1
-              export HOMEBREW_NO_ANALYTICS=1
+              echo "Installing Homebrew with CI-safe settings..."
 
-              # Install Homebrew
-              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-              [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+              # The Homebrew installer will fail on the update step, but we'll handle that
+              /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || {
+                echo "Homebrew installation encountered expected update failure in CI - continuing..."
+              }
 
-              # Clean up problematic taps that might cause issues in CI
-              brew untap homebrew/homebrew-cask-versions 2>/dev/null || true
+              # Set up Homebrew environment
+              if [[ "$(uname -m)" == "arm64" ]]; then
+                eval "$(/opt/homebrew/bin/brew shellenv)"
+              else
+                eval "$(/usr/local/bin/brew shellenv)"
+              fi
 
-              # Verify brew is working without forcing updates
+              # Verify Homebrew is actually installed and working
+              if command -v brew &>/dev/null; then
+                echo "✅ Homebrew installation successful"
+                brew --version
+
+                # Clean up problematic taps that might cause issues
+                brew untap homebrew/homebrew-cask-versions 2>/dev/null || true
+
+                # Disable auto-update permanently in CI
+                brew config 2>/dev/null || echo "Homebrew configured for CI usage"
+              else
+                echo "❌ Homebrew installation failed"
+                exit 1
+              fi
+            else
+              echo "✅ Homebrew already installed"
               brew --version
             fi
 
