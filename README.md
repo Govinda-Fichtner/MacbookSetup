@@ -147,6 +147,38 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
   - **Type**: Privileged (Docker socket + credential access)
   - **Purpose**: Actual infrastructure deployment and management
 
+- **Context7 MCP Server**: Library documentation and code examples
+  - **Features**: Library documentation access, current code examples, library ID resolution, topic-focused documentation, version-specific documentation
+  - **Docker Image**: `local/context7-mcp:latest`
+  - **Type**: Standalone (no authentication required)
+  - **Purpose**: Development research and library documentation discovery
+  - **Source**: Built from [Upstash Context7](https://github.com/upstash/context7.git)
+
+  **Available Tools**:
+  - `get_library_docs` - Get comprehensive documentation for any library
+  - `get_current_code` - Get current, up-to-date code examples
+  - `resolve_library_id` - Resolve library names to standardized identifiers
+  - `get_topic_docs` - Get focused documentation on specific topics
+  - `get_version_docs` - Get version-specific documentation and migration guides
+
+  **Use Cases**:
+  - **Library Research**: Quickly understand how to use any programming library
+  - **Code Examples**: Get current, working code examples for specific use cases
+  - **Migration Assistance**: Find version-specific documentation for library upgrades
+  - **Topic Learning**: Get focused documentation on specific programming topics
+  - **API Discovery**: Explore library APIs and available functionality
+
+  **Example Usage**:
+  ```bash
+  # Test the Context7 server
+  ./mcp_manager.sh test context7
+
+  # Build the server (if not already built)
+  ./mcp_manager.sh setup context7
+  ```
+
+  **Note**: Context7 requires no authentication and provides immediate access to library documentation. The server is built from source during setup and provides comprehensive programming library assistance.
+
 #### Terraform Infrastructure Workflow
 
 The MacbookSetup project includes **two complementary Terraform MCP servers** that work together to provide a complete Infrastructure as Code development experience:
