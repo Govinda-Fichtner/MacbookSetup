@@ -113,6 +113,9 @@ It "generates valid JSON without syntax errors"
 When run jq '.' "$TEST_HOME/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
 The stderr should be blank
+The output should start with '{'
+The output should end with '}'
+The output should include '"mcpServers"'
 End
 
 It "contains no empty lines in JSON structure"
@@ -164,6 +167,7 @@ It "has proper JSON indentation (2 spaces)"
 # This validates that jq is being used with proper formatting
 When run sh -c "head -10 '$TEST_HOME/.cursor/mcp.json' | grep -E '^  [^[:space:]]'"
 The status should be success
+The output should include '"mcpServers"'
 End
 
 It "figma entry has expected Docker image reference"
@@ -195,8 +199,13 @@ End
 Describe "Generation Process Isolation"
 It "config generation does not pollute JSON with log output"
 # Ensure the JSON file itself contains only JSON
-When run jq '.' "$TEST_HOME/.cursor/mcp.json" > /dev/null 2>&1
+When run jq '.' "$TEST_HOME/.cursor/mcp.json"
 The status should be success
+The output should start with '{'
+The output should end with '}'
+The output should not include '[INFO]'
+The output should not include '[SUCCESS]'
+The output should not include '├──'
 End
 
 It "JSON ends properly"
@@ -276,21 +285,35 @@ Describe 'JSON Structure Validation'
 It 'Cursor configuration file exists'
 When run cat "$TEST_HOME/.cursor/mcp.json"
 The status should be success
+The output should start with '{'
+The output should end with '}'
+The output should include '"mcpServers"'
 End
 
 It 'generates valid JSON for Cursor configuration'
 When run jq '.' "$TEST_HOME/.cursor/mcp.json"
 The status should be success
+The output should start with '{'
+The output should end with '}'
+The output should include '"mcpServers"'
+The output should include '"context7"'
 End
 
 It 'Claude Desktop configuration file exists'
 When run cat "$TEST_HOME/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
+The output should start with '{'
+The output should end with '}'
+The output should include '"mcpServers"'
 End
 
 It 'generates valid JSON for Claude Desktop configuration'
 When run jq '.' "$TEST_HOME/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
+The output should start with '{'
+The output should end with '}'
+The output should include '"mcpServers"'
+The output should include '"context7"'
 End
 
 It 'Cursor JSON contains no empty lines'
@@ -450,6 +473,9 @@ End
 It 'both configs should use mcpServers wrapper format'
 When run jq -e '.mcpServers' "$TEST_HOME/.cursor/mcp.json" "$TEST_HOME/Library/Application Support/Claude/claude_desktop_config.json"
 The status should be success
+The output should include '"github"'
+The output should include '"context7"'
+The output should include '"command": "docker"'
 End
 End
 End
