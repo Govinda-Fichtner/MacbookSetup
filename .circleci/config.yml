@@ -11,8 +11,21 @@ commands:
           shell: /bin/zsh
           command: |
             if ! command -v brew &>/dev/null; then
+              # Set CI-specific Homebrew environment variables to prevent network issues
+              export HOMEBREW_NO_AUTO_UPDATE=1
+              export HOMEBREW_NO_INSTALL_CLEANUP=1
+              export HOMEBREW_NO_ENV_HINTS=1
+              export HOMEBREW_NO_ANALYTICS=1
+
+              # Install Homebrew
               /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
               [[ "$(uname -m)" == "arm64" ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
+
+              # Clean up problematic taps that might cause issues in CI
+              brew untap homebrew/homebrew-cask-versions 2>/dev/null || true
+
+              # Verify brew is working without forcing updates
+              brew --version
             fi
 
   prepare_environment:
@@ -22,8 +35,19 @@ commands:
           name: Install required tools and setup environment
           shell: /bin/zsh
           command: |
-            # Install required tools
-            brew install shellcheck
+            # Install required tools (with CI protections)
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            export HOMEBREW_NO_INSTALL_CLEANUP=1
+            export HOMEBREW_NO_ENV_HINTS=1
+            export HOMEBREW_NO_ANALYTICS=1
+            export GIT_TERMINAL_PROMPT=0
+
+            # Install shellcheck (skip if already installed to avoid update issues)
+            if ! command -v shellcheck &>/dev/null; then
+              brew install shellcheck
+            else
+              echo "shellcheck already installed, skipping to avoid update issues"
+            fi
 
             # Set up environment variables consistently
             export ZDOTDIR="${HOME}"
@@ -89,6 +113,9 @@ jobs:
       HOMEBREW_NO_AUTO_UPDATE: 1
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_ENV_HINTS: 1
+      HOMEBREW_NO_ANALYTICS: 1
+      HOMEBREW_NO_INSECURE_REDIRECT: 1
+      GIT_TERMINAL_PROMPT: 0
       CI: true
       NONINTERACTIVE: 1
       PATH: /usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH
@@ -115,4 +142,4 @@ jobs:
       - store_artifacts:
           path: /tmp/circleci-build.log
           destination: build_log
-      # Colima logs removed - no longer using containerization in CI
+          # Colima logs removed - no longer using containerization in CI
