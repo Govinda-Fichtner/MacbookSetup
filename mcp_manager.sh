@@ -1899,8 +1899,42 @@ write_cursor_config() {
         first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
         [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-        # Check for Rails server special dual mount configuration
-        if [[ "$server_id" == "rails" ]]; then
+        # Check for Filesystem server multiple directory mount configuration
+        if [[ "$server_id" == "filesystem" ]]; then
+          # Filesystem server needs multiple directory mounts to individual /projects/<dirname> paths
+          local volume_args=""
+          local container_path_args=""
+          local first_path=true
+
+          # Parse each directory from comma-separated list (portable shell approach)
+          for dir in $(echo "$mount_dirs" | tr ',' '\n'); do
+            dir=$(echo "$dir" | xargs) # Trim whitespace
+            [[ -z "$dir" ]] && continue
+
+            local basename
+            basename=$(basename "$dir")
+            volume_args="${volume_args}      \"--volume\", \"${dir}:/projects/${basename}\",\n"
+
+            # Build separate container path arguments without trailing comma
+            if [[ "$first_path" == "true" ]]; then
+              container_path_args="${container_path_args}        \"/projects/${basename}\""
+              first_path=false
+            else
+              container_path_args="${container_path_args},\n        \"/projects/${basename}\""
+            fi
+          done
+
+          json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\",
+        \"--env-file\", \"$env_file_path\",
+${volume_args}        \"$image\",
+${container_path_args}
+      ]
+    }"
+        elif [[ "$server_id" == "rails" ]]; then
           # Rails needs dual mounts: projects + config (use RAILS_MCP environment variables)
           local config_source_env_var config_container_path config_default
           config_source_env_var=$(get_rails_config_mount "$server_id" "source_env_var")
@@ -2101,8 +2135,42 @@ write_claude_config() {
         first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
         [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-        # Check for Rails server special dual mount configuration
-        if [[ "$server_id" == "rails" ]]; then
+        # Check for Filesystem server multiple directory mount configuration
+        if [[ "$server_id" == "filesystem" ]]; then
+          # Filesystem server needs multiple directory mounts to individual /projects/<dirname> paths
+          local volume_args=""
+          local container_path_args=""
+          local first_path=true
+
+          # Parse each directory from comma-separated list (portable shell approach)
+          for dir in $(echo "$mount_dirs" | tr ',' '\n'); do
+            dir=$(echo "$dir" | xargs) # Trim whitespace
+            [[ -z "$dir" ]] && continue
+
+            local basename
+            basename=$(basename "$dir")
+            volume_args="${volume_args}        \"--volume\", \"${dir}:/projects/${basename}\",\n"
+
+            # Build separate container path arguments without trailing comma
+            if [[ "$first_path" == "true" ]]; then
+              container_path_args="${container_path_args}        \"/projects/${basename}\""
+              first_path=false
+            else
+              container_path_args="${container_path_args},\n        \"/projects/${basename}\""
+            fi
+          done
+
+          json_content="${json_content}
+    \"$server_id\": {
+      \"command\": \"docker\",
+      \"args\": [
+        \"run\", \"--rm\", \"-i\",
+        \"--env-file\", \"$env_file_path\",
+${volume_args}        \"$image\",
+${container_path_args}
+      ]
+    }"
+        elif [[ "$server_id" == "rails" ]]; then
           # Rails needs dual mounts: projects + config (use RAILS_MCP environment variables)
           local config_source_env_var config_container_path config_default
           config_source_env_var=$(get_rails_config_mount "$server_id" "source_env_var")
@@ -2266,10 +2334,39 @@ EOF
         first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
         [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-        printf '      "run", "--rm", "-i",\n'
-        printf '      "--mount", "type=bind,src=%s,dst=%s",\n' "$first_dir" "$container_path"
-        printf '      "%s",\n' "$image"
-        printf '      "%s"\n' "$container_path"
+        # Check for Filesystem server multiple directory mount configuration
+        if [[ "$server_id" == "filesystem" ]]; then
+          # Filesystem server needs multiple directory mounts to individual /projects/<dirname> paths
+          printf '      "run", "--rm", "-i",\n'
+
+          # Parse each directory from comma-separated list (portable shell approach)
+          for dir in $(echo "$mount_dirs" | tr ',' '\n'); do
+            dir=$(echo "$dir" | xargs) # Trim whitespace
+            [[ -z "$dir" ]] && continue
+
+            local basename
+            basename=$(basename "$dir") 2> /dev/null
+            printf '      "--mount", "type=bind,src=%s,dst=/projects/%s",\n' "$dir" "$basename"
+          done
+
+          printf '      "%s"' "$image"
+          # Output each path as a separate argument
+          for dir in $(echo "$mount_dirs" | tr ',' '\n'); do
+            dir=$(echo "$dir" | xargs) # Trim whitespace
+            [[ -z "$dir" ]] && continue
+
+            local basename
+            basename=$(basename "$dir") 2> /dev/null
+            printf ',\n      "/projects/%s"' "$basename"
+          done
+          printf '\n'
+        else
+          # Standard single mount for other mount-based servers
+          printf '      "run", "--rm", "-i",\n'
+          printf '      "--mount", "type=bind,src=%s,dst=%s",\n' "$first_dir" "$container_path"
+          printf '      "%s",\n' "$image"
+          printf '      "%s"\n' "$container_path"
+        fi
         ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)
@@ -2388,10 +2485,39 @@ EOF
         first_dir=$(echo "$mount_dirs" | cut -d',' -f1 | xargs)
         [[ -z "$first_dir" ]] && first_dir=$(eval echo "$default_fallback")
 
-        printf '        "run", "--rm", "-i",\n'
-        printf '        "--mount", "type=bind,src=%s,dst=%s",\n' "$first_dir" "$container_path"
-        printf '        "%s",\n' "$image"
-        printf '        "%s"\n' "$container_path"
+        # Check for Filesystem server multiple directory mount configuration
+        if [[ "$server_id" == "filesystem" ]]; then
+          # Filesystem server needs multiple directory mounts to individual /projects/<dirname> paths
+          printf '        "run", "--rm", "-i",\n'
+
+          # Parse each directory from comma-separated list (portable shell approach)
+          for dir in $(echo "$mount_dirs" | tr ',' '\n'); do
+            dir=$(echo "$dir" | xargs) # Trim whitespace
+            [[ -z "$dir" ]] && continue
+
+            local basename
+            basename=$(basename "$dir") 2> /dev/null
+            printf '        "--mount", "type=bind,src=%s,dst=/projects/%s",\n' "$dir" "$basename"
+          done
+
+          printf '        "%s"' "$image"
+          # Output each path as a separate argument
+          for dir in $(echo "$mount_dirs" | tr ',' '\n'); do
+            dir=$(echo "$dir" | xargs) # Trim whitespace
+            [[ -z "$dir" ]] && continue
+
+            local basename
+            basename=$(basename "$dir") 2> /dev/null
+            printf ',\n        "/projects/%s"' "$basename"
+          done
+          printf '\n'
+        else
+          # Standard single mount for other mount-based servers
+          printf '        "run", "--rm", "-i",\n'
+          printf '        "--mount", "type=bind,src=%s,dst=%s",\n' "$first_dir" "$container_path"
+          printf '        "%s",\n' "$image"
+          printf '        "%s"\n' "$container_path"
+        fi
         ;;
       "privileged")
         # Privileged servers with special system access (Docker socket, networks, etc.)

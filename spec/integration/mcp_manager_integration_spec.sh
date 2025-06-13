@@ -161,7 +161,7 @@ It 'includes container path argument'
 sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
 When run jq -r '.mcpServers.filesystem.args[-1]' tmp/test_home/.cursor/mcp.json
 The status should be success
-The output should equal "/project"
+The output should include "/projects/"
 End
 
 It 'handles existing directories correctly'
@@ -191,6 +191,71 @@ EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
 The output should include "Filesystem MCP Server"
+End
+
+It 'supports multiple directories in FILESYSTEM_ALLOWED_DIRS for configuration generation'
+# Create multiple test directories
+mkdir -p "tmp/test_home/MacbookSetup"
+mkdir -p "tmp/test_home/Desktop"
+mkdir -p "tmp/test_home/Downloads"
+mkdir -p "tmp/test_home/rails-projects"
+cat > tmp/test_home/.env << EOF
+FILESYSTEM_ALLOWED_DIRS=$PWD/tmp/test_home/MacbookSetup,$PWD/tmp/test_home/Desktop,$PWD/tmp/test_home/Downloads,$PWD/tmp/test_home/rails-projects
+EOF
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers.filesystem.args[]' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "--volume"
+The output should include "MacbookSetup:/projects/MacbookSetup"
+The output should include "Desktop:/projects/Desktop"
+The output should include "Downloads:/projects/Downloads"
+The output should include "rails-projects:/projects/rails-projects"
+End
+
+It 'maps each directory to individual /projects/<dirname> paths in Cursor config'
+# Create multiple test directories
+mkdir -p "tmp/test_home/MacbookSetup"
+mkdir -p "tmp/test_home/Desktop"
+mkdir -p "tmp/test_home/Downloads"
+cat > tmp/test_home/.env << EOF
+FILESYSTEM_ALLOWED_DIRS=$PWD/tmp/test_home/MacbookSetup,$PWD/tmp/test_home/Desktop,$PWD/tmp/test_home/Downloads
+EOF
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers.filesystem.args | map(select(contains("/projects/"))) | join(" ")' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "MacbookSetup:/projects/MacbookSetup"
+The output should include "Desktop:/projects/Desktop"
+The output should include "Downloads:/projects/Downloads"
+End
+
+It 'maps each directory to individual /projects/<dirname> paths in Claude Desktop config'
+# Create multiple test directories
+mkdir -p "tmp/test_home/MacbookSetup"
+mkdir -p "tmp/test_home/Desktop"
+mkdir -p "tmp/test_home/Downloads"
+cat > tmp/test_home/.env << EOF
+FILESYSTEM_ALLOWED_DIRS=$PWD/tmp/test_home/MacbookSetup,$PWD/tmp/test_home/Desktop,$PWD/tmp/test_home/Downloads
+EOF
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers.filesystem.args | map(select(contains("/projects/"))) | join(" ")' "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json"
+The status should be success
+The output should include "MacbookSetup:/projects/MacbookSetup"
+The output should include "Desktop:/projects/Desktop"
+The output should include "Downloads:/projects/Downloads"
+End
+
+It 'includes all directories as volume arguments, not just first one'
+# Create multiple test directories
+mkdir -p "tmp/test_home/Project1"
+mkdir -p "tmp/test_home/Project2"
+mkdir -p "tmp/test_home/Project3"
+cat > tmp/test_home/.env << EOF
+FILESYSTEM_ALLOWED_DIRS=$PWD/tmp/test_home/Project1,$PWD/tmp/test_home/Project2,$PWD/tmp/test_home/Project3
+EOF
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers.filesystem.args | map(select(test(".*:/projects/.*"))) | length' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should equal "3"
 End
 End
 
