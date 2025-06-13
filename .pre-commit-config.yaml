@@ -37,9 +37,9 @@ repos:
 
   - repo: local
     hooks:
-      - id: shellspec-tests
-        name: Run Shellspec tests
-        entry: bash -c 'shellspec spec/mcp_manager_spec.sh'
+      - id: shellspec-unit-tests
+        name: Run Shellspec unit tests (fast)
+        entry: bash -c 'shellspec spec/unit/'
         language: system
         files: ^(mcp_manager\.sh|spec/.*_spec\.sh)$
         pass_filenames: false
