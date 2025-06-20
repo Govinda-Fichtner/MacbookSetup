@@ -3,15 +3,15 @@
 # Tests all subcommands and their interfaces
 
 # Global setup for command tests
-BeforeAll
-test_root="$PWD/tmp/command_test_$$"
-mkdir -p "$test_root"
-End
+BeforeAll() {
+  test_root="$PWD/tmp/command_test_$$"
+  mkdir -p "$test_root"
+}
 
-AfterAll
-test_root="$PWD/tmp/command_test_$$"
-rm -rf "$test_root"
-End
+AfterAll() {
+  test_root="$PWD/tmp/command_test_$$"
+  rm -rf "$test_root"
+}
 
 Describe 'MCP Manager Command Interface'
 It 'shows help when called with no arguments'
