@@ -283,3 +283,404 @@ validate_generated_config() {
 ---
 
 **🎯 Key Takeaway**: This system has more architectural complexity than initially apparent. The dual-function design creates maintenance challenges and debugging difficulties. Future improvements should focus on unifying the configuration generation pipeline and adding comprehensive testing at multiple levels.
+
+## MCP Config Generation Architecture (Refactored - June 2025)
+
+### ✅ **Architecture Success: Unified Single-Source Configuration**
+
+After extensive refactoring, we successfully eliminated the **dual-function complexity** and achieved a clean, unified architecture:
+
+### **New Unified Architecture**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 UNIFIED CONFIG GENERATION                  │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  🔄 get_formatted_config_json()                           │
+│  ├── Source .env file (with proper stderr redirect)       │
+│  ├── generate_mcp_config_json() → Raw JSON                │
+│  └── jq formatting → Clean formatted JSON                 │
+│                                                             │
+│  📺 ./mcp_manager.sh config (Preview)                     │
+│  └── get_formatted_config_json() → stdout                 │
+│                                                             │
+│  💾 ./mcp_manager.sh config-write (Write)                 │
+│  └── get_formatted_config_json() → files                  │
+│      ├── ~/.cursor/mcp.json                              │
+│      └── ~/Library/Application Support/Claude/...         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### **Key Refactoring Achievements**
+
+1. **✅ Eliminated Code Duplication**
+   - Single `get_formatted_config_json()` function used by both commands
+   - Identical JSON output for both Claude Desktop and Cursor
+   - No diverging code paths
+
+2. **✅ Fixed Debug Output Leakage**
+   - Proper stderr redirection with `exec 3>&1 1>&2`
+   - Clean config preview without variable assignment output
+   - Suppressed zsh debug noise
+
+3. **✅ Unified Template System**
+   - Jinja2 templates for all servers in `support/templates/`
+   - Post-processing with `jq .` for clean formatting
+   - One configuration source, two file destinations
+
+4. **✅ Proper JSON Formatting**
+   - Templates focus on logic, jq handles presentation
+   - Consistent Docker argument formatting (`"--volume", "/path"`)
+   - Professional JSON output matching industry standards
+
+### **Template Architecture**
+
+```
+support/templates/
+├── mcp_config.tpl              # Global wrapper template
+├── github.tpl                  # Per-server templates
+├── figma.tpl                   # (one per server type)
+├── filesystem.tpl              # Mount-based servers
+├── docker.tpl                  # Privileged servers
+├── kubernetes.tpl              # with volumes/networks
+└── terraform-cli-controller.tpl
+```
+
+### **Adding New MCP Servers: Step-by-Step Guide**
+
+#### **1. Update Registry**
+Add server entry to `mcp_server_registry.yml`:
+```yaml
+servers:
+  my-new-server:
+    name: "My New Server"
+    server_type: "api_based"  # or mount_based, privileged, standalone
+    source:
+      type: registry  # or build
+      image: "my-org/my-server:latest"
+      entrypoint: "node"  # if needed
+      cmd: ["dist/cli.js", "--stdio"]  # if needed
+    environment_variables:
+      - "MY_API_TOKEN"
+```
+
+#### **2. Create Template**
+Create `support/templates/my-new-server.tpl`:
+```jinja2
+"{{ server.id }}": {
+  "command": "docker",
+  "args": [
+    "run", "--rm", "-i",
+    "--env-file", "{{ server.env_file }}",
+    {%- if server.entrypoint != "null" %}
+    "--entrypoint", "{{ server.entrypoint }}",
+    {%- endif %}
+    "{{ server.image }}"
+    {%- if server.cmd_args and server.cmd_args|length > 0 -%},
+    {%- for arg in server.cmd_args -%}"{{ arg }}"{%- if not loop.last -%},{%- endif -%}{%- endfor -%}
+    {%- endif -%}
+  ]
+}
+```
+
+#### **3. Test Configuration**
+```bash
+# Test server registry parsing
+./mcp_manager.sh parse my-new-server server_type
+
+# Preview configuration
+./mcp_manager.sh config | jq '.mcpServers."my-new-server"'
+
+# Write and verify
+./mcp_manager.sh config-write
+cat ~/.cursor/mcp.json | jq '.mcpServers."my-new-server"'
+```
+
+### **Critical Pitfalls to Avoid**
+
+#### **🚨 Debug Output Contamination**
+```bash
+# ❌ WRONG - causes variable assignments in output
+cmd_args=$(yq -r ".servers.$server_id.source.cmd" "$MCP_REGISTRY_FILE")
+
+# ✅ CORRECT - use temp files or proper stderr redirection
+local cmd_temp_file=$(mktemp)
+yq -o json ".servers.$server_id.source.cmd // null" "$MCP_REGISTRY_FILE" > "$cmd_temp_file"
+cmd_args=$(cat "$cmd_temp_file")
+rm -f "$cmd_temp_file"
+```
+
+#### **🚨 Template Formatting Issues**
+```jinja2
+{# ❌ WRONG - creates concatenated arguments #}
+"--volume={{ volume }}"
+
+{# ✅ CORRECT - separate arguments for Docker CLI #}
+"--volume", "{{ volume }}"
+```
+
+#### **🚨 Environment Variable Expansion**
+```bash
+# ✅ CRITICAL - Source .env before config generation
+if [[ -f ".env" ]]; then
+  set -a  # Automatically export all variables
+  source .env 2>/dev/null
+  set +a  # Turn off auto-export
+fi
+```
+
+#### **🚨 JSON Validation**
+```bash
+# ✅ ALWAYS validate generated JSON
+if command -v jq > /dev/null 2>&1 && [[ -n "$raw_json" ]]; then
+  formatted_json=$(echo "$raw_json" | jq .)  # This validates AND formats
+else
+  formatted_json="$raw_json"  # Fallback without validation
+fi
+```
+
+### **Server Type Specific Templates**
+
+| Server Type | Template Pattern | Special Handling |
+|-------------|------------------|------------------|
+| `api_based` | Basic docker run + env-file | Token validation via environment |
+| `mount_based` | docker run + volumes | Directory path resolution |
+| `privileged` | docker run + volumes + networks | System access, host networking |
+| `standalone` | docker run only | Self-contained, no external deps |
+
+### **Testing New Servers**
+
+```bash
+# Unit test the parsing
+./mcp_manager.sh parse my-new-server name
+./mcp_manager.sh parse my-new-server server_type
+./mcp_manager.sh parse my-new-server source.image
+
+# Integration test the configuration
+./mcp_manager.sh config | jq '.mcpServers | keys | contains(["my-new-server"])'
+
+# End-to-end test
+./mcp_manager.sh config-write
+./mcp_manager.sh test my-new-server  # If health testing is implemented
+```
+
+### **Configuration Quality Standards**
+
+1. **JSON Validity**: All output must pass `jq .` validation
+2. **Docker Compatibility**: Args must work with Docker CLI exactly as written
+3. **Environment Expansion**: All `$VAR` references must resolve to absolute paths
+4. **Formatting Consistency**: Use `jq .` post-processing for clean output
+5. **Error Handling**: Graceful fallbacks for missing dependencies
+
+### **Migration Complete: Legacy Architecture Removed**
+
+The old dual-function architecture (`generate_cursor_config()` vs `write_cursor_config()`) has been completely eliminated. All configuration generation now flows through the unified `get_formatted_config_json()` function.
+
+## **Complete Command Architecture**
+
+The MCP Manager provides a comprehensive command interface for managing Docker-based MCP servers:
+
+### **Command Structure**
+
+```
+mcp_manager.sh <command> [options] [arguments]
+
+Commands:
+├── config          → Generate configuration preview
+├── config-write    → Write configuration to client files
+├── list            → List configured servers with names
+├── parse           → Extract configuration values from registry
+├── setup           → Set up MCP servers (Docker pull/build)
+├── test            → Health check MCP servers
+├── inspect         → Debug and validate servers/configuration
+└── help            → Show usage information
+```
+
+### **Setup Command Architecture**
+
+The setup system provides full Docker lifecycle management:
+
+```
+Setup Operations:
+├── setup_mcp_server() ← Main orchestrator
+├── setup_registry_server() ← Docker registry operations
+├── setup_build_server() ← Repository cloning and building
+└── apply_docker_patches() ← Custom Dockerfile application
+```
+
+**Server Source Types:**
+- **Registry**: Pull pre-built images from Docker registries
+- **Build**: Clone repository, apply custom Dockerfiles, build locally
+
+**Custom Dockerfile Support:**
+- Heroku, CircleCI, Kubernetes, Docker, Rails servers have custom Dockerfiles
+- Located in `support/docker/<server-name>/Dockerfile`
+- Applied automatically during build process
+
+### **Test Command Architecture**
+
+Two-tier testing approach for comprehensive validation:
+
+```
+Test Operations:
+├── test_mcp_server_health() ← Main health checker
+├── test_mcp_basic_protocol() ← CI-friendly protocol validation
+└── test_server_advanced_functionality() ← Real token testing
+```
+
+**Testing Modes:**
+- **Basic Protocol**: JSON-RPC handshake validation (CI-compatible)
+- **Advanced Testing**: Real Docker health checks with token validation
+- **Environment Awareness**: Different behavior for CI vs local development
+
+### **Inspect Command Architecture**
+
+Debug and validation functionality with extensive flag support:
+
+**Inspect Modes:**
+- `inspect` → Overview of all configured servers
+- `inspect <server>` → Detailed server inspection
+- `inspect --validate-config` → JSON structure validation
+- `inspect --ci-mode` → Containerless validation for CI
+- `inspect --ui` → UI launcher (placeholder)
+- `inspect --connectivity` → Connection testing (placeholder)
+
+### **Shell Completion System**
+
+**Implementation:**
+- **Location**: `support/completions/_mcp_manager`
+- **Installation**: Symlinked to `~/.zsh/completions/_mcp_manager`
+- **Setup Integration**: Managed by `setup.sh` and verified by `verify_setup.sh`
+
+**Coverage:**
+- All commands and subcommands
+- Server IDs from registry
+- Inspect command flags
+- Parse command configuration keys
+
+### **Adding New Commands**
+
+To add new commands while maintaining compatibility:
+
+#### **1. Command Dispatcher**
+Add to `main()` function in `mcp_manager.sh`:
+```bash
+case "$1" in
+  # ... existing commands ...
+  new-command)
+    handle_new_command "$2" "$3" "$4"
+    ;;
+esac
+```
+
+#### **2. Function Implementation**
+```bash
+handle_new_command() {
+  local arg1="$1"
+  local arg2="$2"
+
+  # Follow existing patterns:
+  # - Use printf with color constants ($RED, $GREEN, $BLUE, $YELLOW, $NC)
+  # - Handle CI environment with [[ "${CI:-false}" == "true" ]]
+  # - Use parse_server_config() for registry data
+  # - Clean up temporary files
+}
+```
+
+#### **3. Help Documentation**
+Update `show_help()` function with new command description.
+
+#### **4. Shell Completion**
+Add to `support/completions/_mcp_manager`:
+```bash
+_mcp_commands() {
+  local commands
+  commands=(
+    # ... existing commands ...
+    'new-command:Description of new command'
+  )
+}
+```
+
+#### **5. Testing**
+- Add unit tests to `spec/unit/`
+- Add integration tests to `spec/integration/`
+- Ensure both CI and local environments are tested
+
+### **Server Configuration Extension**
+
+To add new MCP servers:
+
+#### **1. Registry Configuration**
+Add to `mcp_server_registry.yml`:
+```yaml
+servers:
+  new-server:
+    name: "New Server Name"
+    server_type: "registry"  # or "build"
+    source:
+      type: registry  # or build
+      image: "org/server:latest"
+      # For build type:
+      # repository: "https://github.com/org/repo.git"
+      # build_context: "."
+    environment_variables:
+      - "NEW_SERVER_TOKEN"
+```
+
+#### **2. Template Creation**
+Create `support/templates/new-server.tpl`:
+```jinja2
+"{{ server.id }}": {
+  "command": "docker",
+  "args": [
+    "run", "--rm", "-i",
+    "--env-file", "{{ server.env_file }}",
+    "{{ server.image }}"
+    {%- if server.cmd_args and server.cmd_args|length > 0 -%},
+    {%- for arg in server.cmd_args -%}"{{ arg }}"{%- if not loop.last -%},{%- endif -%}{%- endfor -%}
+    {%- endif -%}
+  ]
+}
+```
+
+#### **3. Custom Dockerfile (if needed)**
+For build-type servers requiring custom Docker configuration:
+```dockerfile
+# support/docker/new-server/Dockerfile
+FROM node:18-alpine
+# Custom build steps...
+```
+
+#### **4. Completion Updates**
+Server IDs are automatically discovered from the registry, so no completion updates needed.
+
+### **Critical Compatibility Requirements**
+
+#### **Environment Handling**
+- Always check `[[ "${CI:-false}" == "true" ]]` for CI-specific behavior
+- Use `command -v docker > /dev/null 2>&1` to check Docker availability
+- Provide graceful fallbacks for missing dependencies
+
+#### **Output Standards**
+- Use established color coding: `$RED` (errors), `$GREEN` (success), `$BLUE` (info), `$YELLOW` (warnings)
+- Follow tree-structure formatting: `├──`, `│   `, `└──`
+- Suppress debug output appropriately (stderr redirection)
+
+#### **Registry Integration**
+- Use `parse_server_config()` for all registry data access
+- Support both `registry` and `build` source types
+- Handle `null` values from registry gracefully
+
+#### **Testing Integration**
+- All new functionality must have unit tests
+- Integration tests should work in both CI and local environments
+- Use `tmp/` for all test artifacts
+
+### **See also**
+- `mcp_manager.sh` (unified config generation + restored functionality)
+- `support/templates/` (Jinja2 templates)
+- `mcp_server_registry.yml` (server definitions)
+- `CLAUDE.md` (development guidelines and restoration protocols)

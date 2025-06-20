@@ -4,7 +4,7 @@
 # ShellSpec helper function for conditional test skipping
 skip() {
   local message="${1:-Skipped}"
-  echo "SKIP: $message" >&2
+  echo 'SKIP:' "$message" >&2
   return 0
 }
 
@@ -22,8 +22,8 @@ setup_test_environment() {
 
   # Create projects.yml with test project (container paths)
   cat > "$TEST_HOME/rails/config/rails-mcp/projects.yml" << 'EOF'
-test_project: "/rails-projects/test_project"
-blog: "/rails-projects/blog"
+test_project: '/rails-projects/test_project'
+blog: '/rails-projects/blog'
 EOF
 
   # Create test project directory

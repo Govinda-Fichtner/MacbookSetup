@@ -198,6 +198,7 @@ The status should be success
 End
 End
 End
+
 End
 
 Describe 'MCP Inspector Error Handling'
@@ -227,6 +228,7 @@ The status should be success
 End
 End
 End
+
 End
 
 Describe 'MCP Inspector Help and Documentation'
@@ -247,4 +249,5 @@ The output should include "inspect --validate-config"
 The status should be success
 End
 End
+
 End

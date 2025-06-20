@@ -122,6 +122,15 @@ The output should include "figma"
 The output should include "heroku"
 The output should include "filesystem"
 The output should include "context7"
+The output should include "memory-service"
+End
+
+It 'writes identical configuration to both client files'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+cursor_config=$(jq -S . tmp/test_home/.cursor/mcp.json)
+claude_config=$(jq -S . "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json")
+When run test "$cursor_config" = "$claude_config"
+The status should be success
 End
 
 It 'writes to real Cursor config location'
@@ -136,6 +145,87 @@ When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mc
 The status should be success
 The output should include "=== MCP Client Configuration Generation ==="
 The file "tmp/test_home/Library/Application Support/Claude/claude_desktop_config.json" should be exist
+End
+End
+
+Describe 'Unified Configuration Architecture Integration'
+BeforeEach 'setup_integration_test_environment'
+AfterEach 'cleanup_integration_test_environment'
+
+It 'config and config-write generate identical JSON content'
+# Get JSON from config command (preview)
+preview_json=$(sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config 2>/dev/null | tail -n +2')
+
+# Get JSON from config-write command (file output)
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+write_json=$(jq . tmp/test_home/.cursor/mcp.json)
+
+When run test "$preview_json" = "$write_json"
+The status should be success
+End
+
+It 'validates all servers have proper Docker command structure'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+
+# All servers should have docker command and args array
+When run jq '.mcpServers | to_entries | map(.value.command == "docker") | all' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "true"
+
+When run jq '.mcpServers | to_entries | map(.value.args | type == "array") | all' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "true"
+End
+
+It 'validates server type specific configurations'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+
+# API-based servers should have minimal args
+When run jq '.mcpServers.github.args | length <= 6' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "true"
+
+# Mount-based servers should have volumes
+When run jq '.mcpServers.filesystem.args | map(select(test("--volume"))) | length > 0' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "true"
+
+# Privileged servers should have special access
+When run jq '.mcpServers.docker.args | map(select(test("/var/run/docker.sock"))) | length > 0' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "true"
+End
+
+It 'validates template processing with real environment'
+# Test with actual .env file
+echo "FILESYSTEM_ALLOWED_DIRS=/tmp/test1,/tmp/test2" > tmp/test_home/.env
+echo "KUBECONFIG_HOST=/tmp/.kube/config" >> tmp/test_home/.env
+
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+
+# Environment variables should be expanded
+When run jq '.mcpServers.filesystem.args | map(select(test("/tmp/test1"))) | length > 0' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "true"
+
+# No unexpanded variables should remain
+When run jq -r . tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should not include '$'
+End
+
+It 'validates JSON formatting quality'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+
+# Volume arguments should be separate, not concatenated
+When run jq '.mcpServers.filesystem.args | map(select(test("--volume="))) | length' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "0"
+
+# Should have separate --volume arguments
+When run jq '.mcpServers.filesystem.args | map(select(. == "--volume")) | length > 0' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "true"
 End
 End
 
@@ -374,6 +464,105 @@ The output should include "Basic protocol validation passed"
 End
 End
 
+Describe 'Memory Service Integration'
+BeforeEach 'setup_integration_test_environment'
+AfterEach 'cleanup_integration_test_environment'
+
+It 'includes memory-service in Docker configuration'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers."memory-service".args[]' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "--volume"
+The output should include "chroma_db"
+The output should include "local/mcp-server-memory-service:latest"
+End
+
+It 'includes ChromaDB volume mounts in configuration'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers."memory-service".args[]' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "/app/chroma_db"
+End
+
+It 'can test memory-service server individually'
+When run zsh mcp_manager.sh test memory-service
+The status should be success
+The output should include "Memory Service MCP Server"
+The output should include "MCP protocol functional"
+End
+
+It 'validates memory service configuration'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers."memory-service".command' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should equal "docker"
+End
+End
+
+Describe 'Memory Service Setup Environment Validation'
+BeforeEach 'setup_integration_test_environment'
+AfterEach 'cleanup_integration_test_environment'
+
+It 'fails with clear error if MCP_MEMORY_CHROMA_PATH is missing'
+# Only set BACKUPS_PATH
+cat > tmp/test_home/.env << EOF
+MCP_MEMORY_BACKUPS_PATH=$PWD/tmp/test_home/ChromaDB/backup
+EOF
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
+The status should not be success
+The output should include "MCP_MEMORY_CHROMA_PATH"
+The output should include "must be set"
+End
+
+It 'fails with clear error if MCP_MEMORY_BACKUPS_PATH is missing'
+# Only set CHROMA_PATH
+cat > tmp/test_home/.env << EOF
+MCP_MEMORY_CHROMA_PATH=$PWD/tmp/test_home/ChromaDB/db
+EOF
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
+The status should not be success
+The output should include "MCP_MEMORY_BACKUPS_PATH"
+The output should include "must be set"
+End
+
+It 'fails with clear error if either variable is empty'
+cat > tmp/test_home/.env << EOF
+MCP_MEMORY_CHROMA_PATH=
+MCP_MEMORY_BACKUPS_PATH=
+EOF
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
+The status should not be success
+The output should include "MCP_MEMORY_CHROMA_PATH"
+The output should include "must be set"
+The output should include "MCP_MEMORY_BACKUPS_PATH"
+The output should include "must be set"
+End
+
+It 'creates directories if both variables are set and non-empty'
+cat > tmp/test_home/.env << EOF
+MCP_MEMORY_CHROMA_PATH=$PWD/tmp/test_home/ChromaDB/db
+MCP_MEMORY_BACKUPS_PATH=$PWD/tmp/test_home/ChromaDB/backup
+EOF
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
+The status should be success
+The output should include "Creating directory"
+The directory "tmp/test_home/ChromaDB/db" should be exist
+The directory "tmp/test_home/ChromaDB/backup" should be exist
+End
+
+It 'does not fail if directories already exist'
+mkdir -p tmp/test_home/ChromaDB/db
+mkdir -p tmp/test_home/ChromaDB/backup
+cat > tmp/test_home/.env << EOF
+MCP_MEMORY_CHROMA_PATH=$PWD/tmp/test_home/ChromaDB/db
+MCP_MEMORY_BACKUPS_PATH=$PWD/tmp/test_home/ChromaDB/backup
+EOF
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
+The status should be success
+The output should include "already exists"
+End
+End
+
 Describe 'Setup Command Integration'
 BeforeEach 'setup_integration_test_environment'
 AfterEach 'cleanup_integration_test_environment'
@@ -382,6 +571,17 @@ It 'context7 server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup context7'
 The status should be success
 The output should include "Context7 Documentation MCP Server"
+The output should include "[SUCCESS]"
+End
+
+It 'memory-service server supports setup command for building'
+# Ensure test .env is present and valid for this test
+cat > tmp/test_home/.env << EOF
+MCP_MEMORY_CHROMA_PATH=$PWD/tmp/test_home/ChromaDB/db
+MCP_MEMORY_BACKUPS_PATH=$PWD/tmp/test_home/ChromaDB/backup
+EOF
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
+The status should be success
 The output should include "[SUCCESS]"
 End
 End
