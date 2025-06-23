@@ -91,9 +91,6 @@ servers:
       repository: https://github.com/doobidoo/mcp-memory-service.git
       image: local/mcp-server-memory-service:latest
       build_context: "."
-    environment_variables:
-      - "MCP_MEMORY_CHROMA_PATH"
-      - "MCP_MEMORY_BACKUPS_PATH"
     volumes:
       - "~/ChromaDB/db:/app/chroma_db"
       - "~/ChromaDB/backup:/app/backups"
@@ -316,8 +313,6 @@ servers:
       - "$TERRAFORM_HOST_DIR:/workspace"
     networks:
       - "host"
-    container_env:
-      TERRAFORM_DIR: "/workspace/default"
     health_test:
       parse_mode: json
       path: "/health"

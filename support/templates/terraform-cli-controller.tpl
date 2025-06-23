@@ -12,7 +12,6 @@
     "--volume", "{{ volume }}",
       {%- endfor %}
     {%- endif %}
-    "--env", "TERRAFORM_DIR=/workspace/default",
     "--env-file", "{{ server.env_file }}",
     "{{ server.image }}"
     {%- if server.cmd_args and server.cmd_args|length > 0 %},

@@ -751,7 +751,7 @@ The project uses organized temporary directories for builds and testing. To clea
 
 ```bash
 # Clean all temporary directories (repositories, test files, etc.)
-support/scripts/clean_tmp.sh
+rm -rf tmp/*
 ```
 
 This script cleans:

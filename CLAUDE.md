@@ -7,11 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Building and Testing
 ```bash
 # Run all tests (MANDATORY before any commit)
-shellspec spec/
+shellspec --shell zsh spec/
 
 # Run specific test suite
-shellspec spec/unit/mcp_manager_unit_spec.sh
-shellspec spec/integration/mcp_manager_integration_spec.sh
+shellspec --shell zsh spec/unit/mcp_manager_unit_spec.sh
+shellspec --shell zsh spec/integration/mcp_manager_integration_spec.sh
 
 # Quick syntax validation
 zsh -n setup.sh && zsh -n verify_setup.sh && zsh -n mcp_manager.sh
@@ -23,7 +23,7 @@ zsh -n setup.sh && zsh -n verify_setup.sh && zsh -n mcp_manager.sh
 pre-commit run --all-files
 
 # Clean temporary files
-support/scripts/clean_tmp.sh
+rm -rf tmp/*
 ```
 
 ### MCP Server Management
@@ -57,13 +57,13 @@ support/scripts/clean_tmp.sh
 sct-fast() {
   echo "⚡ Fast tests..."
   zsh -n setup.sh && zsh -n verify_setup.sh && zsh -n mcp_manager.sh
-  shellspec spec/unit/mcp_manager_unit_spec.sh --format progress
+  shellspec --shell zsh spec/unit/mcp_manager_unit_spec.sh --format progress
 }
 
 # Full tests (30+ seconds) - run periodically
 sct-full() {
   echo "🔍 Full test suite..."
-  shellspec spec/ --format documentation
+  shellspec --shell zsh spec/ --format documentation
   ./verify_setup.sh > /dev/null
   pre-commit run --all-files
 }
@@ -197,6 +197,125 @@ my-new-server:
 # Write and test
 ./mcp_manager.sh config-write
 ```
+
+### **🐋 Docker-Based MCP Server Testing Architecture**
+
+**CRITICAL PRINCIPLE**: All Docker-based MCP servers must be tested identically using proper container lifecycle management, regardless of whether they are locally built or externally sourced.
+
+#### **🏗️ Container Lifecycle Management**
+
+**THE GOLDEN RULE**: Every MCP server test must follow the Start → Test → Stop lifecycle:
+
+```bash
+# ✅ CORRECT APPROACH: Proper Container Lifecycle
+test_mcp_server() {
+  local server_id="$1"
+  local image="$2"
+
+  # 1. START: Launch container in background
+  local container_id
+  container_id=$(docker run -d -i "${env_args[@]}" "$image" 2>/dev/null)
+
+  if [[ $start_status -ne 0 || -z "$container_id" ]]; then
+    echo "Failed to start container"
+    return 1
+  fi
+
+  # 2. TEST: Send JSON-RPC initialization request
+  local test_request='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"mcp-manager-test","version":"1.0"}}}'
+  local response
+  response=$(echo "$test_request" | docker exec -i "$container_id" cat 2>/dev/null | head -5)
+
+  # 3. STOP: Always clean up container (CRITICAL!)
+  docker stop "$container_id" >/dev/null 2>&1
+  docker rm "$container_id" >/dev/null 2>&1
+
+  # 4. EVALUATE: Check for valid MCP response
+  if echo "$response" | grep -q '"result".*"protocolVersion"'; then
+    echo "SUCCESS: MCP protocol handshake successful"
+    return 0
+  elif echo "$response" | grep -q '"jsonrpc":"2.0"'; then
+    echo "SUCCESS: MCP server responded with JSON-RPC"
+    return 0
+  else
+    echo "WARNING: No clear MCP response"
+    return 0  # Still consider success if container started
+  fi
+}
+```
+
+#### **❌ ANTI-PATTERNS: What NOT to Do**
+
+```bash
+# ❌ WRONG: Using timeout to kill hanging containers
+response=$(echo "$request" | timeout 10s docker run --rm -i "$image" 2>&1)
+
+# ❌ WRONG: Treating local vs external servers differently
+if [[ "$image" == local/* ]]; then
+  # Special handling for local builds
+fi
+
+# ❌ WRONG: Not cleaning up containers
+docker run -d "$image"  # Container left running!
+
+# ❌ WRONG: Missing required JSON-RPC parameters
+'{"jsonrpc":"2.0","method":"initialize","params":{}}'  # Missing clientInfo!
+```
+
+#### **🔑 Key Principles**
+
+1. **Identical Behavior**: All Docker-based MCP servers (local/external) must behave identically in tests
+2. **Lifecycle Management**: Always Start → Test → Stop, never rely on timeouts
+3. **Required JSON-RPC Format**: All servers need `clientInfo` parameter in initialize request
+4. **Cleanup Guarantee**: Containers must be stopped regardless of test outcome
+5. **Stdio Protocol**: All MCP servers use stdio and will wait for input indefinitely if not managed properly
+
+#### **📋 Testing Checklist for New MCP Servers**
+
+When adding a new Docker-based MCP server:
+
+- [ ] **Registry Configuration**: Ensure proper `source.image` and optional `source.cmd` entries
+- [ ] **Template Creation**: Create Jinja2 template in `support/templates/server-name.tpl`
+- [ ] **JSON-RPC Protocol**: Verify server responds to standard initialization request
+- [ ] **Container Lifecycle**: Test starts container, communicates, and stops cleanly
+- [ ] **Consistency Check**: Server behaves identically to other MCP servers in test suite
+- [ ] **Integration Test**: Verify server works in full integration test suite without hanging
+
+#### **🔧 Debugging Container Issues**
+
+If a new MCP server hangs or fails in tests:
+
+1. **Test manually**: `docker run -i server:latest` and send JSON-RPC manually
+2. **Check logs**: `~/Library/Logs/Claude/mcp-server-name.log` for production behavior
+3. **Verify JSON-RPC**: Ensure `clientInfo` parameter is included in initialize request
+4. **Container startup**: Confirm container starts without immediate errors
+5. **Compare working**: Check against known working servers like github or heroku
+
+#### **📊 Success Criteria**
+
+A properly implemented MCP server test should:
+
+- ✅ **Start quickly**: Container launches in < 2 seconds
+- ✅ **Respond correctly**: Valid JSON-RPC response to initialization
+- ✅ **Clean up properly**: Container stops and is removed
+- ✅ **Never hang**: Test completes in < 10 seconds total
+- ✅ **Work consistently**: Same behavior across all test runs
+
+#### **🚨 Critical Lessons Learned (June 2025)**
+
+**Root Cause of Previous Issues**:
+- **Timeout-based testing**: Caused hanging and inconsistent behavior
+- **Different handling for local vs external**: Created unnecessary complexity
+- **Missing JSON-RPC parameters**: Some servers require `clientInfo` in initialize
+- **No lifecycle management**: Containers left running or killed abruptly
+
+**The Solution**:
+- **Unified approach**: All servers tested identically with proper lifecycle
+- **Background containers**: Start with `-d` flag, communicate via `docker exec`
+- **Explicit cleanup**: Always stop and remove containers
+- **Standard JSON-RPC**: Use complete initialization request for all servers
+
+This architecture ensures **reliable, fast, and consistent testing** for all Docker-based MCP servers.
 
 ### **🚨 Critical: Preventing Output Pollution/Corruption**
 

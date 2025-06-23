@@ -138,13 +138,15 @@ It 'handles missing .env file gracefully'
 rm -f "$TEST_HOME/.env"
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config'
 The status should be success
-The output should include "=== MCP Client Configuration Generation ==="
+The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "[WARNING] No .env file found - some variables may not expand"
 End
 
 It 'reads environment variables from .env file'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config'
 The status should be success
-The output should include "=== MCP Client Configuration Generation ==="
+The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 
 It 'handles empty FILESYSTEM_ALLOWED_DIRS'
@@ -154,7 +156,8 @@ GITHUB_PERSONAL_ACCESS_TOKEN=test_token
 EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config'
 The status should be success
-The output should include "=== MCP Client Configuration Generation ==="
+The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 
 It 'handles malformed environment file'
@@ -164,7 +167,8 @@ GITHUB_PERSONAL_ACCESS_TOKEN=test
 EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config'
 The status should be success
-The output should include "=== MCP Client Configuration Generation ==="
+The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 End
 
@@ -175,9 +179,10 @@ AfterEach 'cleanup_unit_test_environment'
 It 'generates configuration preview without errors'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config'
 The status should be success
-The output should include "=== MCP Client Configuration Generation ==="
-The output should include "Cursor Configuration"
-The output should include "Claude Desktop Configuration"
+The output should include "=== MCP Client Configuration Preview ==="
+The output should include "mcpServers"
+The output should include "{"
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 
 It 'includes all expected servers in configuration preview'
@@ -189,12 +194,14 @@ The output should include "figma"
 The output should include "heroku"
 The output should include "filesystem"
 The output should include "terraform-cli-controller"
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 
 It 'handles CI environment gracefully'
 When run env CI=true sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config'
 The status should be success
-The output should include "=== MCP Client Configuration Generation ==="
+The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 End
 
@@ -244,9 +251,9 @@ End
 
 It 'handles missing parse arguments gracefully'
 When run zsh "$PWD/mcp_manager.sh" parse
-The status should be success
-The output should include "Usage:"
-The output should include "parse <server_id> <config_key>"
+The status should not be success
+The stderr should include "Usage:"
+The stderr should include "parse <server_id> <config_key>"
 End
 
 It 'handles unknown configuration keys gracefully'
@@ -263,6 +270,7 @@ The status should be success
 The file ".env_example" should be exist
 The output should include "=== MCP Client Configuration Generation ==="
 The output should include "Client configurations written"
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 
 It 'includes GitHub token placeholder in .env_example'

@@ -251,8 +251,8 @@ start_test_mcp_containers() {
     -e CIRCLECI_TOKEN=test_token \
     local/mcp-server-circleci:latest > /dev/null 2>&1 || true
 
-  # Wait for containers to start
-  sleep 2
+  # Wait for containers to start (reduced from 2s)
+  sleep 0.5
 }
 
 # Mock Docker for CI environment
@@ -304,4 +304,61 @@ start_github_server_for_test() {
 
 stop_github_server_for_test() {
   ./mcp_manager.sh stop github > /dev/null
+}
+
+# Validate .env file content to prevent corruption issues
+validate_env_file() {
+  local env_file="$1"
+
+  if [[ ! -f "$env_file" ]]; then
+    echo "ERROR: .env file not found: $env_file" >&2
+    return 1
+  fi
+
+  # Check for shell redirection artifacts that indicate corruption
+  if grep -q -E "(EOF|<<|>>|< /dev|> /dev)" "$env_file"; then
+    echo "ERROR: .env file contains shell redirection artifacts: $env_file" >&2
+    echo "Corrupted content:" >&2
+    cat "$env_file" >&2
+    return 1
+  fi
+
+  # Check for invalid variable format (must be KEY=VALUE)
+  while IFS= read -r line; do
+    # Skip empty lines and comments
+    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+    # Check if line matches KEY=VALUE format
+    if ! [[ "$line" =~ ^[A-Z_][A-Z0-9_]*=.*$ ]]; then
+      echo "ERROR: Invalid .env line format: '$line'" >&2
+      echo "Expected format: KEY=VALUE" >&2
+      return 1
+    fi
+  done < "$env_file"
+
+  return 0
+}
+
+# Create safe .env file using printf instead of heredoc
+create_safe_env_file() {
+  local env_file="$1"
+  shift
+  local env_vars=("$@")
+
+  # Remove existing file first
+  rm -f "$env_file"
+
+  # Create each line safely using printf
+  for env_var in "${env_vars[@]}"; do
+    printf '%s\n' "$env_var" >> "$env_file"
+  done
+
+  # Validate the created file
+  if ! validate_env_file "$env_file"; then
+    rm -f "$env_file"
+    echo "ERROR: Failed to create valid .env file: $env_file" >&2
+    return 1
+  fi
+
+  return 0
 }

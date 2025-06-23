@@ -29,8 +29,8 @@ start_test_mcp_containers() {
     -e CIRCLECI_TOKEN=test_token \
     local/mcp-server-circleci:latest > /dev/null 2>&1 || true
 
-  # Wait for containers to start
-  sleep 2
+  # Wait for containers to start (reduced from 2s)
+  sleep 0.5
 }
 
 mock_docker_for_ci() {
@@ -209,7 +209,11 @@ BeforeEach 'setup_inspector_test_environment'
 AfterEach 'cleanup_inspector_test_environment'
 
 It 'should gracefully handle missing Docker'
-When run env PATH="/usr/bin:/bin" ./mcp_manager.sh inspect
+# Create temp directory with essential tools but no docker
+mkdir -p tmp/no_docker_bin
+ln -sf /opt/homebrew/bin/yq tmp/no_docker_bin/yq 2> /dev/null || true
+ln -sf /opt/homebrew/bin/jq tmp/no_docker_bin/jq 2> /dev/null || true
+When run env PATH="$PWD/tmp/no_docker_bin:/usr/bin:/bin" ./mcp_manager.sh inspect
 The output should include "Docker not available"
 The status should be success
 End
