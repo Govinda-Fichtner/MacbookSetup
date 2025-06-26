@@ -32,6 +32,8 @@ SONARQUBE_TOKEN=test_sonarqube_token_placeholder
 SONARQUBE_ORG=test_sonarqube_org_placeholder
 SONARQUBE_URL=https://sonarcloud.io
 SONARQUBE_STORAGE_PATH=$TEST_HOME/sonarqube_storage
+MAILGUN_API_KEY=test_mailgun_api_key_placeholder
+MAILGUN_DOMAIN=test_mailgun_domain_placeholder
 EOF
 }
 
@@ -149,6 +151,24 @@ When run zsh "$PWD/mcp_manager.sh" parse sonarqube source.type
 The status should be success
 The output should equal "build"
 End
+
+It 'recognizes mailgun as api_based server type'
+When run zsh "$PWD/mcp_manager.sh" parse mailgun server_type
+The status should be success
+The output should equal "api_based"
+End
+
+It 'parses mailgun source image correctly'
+When run zsh "$PWD/mcp_manager.sh" parse mailgun source.image
+The status should be success
+The output should equal "local/mailgun-mcp-server:latest"
+End
+
+It 'parses mailgun source type correctly'
+When run zsh "$PWD/mcp_manager.sh" parse mailgun source.type
+The status should be success
+The output should equal "build"
+End
 End
 
 Describe 'Environment Variable Handling'
@@ -214,6 +234,7 @@ The output should include "github"
 The output should include "circleci"
 The output should include "figma"
 The output should include "sonarqube"
+The output should include "mailgun"
 The output should include "heroku"
 The output should include "filesystem"
 The output should include "terraform-cli-controller"
@@ -236,6 +257,7 @@ The output should include "github"
 The output should include "circleci"
 The output should include "figma"
 The output should include "sonarqube"
+The output should include "mailgun"
 The output should include "heroku"
 The output should include "filesystem"
 The output should include "context7"

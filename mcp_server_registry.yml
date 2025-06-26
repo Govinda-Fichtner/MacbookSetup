@@ -370,6 +370,46 @@ servers:
       - "project_search"
       - "system_health_monitoring"
 
+  mailgun:
+    name: "Mailgun MCP Server"
+    server_type: "api_based"
+    description: "Mailgun email service integration for AI-orchestrated email automation workflows"
+    category: "email"
+    source:
+      type: build
+      repository: "https://github.com/mailgun/mailgun-mcp-server.git"
+      image: "local/mailgun-mcp-server:latest"
+      build_context: "."
+    environment_variables:
+      - "MAILGUN_API_KEY"
+      - "MAILGUN_DOMAIN"
+    health_test:
+      type: "stdio_jsonrpc"
+      method: "initialize"
+      params:
+        protocolVersion: "2024-11-05"
+        capabilities: {}
+        clientInfo:
+          name: "health_checker"
+          version: "1.0.0"
+      expected_response:
+        jsonrpc: "2.0"
+        result:
+          protocolVersion: "2024-11-05"
+          serverInfo:
+            name: "mailgun-mcp-server"
+    capabilities:
+      - "email_sending"
+      - "delivery_analytics"
+      - "domain_management"
+      - "mailing_list_operations"
+      - "suppression_management"
+      - "email_validation"
+      - "bounce_tracking"
+      - "click_tracking"
+      - "open_tracking"
+      - "webhook_configuration"
+
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"
