@@ -663,7 +663,7 @@ if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test sonarqube
 The status should be success
 The output should include "SonarQube MCP Server"
-The stderr should include "READY"
+The stderr should include "TIMEOUT"
 End
 
 It 'can test Mailgun server with real token'

@@ -1068,7 +1068,13 @@ generate_env_example() {
 
   # Process each server
   for server_id in "${server_ids[@]}"; do
-    # Get server configuration with stderr redirection only
+    # Print server section
+    echo "# $server_id server configuration"
+    echo
+
+    # Get server configuration using file descriptor isolation to prevent pollution
+    exec 3>&1 1>&2
+
     local server_type
     server_type=$(get_server_type "$server_id" 2> /dev/null)
     local env_vars_str
@@ -1076,9 +1082,7 @@ generate_env_example() {
     local mount_config
     mount_config=$(get_mount_config "$server_id" 2> /dev/null)
 
-    # Print server section
-    echo "# $server_id server configuration"
-    echo
+    exec 1>&3 3>&-
 
     # Print environment variables
     if [[ -n "$env_vars_str" ]]; then
@@ -1087,12 +1091,20 @@ generate_env_example() {
       local var_array=()
 
       # Shell-compatible array splitting
-      IFS=' ' read -ra var_array <<< "$trimmed_vars"
+      if [[ -n "$ZSH_VERSION" ]]; then
+        # zsh-specific array splitting
+        IFS=' ' read -rA var_array <<< "$trimmed_vars"
+      else
+        # bash-specific array splitting
+        IFS=' ' read -ra var_array <<< "$trimmed_vars"
+      fi
 
       for var in "${var_array[@]}"; do
         if [[ -n "$var" && "$var" != "-" ]]; then
+          exec 3>&1 1>&2
           local placeholder
           placeholder=$(get_env_placeholder "$var" 2> /dev/null)
+          exec 1>&3 3>&-
           echo "$var=$placeholder"
         fi
       done
@@ -1101,10 +1113,15 @@ generate_env_example() {
 
     # Print mount configuration
     if [[ "$server_type" == "mount_based" && -n "$mount_config" && "$mount_config" != "null" ]]; then
+      exec 3>&1 1>&2
+
       local source_env_var
       source_env_var=$(get_mount_config "$server_id" "source_env_var" 2> /dev/null)
       local default_fallback
       default_fallback=$(get_mount_config "$server_id" "default_fallback" 2> /dev/null)
+
+      exec 1>&3 3>&-
+
       if [[ -n "$source_env_var" && -n "$default_fallback" && "$source_env_var" != "null" && "$default_fallback" != "null" ]]; then
         echo "$source_env_var=$default_fallback"
         echo
