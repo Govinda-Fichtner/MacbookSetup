@@ -328,6 +328,48 @@ servers:
       - "terraform_workspace_management"
       - "docker_provider_support"
 
+  sonarqube:
+    name: "SonarQube MCP Server"
+    server_type: "mount_based"
+    description: "SonarQube Cloud/Server integration for code quality analysis, issue management, and project metrics"
+    category: "code"
+    source:
+      type: build
+      repository: "https://github.com/SonarSource/sonarqube-mcp-server.git"
+      image: "local/sonarqube-mcp-server:latest"
+      build_context: "."
+    environment_variables:
+      - "SONARQUBE_TOKEN"
+      - "SONARQUBE_ORG"
+      - "SONARQUBE_URL"
+      - "SONARQUBE_STORAGE_PATH"
+    volumes:
+      - "SONARQUBE_STORAGE_PATH:/app/storage"
+    health_test:
+      type: "stdio_jsonrpc"
+      method: "initialize"
+      params:
+        protocolVersion: "2024-11-05"
+        capabilities: {}
+        clientInfo:
+          name: "health_checker"
+          version: "1.0.0"
+      expected_response:
+        jsonrpc: "2.0"
+        result:
+          protocolVersion: "2024-11-05"
+          serverInfo:
+            name: "sonarqube-mcp-server"
+    capabilities:
+      - "code_quality_analysis"
+      - "issue_management"
+      - "project_metrics"
+      - "quality_gates"
+      - "rule_repositories"
+      - "source_code_access"
+      - "project_search"
+      - "system_health_monitoring"
+
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"

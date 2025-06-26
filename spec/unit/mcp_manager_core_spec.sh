@@ -28,6 +28,10 @@ GITHUB_PERSONAL_ACCESS_TOKEN=test_github_token_placeholder
 CIRCLECI_TOKEN=test_circleci_token_placeholder
 FILESYSTEM_ALLOWED_DIRS=$TEST_HOME,/tmp
 HEROKU_API_KEY=test_heroku_api_key_placeholder
+SONARQUBE_TOKEN=test_sonarqube_token_placeholder
+SONARQUBE_ORG=test_sonarqube_org_placeholder
+SONARQUBE_URL=https://sonarcloud.io
+SONARQUBE_STORAGE_PATH=$TEST_HOME/sonarqube_storage
 EOF
 }
 
@@ -127,6 +131,24 @@ When run zsh "$PWD/mcp_manager.sh" parse rails server_type
 The status should be success
 The output should equal "mount_based"
 End
+
+It 'recognizes sonarqube as mount_based server type'
+When run zsh "$PWD/mcp_manager.sh" parse sonarqube server_type
+The status should be success
+The output should equal "mount_based"
+End
+
+It 'parses sonarqube source image correctly'
+When run zsh "$PWD/mcp_manager.sh" parse sonarqube source.image
+The status should be success
+The output should equal "local/sonarqube-mcp-server:latest"
+End
+
+It 'parses sonarqube source type correctly'
+When run zsh "$PWD/mcp_manager.sh" parse sonarqube source.type
+The status should be success
+The output should equal "build"
+End
 End
 
 Describe 'Environment Variable Handling'
@@ -191,6 +213,7 @@ The status should be success
 The output should include "github"
 The output should include "circleci"
 The output should include "figma"
+The output should include "sonarqube"
 The output should include "heroku"
 The output should include "filesystem"
 The output should include "terraform-cli-controller"
@@ -212,6 +235,7 @@ The status should be success
 The output should include "github"
 The output should include "circleci"
 The output should include "figma"
+The output should include "sonarqube"
 The output should include "heroku"
 The output should include "filesystem"
 The output should include "context7"

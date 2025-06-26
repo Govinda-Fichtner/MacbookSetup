@@ -616,6 +616,13 @@ When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mc
 The status should be success
 The output should include "[SUCCESS]"
 End
+
+It 'sonarqube server supports setup command for building'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup sonarqube'
+The status should be success
+The output should include "SonarQube MCP Server"
+The output should include "[SUCCESS]"
+End
 End
 
 Describe 'Real Token Integration Tests'
@@ -642,6 +649,14 @@ When run zsh "$PWD/mcp_manager.sh" test heroku
 The status should be success
 The output should include "Heroku Platform MCP Server"
 The stderr should include "TIMEOUT"
+End
+
+It 'can test SonarQube server with real token'
+if ! has_real_tokens; then skip "No real .env present"; fi
+When run zsh "$PWD/mcp_manager.sh" test sonarqube
+The status should be success
+The output should include "SonarQube MCP Server"
+The stderr should include "READY"
 End
 
 End
