@@ -1013,7 +1013,7 @@ handle_config_write() {
       all_servers+=("$server_name")
     fi
   done
-  generate_env_file "${all_servers[@]}" >&2
+  generate_env_file "${all_servers[@]}" 2> /dev/null
   # Categorize servers by token status (but include ALL servers in configuration)
   local servers_with_tokens=()
   local servers_with_placeholders=()
