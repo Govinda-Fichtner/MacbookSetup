@@ -52,6 +52,7 @@ The status should be success
 # Should list configured servers
 The output should include "github"
 The output should include "filesystem"
+The output should include "playwright"
 End
 
 It 'accepts parse command with server and field'

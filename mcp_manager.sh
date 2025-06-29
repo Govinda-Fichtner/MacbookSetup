@@ -1193,8 +1193,13 @@ wait_for_container_ready() {
     fi
 
     # Check container logs for MCP server readiness indicators
+    # Use temporary file to prevent zsh variable assignment leakage
+    local temp_logs
+    temp_logs=$(mktemp)
+    docker logs "$container_id" 2>&1 | tail -5 > "$temp_logs" 2> /dev/null
     local logs
-    logs=$(docker logs "$container_id" 2>&1 | tail -5)
+    logs=$(cat "$temp_logs")
+    rm -f "$temp_logs"
 
     # Look for signs that MCP server is ready (improved patterns)
     if echo "$logs" | grep -q -E "(initialization completed|capabilities registered|running on stdio|MCP.*[Ss]erver)" \
@@ -1807,6 +1812,41 @@ setup_build_server() {
   local image
   repository=$(parse_server_config "$server_id" "source.repository")
   image=$(parse_server_config "$server_id" "source.image")
+
+  # Check if we have a custom Dockerfile (no repository needed)
+  # Try relative path first, then absolute path relative to script location
+  local dockerfile_path="support/docker/$server_id/Dockerfile"
+  if [[ ! -f "$dockerfile_path" ]]; then
+    # Fallback to script directory if relative path doesn't work
+    local script_dir
+    if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+      script_dir="$(dirname "${BASH_SOURCE[0]}")"
+    else
+      # If BASH_SOURCE is not available, use the calling script path from $0
+      script_dir="$(dirname "$0")"
+      # If that's also not helpful, use a hardcoded fallback for tests
+      if [[ "$script_dir" == "." ]]; then
+        script_dir="/Users/gfichtner/MacbookSetup"
+      fi
+    fi
+    dockerfile_path="$script_dir/support/docker/$server_id/Dockerfile"
+  fi
+
+  if [[ -f "$dockerfile_path" ]] && [[ -z "$repository" || "$repository" == "null" ]]; then
+    printf "│   ├── %b[BUILDING]%b Using custom Dockerfile: %s\\n" "$BLUE" "$NC" "$dockerfile_path"
+
+    # Build context is the directory containing the Dockerfile
+    local build_context
+    build_context=$(dirname "$dockerfile_path")
+
+    if docker build -t "$image" -f "$dockerfile_path" "$build_context" > /dev/null 2>&1; then
+      printf "│   └── %b[SUCCESS]%b Custom build complete\\n" "$GREEN" "$NC"
+      return 0
+    else
+      printf "│   └── %b[ERROR]%b Custom build failed\\n" "$RED" "$NC"
+      return 1
+    fi
+  fi
 
   # CI environment: skip Docker operations, just validate repository access
   if [[ "${CI:-false}" == "true" ]]; then

@@ -81,6 +81,8 @@ setup_integration_test_environment() {
   mkdir -p "$TEST_HOME/terraform-projects"
   mkdir -p "$TEST_HOME/.kube"
   mkdir -p "$TEST_HOME/.config/rails-mcp"
+  mkdir -p "$TEST_HOME/.cache/ms-playwright"
+  mkdir -p "$TEST_HOME/screenshots"
 
   # Create required Rails MCP projects.yml file with proper entries
   printf '%s\n' \
@@ -107,7 +109,9 @@ setup_integration_test_environment() {
     "TERRAFORM_HOST_DIR=$TEST_HOME/terraform-projects" \
     "KUBECONFIG_HOST=$TEST_HOME/.kube/config" \
     "K8S_NAMESPACE=test_namespace" \
-    "K8S_CONTEXT=test_context"
+    "K8S_CONTEXT=test_context" \
+    "PLAYWRIGHT_BROWSER_PATH=$TEST_HOME/.cache/ms-playwright" \
+    "PLAYWRIGHT_SCREENSHOTS_PATH=$TEST_HOME/screenshots"
 }
 
 # Cleanup test environment
@@ -158,6 +162,7 @@ The output should include "heroku"
 The output should include "filesystem"
 The output should include "context7"
 The output should include "memory-service"
+The output should include "playwright"
 End
 
 It 'writes identical configuration to both client files'
@@ -418,6 +423,15 @@ The output should include "Terraform CLI Controller"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
+
+It 'can test playwright server individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test playwright'
+The status should be success
+The output should include "Playwright MCP Server"
+# Playwright may timeout due to large image size but should still succeed overall
+The output should include "SUCCESS"
+The stderr should include "TIMEOUT"
+End
 End
 
 Describe 'Docker Server Integration'
@@ -447,6 +461,17 @@ When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mc
 The status should be success
 The output should include "Docker MCP Server"
 The stderr should include "TIMEOUT"
+End
+
+It 'includes playwright in Docker configuration with browser cache and screenshots mounts'
+sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
+When run jq -r '.mcpServers.playwright.args[]' tmp/test_home/.cursor/mcp.json
+The status should be success
+The output should include "--volume"
+The output should include ".cache/ms-playwright:/ms-playwright"
+The output should include "screenshots:/app/output"
+The output should include "--output-dir"
+The output should include "local/playwright-mcp-server:latest"
 End
 
 It 'handles Docker unavailability gracefully'
@@ -628,6 +653,13 @@ It 'mailgun server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup mailgun'
 The status should be success
 The output should include "Mailgun MCP Server"
+The output should include "[SUCCESS]"
+End
+
+It 'playwright server supports setup command for building'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup playwright'
+The status should be success
+The output should include "Playwright MCP Server"
 The output should include "[SUCCESS]"
 End
 End

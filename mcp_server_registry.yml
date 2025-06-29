@@ -410,6 +410,65 @@ servers:
       - "open_tracking"
       - "webhook_configuration"
 
+  playwright:
+    name: "Playwright MCP Server"
+    server_type: "mount_based"
+    description: "Microsoft Playwright browser automation for AI-orchestrated web testing and automation workflows"
+    category: "automation"
+    source:
+      type: build
+      repository: "https://github.com/microsoft/playwright-mcp.git"
+      image: "local/playwright-mcp-server:latest"
+      build_context: "."
+      cmd: ["--headless", "--browser", "chromium", "--no-sandbox", "--output-dir", "/app/output"]
+    environment_variables:
+      - "PLAYWRIGHT_BROWSER_PATH"
+      - "PLAYWRIGHT_SCREENSHOTS_PATH"
+    volumes:
+      - "PLAYWRIGHT_BROWSER_PATH:/ms-playwright"
+      - "PLAYWRIGHT_SCREENSHOTS_PATH:/app/output"
+    health_test:
+      type: "stdio_jsonrpc"
+      method: "initialize"
+      params:
+        protocolVersion: "2024-11-05"
+        capabilities: {}
+        clientInfo:
+          name: "health_checker"
+          version: "1.0.0"
+      expected_response:
+        jsonrpc: "2.0"
+        result:
+          protocolVersion: "2024-11-05"
+          serverInfo:
+            name: "playwright-mcp-server"
+    capabilities:
+      - "browser_navigate"
+      - "browser_click"
+      - "browser_type"
+      - "browser_hover"
+      - "browser_drag"
+      - "browser_snapshot"
+      - "browser_take_screenshot"
+      - "browser_press_key"
+      - "browser_select_option"
+      - "browser_handle_dialog"
+      - "browser_tab_new"
+      - "browser_tab_select"
+      - "browser_tab_close"
+      - "browser_navigate_back"
+      - "browser_navigate_forward"
+      - "browser_console_messages"
+      - "browser_file_upload"
+      - "browser_pdf_save"
+      - "browser_wait"
+      - "browser_resize"
+      - "browser_close"
+      - "browser_install"
+      - "browser_screen_move_mouse"
+      - "browser_screen_click"
+      - "browser_screen_drag"
+
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"

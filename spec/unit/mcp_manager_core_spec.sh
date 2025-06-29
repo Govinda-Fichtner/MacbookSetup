@@ -169,6 +169,24 @@ When run zsh "$PWD/mcp_manager.sh" parse mailgun source.type
 The status should be success
 The output should equal "build"
 End
+
+It 'recognizes playwright as mount_based server type'
+When run zsh "$PWD/mcp_manager.sh" parse playwright server_type
+The status should be success
+The output should equal "mount_based"
+End
+
+It 'parses playwright source image correctly'
+When run zsh "$PWD/mcp_manager.sh" parse playwright source.image
+The status should be success
+The output should equal "local/playwright-mcp-server:latest"
+End
+
+It 'parses playwright source type correctly'
+When run zsh "$PWD/mcp_manager.sh" parse playwright source.type
+The status should be success
+The output should equal "build"
+End
 End
 
 Describe 'Environment Variable Handling'
@@ -238,6 +256,7 @@ The output should include "mailgun"
 The output should include "heroku"
 The output should include "filesystem"
 The output should include "terraform-cli-controller"
+The output should include "playwright"
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 
