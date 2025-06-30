@@ -7,9 +7,9 @@ WORKDIR /usr/src/app
 # Install dependencies, clone repository, build, and set up user
 RUN apk add --no-cache git && \
     git clone https://github.com/cyanheads/obsidian-mcp-server.git . && \
-    npm ci && \
+    npm ci --ignore-scripts && \
     npm run build && \
-    npm ci --only=production && \
+    npm ci --only=production --ignore-scripts && \
     rm -rf .git && \
     mkdir -p /usr/src/app/logs && \
     addgroup -S appgroup && \
