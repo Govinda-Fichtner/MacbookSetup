@@ -413,7 +413,8 @@ servers:
   playwright:
     name: "Playwright MCP Server"
     server_type: "mount_based"
-    description: "Microsoft Playwright browser automation for AI-orchestrated web testing and automation workflows"
+    description: |
+      Microsoft Playwright browser automation for AI-orchestrated web testing and automation workflows
     category: "automation"
     source:
       type: build
@@ -425,7 +426,6 @@ servers:
       - "PLAYWRIGHT_BROWSER_PATH"
       - "PLAYWRIGHT_SCREENSHOTS_PATH"
     volumes:
-      - "PLAYWRIGHT_BROWSER_PATH:/ms-playwright"
       - "PLAYWRIGHT_SCREENSHOTS_PATH:/app/output"
     health_test:
       type: "stdio_jsonrpc"

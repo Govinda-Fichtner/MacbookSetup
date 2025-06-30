@@ -468,7 +468,8 @@ sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager
 When run jq -r '.mcpServers.playwright.args[]' tmp/test_home/.cursor/mcp.json
 The status should be success
 The output should include "--volume"
-The output should include ".cache/ms-playwright:/ms-playwright"
+# The browser cache mount is no longer present
+# The output should include ".cache/ms-playwright:/ms-playwright"
 The output should include "screenshots:/app/output"
 The output should include "--output-dir"
 The output should include "local/playwright-mcp-server:latest"
