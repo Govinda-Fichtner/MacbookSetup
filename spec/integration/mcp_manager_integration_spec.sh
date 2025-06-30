@@ -102,6 +102,12 @@ setup_integration_test_environment() {
     "FILESYSTEM_ALLOWED_DIRS=$TEST_HOME,/tmp" \
     "HEROKU_API_KEY=test_heroku_api_key_placeholder" \
     "FIGMA_API_KEY=test_figma_api_key_placeholder" \
+    "SONARQUBE_TOKEN=test_sonarqube_token_placeholder" \
+    "SONARQUBE_ORG=test_sonarqube_org_placeholder" \
+    "SONARQUBE_URL=https://sonarcloud.io" \
+    "SONARQUBE_STORAGE_PATH=$TEST_HOME/sonarqube_storage" \
+    "MAILGUN_API_KEY=test_mailgun_api_key_placeholder" \
+    "MAILGUN_DOMAIN=test_mailgun_domain_placeholder" \
     "RAILS_MCP_ROOT_PATH=$TEST_HOME/rails-projects" \
     "RAILS_MCP_CONFIG_HOME=$TEST_HOME/.config" \
     "MCP_MEMORY_CHROMA_PATH=$TEST_HOME/ChromaDB/db" \

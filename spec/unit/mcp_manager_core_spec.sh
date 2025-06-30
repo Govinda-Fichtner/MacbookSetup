@@ -34,8 +34,22 @@ SONARQUBE_URL=https://sonarcloud.io
 SONARQUBE_STORAGE_PATH=$TEST_HOME/sonarqube_storage
 MAILGUN_API_KEY=test_mailgun_api_key_placeholder
 MAILGUN_DOMAIN=test_mailgun_domain_placeholder
+RAILS_MCP_ROOT_PATH=$TEST_HOME/rails-projects
+RAILS_MCP_CONFIG_HOME=$TEST_HOME/.config
+MCP_MEMORY_CHROMA_PATH=$TEST_HOME/ChromaDB/db
+MCP_MEMORY_BACKUPS_PATH=$TEST_HOME/ChromaDB/backup
+TERRAFORM_HOST_DIR=$TEST_HOME/terraform-projects
+KUBECONFIG_HOST=$TEST_HOME/.kube/config
+K8S_NAMESPACE=test_namespace
+K8S_CONTEXT=test_context
+PLAYWRIGHT_BROWSER_PATH=$TEST_HOME/.cache/ms-playwright
+PLAYWRIGHT_SCREENSHOTS_PATH=$TEST_HOME/screenshots
 OBSIDIAN_API_KEY=test_obsidian_api_key_placeholder
 OBSIDIAN_BASE_URL=https://host.docker.internal:27124
+OBSIDIAN_VERIFY_SSL=false
+OBSIDIAN_ENABLE_CACHE=true
+MCP_TRANSPORT_TYPE=stdio
+MCP_LOG_LEVEL=debug
 EOF
 }
 
