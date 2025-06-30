@@ -1149,6 +1149,12 @@ get_env_placeholder() {
     "CIRCLECI_TOKEN") echo "your_circleci_token_here" ;;
     "HEROKU_API_KEY") echo "your_heroku_api_key_here" ;;
     "FILESYSTEM_ALLOWED_DIRS") echo "/Users/user/Project,/Users/user/Desktop,/Users/user/Downloads" ;;
+    "OBSIDIAN_API_KEY") echo "your_obsidian_api_key_here" ;;
+    "OBSIDIAN_BASE_URL") echo "https://host.docker.internal:27124" ;;
+    "OBSIDIAN_VERIFY_SSL") echo "false" ;;
+    "OBSIDIAN_ENABLE_CACHE") echo "true" ;;
+    "MCP_TRANSPORT_TYPE") echo "stdio" ;;
+    "MCP_LOG_LEVEL") echo "debug" ;;
     *)
       # Zsh-compatible lowercase conversion
       local lower_var

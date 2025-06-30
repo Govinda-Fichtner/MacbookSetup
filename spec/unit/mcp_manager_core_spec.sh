@@ -397,7 +397,7 @@ It 'includes Obsidian base URL placeholder in .env_example'
 zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
 When run grep "OBSIDIAN_BASE_URL" "$PWD/.env_example"
 The status should be success
-The output should include "your_obsidian_base_url_here"
+The output should include "https://host.docker.internal:27124"
 End
 End
 
