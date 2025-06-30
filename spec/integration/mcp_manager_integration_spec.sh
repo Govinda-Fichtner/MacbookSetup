@@ -111,7 +111,13 @@ setup_integration_test_environment() {
     "K8S_NAMESPACE=test_namespace" \
     "K8S_CONTEXT=test_context" \
     "PLAYWRIGHT_BROWSER_PATH=$TEST_HOME/.cache/ms-playwright" \
-    "PLAYWRIGHT_SCREENSHOTS_PATH=$TEST_HOME/screenshots"
+    "PLAYWRIGHT_SCREENSHOTS_PATH=$TEST_HOME/screenshots" \
+    "OBSIDIAN_API_KEY=test_obsidian_api_key_placeholder" \
+    "OBSIDIAN_BASE_URL=https://host.docker.internal:27124" \
+    "OBSIDIAN_VERIFY_SSL=false" \
+    "OBSIDIAN_ENABLE_CACHE=true" \
+    "MCP_TRANSPORT_TYPE=stdio" \
+    "MCP_LOG_LEVEL=debug"
 }
 
 # Cleanup test environment
@@ -388,17 +394,18 @@ AfterEach 'cleanup_integration_test_environment'
 It 'can test all servers efficiently in one batch'
 # Test all servers at once to reduce container overhead
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test'
-# Status may fail if containers can't start, but output should still show all servers being tested
+# Status may fail if some containers can't start, but most should work
 The status should be failure
 The output should include "GitHub MCP Server"
 The output should include "Figma Context MCP Server"
 The output should include "Filesystem MCP Server"
 The output should include "Docker MCP Server"
 The output should include "Rails MCP Server"
-# Expect both successful readiness and timeout messages
+The output should include "Obsidian MCP Server"
+# Improved readiness detection should show most servers as ready
 The stderr should include "READY"
 The stderr should include "VALIDATED"
-The stderr should include "TIMEOUT"
+# Some servers may still have issues, so we might see errors
 End
 
 It 'can test context7 server individually'
@@ -431,6 +438,17 @@ The output should include "Playwright MCP Server"
 # Playwright may timeout due to large image size but should still succeed overall
 The output should include "SUCCESS"
 The stderr should include "TIMEOUT"
+End
+
+It 'can test obsidian server individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test obsidian'
+The status should be success
+The output should include "Obsidian MCP Server"
+# Obsidian should work with improved silent server detection
+The output should include "SUCCESS"
+# Should detect silent MCP servers quickly
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 End
 

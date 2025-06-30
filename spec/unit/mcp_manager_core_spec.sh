@@ -34,6 +34,8 @@ SONARQUBE_URL=https://sonarcloud.io
 SONARQUBE_STORAGE_PATH=$TEST_HOME/sonarqube_storage
 MAILGUN_API_KEY=test_mailgun_api_key_placeholder
 MAILGUN_DOMAIN=test_mailgun_domain_placeholder
+OBSIDIAN_API_KEY=test_obsidian_api_key_placeholder
+OBSIDIAN_BASE_URL=https://host.docker.internal:27124
 EOF
 }
 
@@ -184,6 +186,24 @@ End
 
 It 'parses playwright source type correctly'
 When run zsh "$PWD/mcp_manager.sh" parse playwright source.type
+The status should be success
+The output should equal "build"
+End
+
+It 'recognizes obsidian as api_based server type'
+When run zsh "$PWD/mcp_manager.sh" parse obsidian server_type
+The status should be success
+The output should equal "api_based"
+End
+
+It 'parses obsidian source image correctly'
+When run zsh "$PWD/mcp_manager.sh" parse obsidian source.image
+The status should be success
+The output should equal "local/obsidian-mcp-server:latest"
+End
+
+It 'parses obsidian source type correctly'
+When run zsh "$PWD/mcp_manager.sh" parse obsidian source.type
 The status should be success
 The output should equal "build"
 End
@@ -364,6 +384,20 @@ zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
 When run grep "FILESYSTEM_ALLOWED_DIRS" "$PWD/.env_example"
 The status should be success
 The output should include "/Users/user/Project,/Users/user/Desktop,/Users/user/Downloads"
+End
+
+It 'includes Obsidian API key placeholder in .env_example'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "OBSIDIAN_API_KEY" "$PWD/.env_example"
+The status should be success
+The output should include "your_obsidian_api_key_here"
+End
+
+It 'includes Obsidian base URL placeholder in .env_example'
+zsh "$PWD/mcp_manager.sh" config-write > /dev/null 2>&1
+When run grep "OBSIDIAN_BASE_URL" "$PWD/.env_example"
+The status should be success
+The output should include "your_obsidian_base_url_here"
 End
 End
 

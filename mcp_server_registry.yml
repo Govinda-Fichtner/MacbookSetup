@@ -469,6 +469,51 @@ servers:
       - "browser_screen_click"
       - "browser_screen_drag"
 
+  obsidian:
+    name: "Obsidian MCP Server"
+    server_type: "api_based"
+    description: |
+      Comprehensive Obsidian vault management with tools for reading, writing, searching,
+      and managing notes, tags, and frontmatter through the Local REST API plugin
+    category: "knowledge"
+    startup_timeout: 20  # Extended timeout for cache building when OBSIDIAN_ENABLE_CACHE=true
+    source:
+      type: build
+      repository: "https://github.com/cyanheads/obsidian-mcp-server.git"
+      image: "local/obsidian-mcp-server:latest"
+      build_context: "."
+    environment_variables:
+      - "OBSIDIAN_API_KEY"
+      - "OBSIDIAN_BASE_URL"
+      - "OBSIDIAN_VERIFY_SSL"
+      - "OBSIDIAN_ENABLE_CACHE"
+      - "MCP_TRANSPORT_TYPE"
+      - "MCP_LOG_LEVEL"
+    health_test:
+      type: "stdio_jsonrpc"
+      method: "initialize"
+      params:
+        protocolVersion: "2024-11-05"
+        capabilities: {}
+        clientInfo:
+          name: "health_checker"
+          version: "1.0.0"
+      expected_response:
+        jsonrpc: "2.0"
+        result:
+          protocolVersion: "2024-11-05"
+          serverInfo:
+            name: "obsidian-mcp-server"
+    capabilities:
+      - "note_management"
+      - "vault_search"
+      - "tag_operations"
+      - "frontmatter_manipulation"
+      - "file_operations"
+      - "folder_management"
+      - "link_management"
+      - "metadata_access"
+
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"
