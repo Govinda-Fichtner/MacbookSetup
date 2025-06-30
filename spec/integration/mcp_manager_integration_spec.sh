@@ -420,7 +420,9 @@ It 'can test heroku server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
 The status should be success
 The output should include "Heroku Platform MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test terraform-cli-controller server individually'
@@ -435,9 +437,10 @@ It 'can test playwright server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test playwright'
 The status should be success
 The output should include "Playwright MCP Server"
-# Playwright may timeout due to large image size but should still succeed overall
+# Improved readiness detection should show READY instead of TIMEOUT
 The output should include "SUCCESS"
-The stderr should include "TIMEOUT"
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test obsidian server individually'
@@ -478,7 +481,9 @@ fi
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
 The output should include "Docker MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'includes playwright in Docker configuration with browser cache and screenshots mounts'
@@ -698,7 +703,9 @@ if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test circleci
 The status should be success
 The output should include "CircleCI MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test Heroku server with real token'
@@ -706,7 +713,9 @@ if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test heroku
 The status should be success
 The output should include "Heroku Platform MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test SonarQube server with real token'
@@ -714,7 +723,9 @@ if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test sonarqube
 The status should be success
 The output should include "SonarQube MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test Mailgun server with real token'
