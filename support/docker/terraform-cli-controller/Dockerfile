@@ -32,14 +32,14 @@ RUN addgroup -g 1001 -S appgroup && \
 # Set working directory
 WORKDIR /app
 
-# Copy the tfmcp binary from builder with proper ownership
-COPY --from=builder --chown=appuser:appgroup /usr/local/cargo/bin/tfmcp /usr/local/bin/tfmcp
+# Copy the tfmcp binary from builder (read-only for security)
+COPY --from=builder /usr/local/cargo/bin/tfmcp /usr/local/bin/tfmcp
 
-# Make sure the binary is executable
-RUN chmod +x /usr/local/bin/tfmcp
-
-# Ensure appuser has access to terraform binary
-RUN chown -R appuser:appgroup /app
+# Make sure the binary is executable and create necessary directories
+RUN chmod +x /usr/local/bin/tfmcp && \
+    mkdir -p /app/tmp /app/logs /app/terraform && \
+    chown appuser:appgroup /app/tmp /app/logs /app/terraform && \
+    chmod 755 /app
 
 # Switch to non-root user
 USER appuser

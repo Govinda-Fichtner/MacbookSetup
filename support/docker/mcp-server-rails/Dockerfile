@@ -21,7 +21,9 @@ RUN mkdir -p /app/config /app/.config/rails-mcp /app/projects
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup -h /app && \
-    chown -R appuser:appgroup /app /app/.config
+    mkdir -p /app/tmp /app/logs && \
+    chown appuser:appgroup /app/.config /app/config /app/projects /app/tmp /app/logs && \
+    chmod 755 /app
 
 # Set up environment variables
 ENV RAILS_MCP_ROOT_PATH=/rails-projects

@@ -50,7 +50,10 @@ RUN echo "=== Final verification ===" && \
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup -h /app && \
-    chown -R appuser:appgroup /app
+    mkdir -p /app/tmp /app/logs && \
+    chown appuser:appgroup /app/tmp /app/logs && \
+    chmod 755 /app/src /app/dist /app/bin /app/node_modules && \
+    chmod 644 /app/package.json /app/package-lock.json /app/tsconfig.json
 
 # Switch to non-root user
 USER appuser

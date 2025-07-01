@@ -17,7 +17,9 @@ RUN apk add --no-cache docker-cli && \
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup -h /app && \
-    chown -R appuser:appgroup /app
+    mkdir -p /app/tmp /app/logs && \
+    chown appuser:appgroup /app/tmp /app/logs && \
+    chmod 755 /app
 
 # Expose the ports
 EXPOSE 6274 6277
