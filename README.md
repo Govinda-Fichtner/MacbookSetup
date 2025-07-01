@@ -35,6 +35,12 @@ This setup automates the installation and configuration of:
 - **Infrastructure as Code**: Terraform, Packer
 - **System Monitoring**: htop for process monitoring
 
+### Knowledge Management and Productivity
+- **Obsidian**: Advanced knowledge base and note-taking app with AI integration
+  - **MCP Integration**: Included MCP server for AI-enhanced vault management
+  - **Local REST API**: Enables programmatic access to your knowledge base
+  - **AI Workflows**: Search, create, and organize notes through AI assistants
+
 ### About Packer Installation
 
 #### Why Packer is Installed Directly (Not via Homebrew)
@@ -178,6 +184,84 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
   ```
 
   **Note**: Context7 requires no authentication and provides immediate access to library documentation. The server is built from source during setup and provides comprehensive programming library assistance.
+
+- **Obsidian MCP Server**: Comprehensive vault management for knowledge workers
+  - **Features**: Note management, vault search, tag operations, frontmatter manipulation, file operations, folder management, link management, metadata access
+  - **Docker Image**: `local/obsidian-mcp-server:latest`
+  - **Type**: API-based (requires Obsidian Local REST API plugin)
+  - **Purpose**: AI-enhanced knowledge management and note-taking workflows
+  - **Source**: Built from [cyanheads/obsidian-mcp-server](https://github.com/cyanheads/obsidian-mcp-server.git)
+
+  **Available Tools**:
+  - `search_notes` - Global search across vault (when cache enabled)
+  - `read_note` / `read_notes` - Read note contents and metadata
+  - `write_note` - Create or update notes with content and frontmatter
+  - `delete_note` - Delete notes from vault
+  - `list_notes` - List notes in folder or entire vault
+  - `create_folder` / `delete_folder` - Folder management operations
+  - `get_tags` / `get_notes_by_tag` - Tag-based organization
+  - `get_frontmatter` / `update_frontmatter` - YAML frontmatter manipulation
+
+  **Host Setup Requirements**:
+
+  To use the Obsidian MCP server, you need to set up the Obsidian Local REST API plugin on your host machine:
+
+  1. **Install Obsidian Local REST API Plugin**:
+     - Open Obsidian → Settings → Community Plugins
+     - Search for "Local REST API" by coddingtonbear
+     - Install and enable the plugin
+
+  2. **Configure the Plugin**:
+     - Go to Plugin Settings for "Local REST API"
+     - **Enable** the REST API server
+     - **Set Port**: Use `27124` (default, or choose your preferred port)
+     - **Enable HTTPS**: Recommended for security
+     - **Generate API Key**: Copy the generated API key for environment configuration
+     - **Enable CORS**: Required for Docker container communication
+
+  3. **Environment Configuration**:
+     Add the following to your `.env` file:
+     ```bash
+     # Obsidian MCP Server Configuration
+     OBSIDIAN_API_KEY=your_api_key_from_plugin_settings
+     OBSIDIAN_BASE_URL=https://host.docker.internal:27124
+     OBSIDIAN_VERIFY_SSL=false  # For self-signed certificates
+     OBSIDIAN_ENABLE_CACHE=true  # Enables global search capabilities
+     MCP_TRANSPORT_TYPE=stdio
+     MCP_LOG_LEVEL=debug
+     ```
+
+  4. **Network Configuration**:
+     - The MCP server uses `host.docker.internal:27124` to connect from Docker containers to your local Obsidian instance
+     - This works automatically on macOS with Docker Desktop
+     - Ensure Obsidian is running and the Local REST API plugin is active
+
+  5. **Testing the Setup**:
+     ```bash
+     # Test the Obsidian MCP server
+     ./mcp_manager.sh test obsidian
+
+     # Build the server (if not already built)
+     ./mcp_manager.sh setup obsidian
+     ```
+
+  **Use Cases**:
+  - **AI-Enhanced Note Taking**: Let AI assistants help organize and search your knowledge base
+  - **Content Generation**: Generate notes, outlines, and documentation directly in your vault
+  - **Research Workflows**: AI can search and reference your existing notes while helping with new content
+  - **Knowledge Graph Navigation**: AI can understand relationships between notes via links and tags
+  - **Automated Organization**: AI can help with tagging, linking, and structuring your vault
+
+  **Performance Notes**:
+  - **Cache Building**: When `OBSIDIAN_ENABLE_CACHE=true`, the server builds an index of your vault on startup (20s timeout)
+  - **Global Search**: Cache enables powerful full-text search across your entire vault
+  - **Silent Server**: The server doesn't log startup messages, so enhanced readiness detection is used
+
+  **Security Considerations**:
+  - API key provides full access to your Obsidian vault
+  - Keep your API key secure and never commit it to version control
+  - The Local REST API plugin runs locally, so data doesn't leave your machine
+  - Docker container communicates only with your local Obsidian instance
 
 #### Terraform Infrastructure Workflow
 

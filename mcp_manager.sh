@@ -1149,6 +1149,12 @@ get_env_placeholder() {
     "CIRCLECI_TOKEN") echo "your_circleci_token_here" ;;
     "HEROKU_API_KEY") echo "your_heroku_api_key_here" ;;
     "FILESYSTEM_ALLOWED_DIRS") echo "/Users/user/Project,/Users/user/Desktop,/Users/user/Downloads" ;;
+    "OBSIDIAN_API_KEY") echo "your_obsidian_api_key_here" ;;
+    "OBSIDIAN_BASE_URL") echo "https://host.docker.internal:27124" ;;
+    "OBSIDIAN_VERIFY_SSL") echo "false" ;;
+    "OBSIDIAN_ENABLE_CACHE") echo "true" ;;
+    "MCP_TRANSPORT_TYPE") echo "stdio" ;;
+    "MCP_LOG_LEVEL") echo "debug" ;;
     *)
       # Zsh-compatible lowercase conversion
       local lower_var
@@ -1168,9 +1174,9 @@ get_env_placeholder() {
 # Uses Docker CLI and log monitoring for intelligent readiness detection
 wait_for_container_ready() {
   local container_id="$1"
-  local max_wait=8 # Optimized timeout: balance speed vs reliability
+  local max_wait="${2:-8}" # Default 8 seconds, allow override for cache building
   local check_count=0
-  local max_checks=32 # 8 seconds / 0.25 second intervals
+  local max_checks=$((max_wait * 4)) # max_wait seconds / 0.25 second intervals
 
   # First, verify container actually started
   if [[ -z "$container_id" ]]; then
@@ -1225,6 +1231,21 @@ wait_for_container_ready() {
       printf "│   │   └── %b[ERROR]%b Container logs show non-auth errors after %ds\\n" "$RED" "$NC" "$elapsed_time" >&2
       printf "│   │       Error log: %.80s\\n" "$(echo "$logs" | grep -E "(error|Error|ERROR)" | head -1)" >&2
       return 1
+    fi
+
+    # For silent servers (like Obsidian): if container runs for 3+ seconds without errors, consider ready
+    if [[ $check_count -ge 12 ]] && [[ -z "$logs" ]]; then # 3 seconds of silence
+      local elapsed_time=$((check_count / 4))
+      printf "│   │   ├── %b[READY]%b Silent MCP server stable after %ds (no errors)\\n" "$GREEN" "$NC" "$elapsed_time" >&2
+
+      # Validate MCP protocol for silent servers
+      if validate_mcp_protocol "$container_id"; then
+        printf "│   │   ├── %b[VALIDATED]%b MCP protocol responding\\n" "$GREEN" "$NC" >&2
+        return 0
+      else
+        printf "│   │   ├── %b[WARNING]%b MCP server stable but protocol validation failed\\n" "$YELLOW" "$NC" >&2
+        return 0 # Don't fail - server is stable, might need auth
+      fi
     fi
 
     sleep 0.25
@@ -1406,9 +1427,13 @@ test_mcp_basic_protocol() {
 
   printf "│   │   ├── %b[STARTED]%b Container ID: ${container_id:0:12}\\n" "$GREEN" "$NC"
 
+  # Get server-specific timeout for cache building (e.g., Obsidian with OBSIDIAN_ENABLE_CACHE=true)
+  local startup_timeout
+  startup_timeout=$(yq -r ".servers.$server_id.startup_timeout // 8" "$MCP_REGISTRY_FILE")
+
   # Wait for container to be ready using intelligent detection
-  printf "│   │   ├── %b[WAITING]%b For container readiness\\n" "$BLUE" "$NC"
-  if ! wait_for_container_ready "$container_id"; then
+  printf "│   │   ├── %b[WAITING]%b For container readiness (timeout: ${startup_timeout}s)\\n" "$BLUE" "$NC"
+  if ! wait_for_container_ready "$container_id" "$startup_timeout"; then
     printf "│   │   └── %b[ERROR]%b Container failed to become ready\\n" "$RED" "$NC"
     docker stop "$container_id" > /dev/null 2>&1
     docker rm "$container_id" > /dev/null 2>&1

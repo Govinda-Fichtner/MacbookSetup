@@ -102,6 +102,12 @@ setup_integration_test_environment() {
     "FILESYSTEM_ALLOWED_DIRS=$TEST_HOME,/tmp" \
     "HEROKU_API_KEY=test_heroku_api_key_placeholder" \
     "FIGMA_API_KEY=test_figma_api_key_placeholder" \
+    "SONARQUBE_TOKEN=test_sonarqube_token_placeholder" \
+    "SONARQUBE_ORG=test_sonarqube_org_placeholder" \
+    "SONARQUBE_URL=https://sonarcloud.io" \
+    "SONARQUBE_STORAGE_PATH=$TEST_HOME/sonarqube_storage" \
+    "MAILGUN_API_KEY=test_mailgun_api_key_placeholder" \
+    "MAILGUN_DOMAIN=test_mailgun_domain_placeholder" \
     "RAILS_MCP_ROOT_PATH=$TEST_HOME/rails-projects" \
     "RAILS_MCP_CONFIG_HOME=$TEST_HOME/.config" \
     "MCP_MEMORY_CHROMA_PATH=$TEST_HOME/ChromaDB/db" \
@@ -111,7 +117,13 @@ setup_integration_test_environment() {
     "K8S_NAMESPACE=test_namespace" \
     "K8S_CONTEXT=test_context" \
     "PLAYWRIGHT_BROWSER_PATH=$TEST_HOME/.cache/ms-playwright" \
-    "PLAYWRIGHT_SCREENSHOTS_PATH=$TEST_HOME/screenshots"
+    "PLAYWRIGHT_SCREENSHOTS_PATH=$TEST_HOME/screenshots" \
+    "OBSIDIAN_API_KEY=test_obsidian_api_key_placeholder" \
+    "OBSIDIAN_BASE_URL=https://host.docker.internal:27124" \
+    "OBSIDIAN_VERIFY_SSL=false" \
+    "OBSIDIAN_ENABLE_CACHE=true" \
+    "MCP_TRANSPORT_TYPE=stdio" \
+    "MCP_LOG_LEVEL=debug"
 }
 
 # Cleanup test environment
@@ -388,17 +400,18 @@ AfterEach 'cleanup_integration_test_environment'
 It 'can test all servers efficiently in one batch'
 # Test all servers at once to reduce container overhead
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test'
-# Status may fail if containers can't start, but output should still show all servers being tested
+# Status may fail if some containers can't start, but most should work
 The status should be failure
 The output should include "GitHub MCP Server"
 The output should include "Figma Context MCP Server"
 The output should include "Filesystem MCP Server"
 The output should include "Docker MCP Server"
 The output should include "Rails MCP Server"
-# Expect both successful readiness and timeout messages
+The output should include "Obsidian MCP Server"
+# Improved readiness detection should show most servers as ready
 The stderr should include "READY"
 The stderr should include "VALIDATED"
-The stderr should include "TIMEOUT"
+# Some servers may still have issues, so we might see errors
 End
 
 It 'can test context7 server individually'
@@ -413,7 +426,9 @@ It 'can test heroku server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
 The status should be success
 The output should include "Heroku Platform MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test terraform-cli-controller server individually'
@@ -428,9 +443,21 @@ It 'can test playwright server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test playwright'
 The status should be success
 The output should include "Playwright MCP Server"
-# Playwright may timeout due to large image size but should still succeed overall
+# Improved readiness detection should show READY instead of TIMEOUT
 The output should include "SUCCESS"
-The stderr should include "TIMEOUT"
+The stderr should include "READY"
+The stderr should include "VALIDATED"
+End
+
+It 'can test obsidian server individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test obsidian'
+The status should be success
+The output should include "Obsidian MCP Server"
+# Obsidian should work with improved silent server detection
+The output should include "SUCCESS"
+# Should detect silent MCP servers quickly
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 End
 
@@ -460,7 +487,9 @@ fi
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
 The output should include "Docker MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'includes playwright in Docker configuration with browser cache and screenshots mounts'
@@ -680,7 +709,9 @@ if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test circleci
 The status should be success
 The output should include "CircleCI MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test Heroku server with real token'
@@ -688,7 +719,9 @@ if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test heroku
 The status should be success
 The output should include "Heroku Platform MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test SonarQube server with real token'
@@ -696,7 +729,9 @@ if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test sonarqube
 The status should be success
 The output should include "SonarQube MCP Server"
-The stderr should include "TIMEOUT"
+# Improved readiness detection should show READY instead of TIMEOUT
+The stderr should include "READY"
+The stderr should include "VALIDATED"
 End
 
 It 'can test Mailgun server with real token'
