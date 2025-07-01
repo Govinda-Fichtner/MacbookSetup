@@ -47,5 +47,13 @@ RUN echo "=== Final verification ===" && \
     heroku version && \
     echo "=== All checks passed ==="
 
+# Create non-root user for security
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -h /app && \
+    chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
 # Use the correct entrypoint as specified in PR #67
 ENTRYPOINT ["node", "bin/heroku-mcp-server.mjs"]

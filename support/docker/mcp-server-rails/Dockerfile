@@ -18,6 +18,11 @@ RUN gem install rails-mcp-server
 # Create directories for configuration and projects
 RUN mkdir -p /app/config /app/.config/rails-mcp /app/projects
 
+# Create non-root user for security
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -h /app && \
+    chown -R appuser:appgroup /app /app/.config
+
 # Set up environment variables
 ENV RAILS_MCP_ROOT_PATH=/rails-projects
 ENV RAILS_MCP_CONFIG_HOME=/app/.config
@@ -26,6 +31,9 @@ ENV XDG_CONFIG_HOME=/app/.config
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD rails-mcp-server --help || exit 1
+
+# Switch to non-root user
+USER appuser
 
 # Use the rails-mcp-server executable as entrypoint
 ENTRYPOINT ["rails-mcp-server"]

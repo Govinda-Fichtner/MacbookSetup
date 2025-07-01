@@ -14,6 +14,11 @@ ENV SERVER_PORT=6277
 RUN apk add --no-cache docker-cli && \
     npm install -g @modelcontextprotocol/inspector@latest
 
+# Create non-root user for security
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -h /app && \
+    chown -R appuser:appgroup /app
+
 # Expose the ports
 EXPOSE 6274 6277
 
@@ -25,7 +30,11 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=2 \
 # Create entrypoint script
 RUN echo '#!/bin/sh' > /entrypoint.sh && \
     echo 'exec npx @modelcontextprotocol/inspector "$@"' >> /entrypoint.sh && \
-    chmod +x /entrypoint.sh
+    chmod +x /entrypoint.sh && \
+    chown appuser:appgroup /entrypoint.sh
+
+# Switch to non-root user
+USER appuser
 
 ENTRYPOINT ["/entrypoint.sh"]
 

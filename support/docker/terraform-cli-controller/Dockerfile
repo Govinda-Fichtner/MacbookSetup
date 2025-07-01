@@ -25,14 +25,24 @@ RUN curl -fsSL https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_li
     rm terraform.zip && \
     chmod +x /usr/local/bin/terraform
 
-# Copy the tfmcp binary from builder
-COPY --from=builder /usr/local/cargo/bin/tfmcp /usr/local/bin/tfmcp
+# Create non-root user for security
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup -h /app
+
+# Set working directory
+WORKDIR /app
+
+# Copy the tfmcp binary from builder with proper ownership
+COPY --from=builder --chown=appuser:appgroup /usr/local/cargo/bin/tfmcp /usr/local/bin/tfmcp
 
 # Make sure the binary is executable
 RUN chmod +x /usr/local/bin/tfmcp
 
-# Set working directory
-WORKDIR /app
+# Ensure appuser has access to terraform binary
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
 
 # Set the entrypoint
 ENTRYPOINT ["tfmcp"]
