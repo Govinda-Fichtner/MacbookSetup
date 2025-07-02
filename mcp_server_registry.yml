@@ -487,8 +487,6 @@ servers:
       - "OBSIDIAN_BASE_URL"
       - "OBSIDIAN_VERIFY_SSL"
       - "OBSIDIAN_ENABLE_CACHE"
-      - "MCP_TRANSPORT_TYPE"
-      - "MCP_LOG_LEVEL"
     health_test:
       type: "stdio_jsonrpc"
       method: "initialize"
