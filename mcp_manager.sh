@@ -208,21 +208,21 @@ test_mcp_server_health() {
 
   # Validate that server exists
   if [[ "$server_name" == "null" || -z "$server_name" ]]; then
-    printf "├── %b[ERROR]%b Unknown server: %s\\n" "$RED" "$NC" "$server_id"
+    printf "├── %b[ERROR]%b Unknown server: %s\\n" "$RED" "$NC" "$server_id" >&2
     return 1
   fi
 
-  printf "├── %b[SERVER]%b %s\\n" "$BLUE" "$NC" "$server_name"
+  printf "├── %b[SERVER]%b %s\\n" "$BLUE" "$NC" "$server_name" >&2
 
   # Basic protocol testing (CI + local)
   if ! test_mcp_basic_protocol "$server_id" "$server_name" "$image" "$parse_mode"; then
-    printf "│   └── %b[ERROR]%b Basic protocol test failed\\n" "$RED" "$NC"
+    printf "│   └── %b[ERROR]%b Basic protocol test failed\\n" "$RED" "$NC" >&2
     return 1
   fi
 
   # Advanced functionality testing (local only, with real tokens)
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (CI environment)\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (CI environment)\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 
@@ -230,7 +230,7 @@ test_mcp_server_health() {
     test_server_advanced_functionality "$server_id" "$server_name" "$image"
     return $?
   else
-    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (no real tokens)\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (no real tokens)\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 }
@@ -242,22 +242,22 @@ test_mcp_basic_protocol() {
   local image="$3"
   local parse_mode="$4"
 
-  printf "│   ├── %b[TESTING]%b Basic MCP protocol compatibility\\n" "$BLUE" "$NC"
+  printf "│   ├── %b[TESTING]%b Basic MCP protocol compatibility\\n" "$BLUE" "$NC" >&2
 
   # For CI, just validate that server is configured correctly
   if [[ "${CI:-false}" == "true" ]]; then
     if [[ -n "$server_name" && -n "$image" ]]; then
-      printf "│   │   └── %b[SUCCESS]%b Configuration validated (CI mode)\\n" "$GREEN" "$NC"
+      printf "│   │   └── %b[SUCCESS]%b Configuration validated (CI mode)\\n" "$GREEN" "$NC" >&2
       return 0
     else
-      printf "│   │   └── %b[ERROR]%b Invalid configuration\\n" "$RED" "$NC"
+      printf "│   │   └── %b[ERROR]%b Invalid configuration\\n" "$RED" "$NC" >&2
       return 1
     fi
   fi
 
   # Skip if Docker not available
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   │   └── %b[SKIPPED]%b Docker not available\\n" "$YELLOW" "$NC"
+    printf "│   │   └── %b[SKIPPED]%b Docker not available\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 
@@ -320,7 +320,7 @@ test_mcp_basic_protocol() {
   local start_status=$?
 
   if [[ $start_status -ne 0 || -z "$container_id" ]]; then
-    printf "│   │   └── %b[ERROR]%b Failed to start container\\n" "$RED" "$NC"
+    printf "│   │   └── %b[ERROR]%b Failed to start container\\n" "$RED" "$NC" >&2
     rm -f "$temp_request_file"
     [[ -d "$test_dir" ]] && rm -rf "$test_dir"
     return 1
@@ -342,28 +342,28 @@ test_mcp_basic_protocol() {
   if [[ "$parse_mode" == "error_only" ]]; then
     # For servers that don't output unless there's an error
     if [[ $exit_code -eq 0 ]] && [[ -z "$response" || "$response" =~ "^\s*$" ]]; then
-      printf "│   │   └── %b[SUCCESS]%b Server started without errors\\n" "$GREEN" "$NC"
+      printf "│   │   └── %b[SUCCESS]%b Server started without errors\\n" "$GREEN" "$NC" >&2
       return 0
     fi
   else
     # Standard JSON-RPC response parsing
     if echo "$response" | grep -q '"method":"initialized"'; then
-      printf "│   │   └── %b[SUCCESS]%b Received MCP initialization response\\n" "$GREEN" "$NC"
+      printf "│   │   └── %b[SUCCESS]%b Received MCP initialization response\\n" "$GREEN" "$NC" >&2
       return 0
     elif echo "$response" | grep -q '"result".*"protocolVersion"'; then
-      printf "│   │   └── %b[SUCCESS]%b Received MCP protocol handshake\\n" "$GREEN" "$NC"
+      printf "│   │   └── %b[SUCCESS]%b Received MCP protocol handshake\\n" "$GREEN" "$NC" >&2
       return 0
     elif echo "$response" | grep -q -E "(running on stdio|MCP.*[Ss]erver)" && [[ $exit_code -eq 124 ]]; then
       # Server started and responded but timed out (expected behavior for stdio servers)
-      printf "│   │   └── %b[SUCCESS]%b MCP server responsive (timeout expected)\\n" "$GREEN" "$NC"
+      printf "│   │   └── %b[SUCCESS]%b MCP server responsive (timeout expected)\\n" "$GREEN" "$NC" >&2
       return 0
     fi
   fi
 
   # If we get here, the test was inconclusive
-  printf "│   │   └── %b[WARNING]%b Protocol validation inconclusive (exit: %d)\\n" "$YELLOW" "$NC" "$exit_code"
+  printf "│   │   └── %b[WARNING]%b Protocol validation inconclusive (exit: %d)\\n" "$YELLOW" "$NC" "$exit_code" >&2
   if [[ -n "$response" ]]; then
-    printf "│   │       Response: %.80s...\\n" "$(echo "$response" | tr '\n' ' ')"
+    printf "│   │       Response: %.80s...\\n" "$(echo "$response" | tr '\n' ' ')" >&2
   fi
   return 0
 }
@@ -408,7 +408,7 @@ test_server_advanced_functionality() {
   local server_name="$2"
   local image="$3"
 
-  printf "│   └── %b[TESTING]%b Advanced functionality with real tokens\\n" "$BLUE" "$NC"
+  printf "│   └── %b[TESTING]%b Advanced functionality with real tokens\\n" "$BLUE" "$NC" >&2
 
   local server_type
   server_type=$(get_server_type "$server_id")
@@ -421,19 +421,19 @@ test_server_advanced_functionality() {
           test_github_advanced_functionality "$server_id" "$server_name" "$image"
           ;;
         *)
-          printf "│       └── %b[INFO]%b No specific advanced test for %s\\n" "$BLUE" "$NC" "$server_name"
+          printf "│       └── %b[INFO]%b No specific advanced test for %s\\n" "$BLUE" "$NC" "$server_name" >&2
           return 0
           ;;
       esac
       ;;
     "mount_based")
       # Mount-based servers: Already tested file access in basic test
-      printf "│       └── %b[SUCCESS]%b Mount-based functionality verified\\n" "$GREEN" "$NC"
+      printf "│       └── %b[SUCCESS]%b Mount-based functionality verified\\n" "$GREEN" "$NC" >&2
       return 0
       ;;
     "standalone")
       # Standalone servers: No additional testing needed
-      printf "│       └── %b[SUCCESS]%b Standalone server operational\\n" "$GREEN" "$NC"
+      printf "│       └── %b[SUCCESS]%b Standalone server operational\\n" "$GREEN" "$NC" >&2
       return 0
       ;;
     "privileged")
@@ -446,7 +446,7 @@ test_server_advanced_functionality() {
           test_docker_advanced_functionality "$server_id" "$server_name" "$image"
           ;;
         *)
-          printf "│       └── %b[INFO]%b No specific advanced test for %s\\n" "$BLUE" "$NC" "$server_name"
+          printf "│       └── %b[INFO]%b No specific advanced test for %s\\n" "$BLUE" "$NC" "$server_name" >&2
           return 0
           ;;
       esac
@@ -458,7 +458,7 @@ test_server_advanced_functionality() {
 setup_mcp_server() {
   local server_id="$1"
 
-  printf "├── %b[SETUP]%b %s\n" "$BLUE" "$NC" "$(parse_server_config "$server_id" "name")"
+  printf "├── %b[SETUP]%b %s\n" "$BLUE" "$NC" "$(parse_server_config "$server_id" "name")" >&2
 
   local source_type
   source_type=$(parse_server_config "$server_id" "source.type")
@@ -471,7 +471,7 @@ setup_mcp_server() {
       setup_build_server "$server_id"
       ;;
     *)
-      printf "│   └── %b[ERROR]%b Unknown source type: %s\n" "$RED" "$NC" "$source_type"
+      printf "│   └── %b[ERROR]%b Unknown source type: %s\n" "$RED" "$NC" "$source_type" >&2
       return 1
       ;;
   esac
@@ -485,29 +485,29 @@ setup_registry_server() {
 
   # CI environment: skip Docker operations
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[SKIPPED]%b Docker pull for %s (CI environment)\n" "$YELLOW" "$NC" "$image"
+    printf "│   └── %b[SKIPPED]%b Docker pull for %s (CI environment)\n" "$YELLOW" "$NC" "$image" >&2
     return 0
   fi
 
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   └── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\n" "$YELLOW" "$NC"
+    printf "│   └── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 
   # Check if Docker image already exists
   if docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
-    printf "│   ├── %b[FOUND]%b Registry image already exists: %s\n" "$GREEN" "$NC" "$image"
-    printf "│   └── %b[SUCCESS]%b Using existing registry image\n" "$GREEN" "$NC"
+    printf "│   ├── %b[FOUND]%b Registry image already exists: %s\n" "$GREEN" "$NC" "$image" >&2
+    printf "│   └── %b[SUCCESS]%b Using existing registry image\n" "$GREEN" "$NC" >&2
     return 0
   fi
 
-  printf "│   ├── %b[PULLING]%b Registry image: %s\n" "$BLUE" "$NC" "$image"
+  printf "│   ├── %b[PULLING]%b Registry image: %s\n" "$BLUE" "$NC" "$image" >&2
 
   if docker pull "$image" > /dev/null 2>&1; then
-    printf "│   └── %b[SUCCESS]%b Registry image ready\n" "$GREEN" "$NC"
+    printf "│   └── %b[SUCCESS]%b Registry image ready\n" "$GREEN" "$NC" >&2
     return 0
   else
-    printf "│   └── %b[ERROR]%b Failed to pull registry image\n" "$RED" "$NC"
+    printf "│   └── %b[ERROR]%b Failed to pull registry image\n" "$RED" "$NC" >&2
     return 1
   fi
 }
@@ -518,30 +518,30 @@ setup_build_server() {
 
   # Server-specific environment validation (before any other operations)
   if [[ "$server_id" == "memory-service" ]]; then
-    printf "│   ├── %b[VALIDATING]%b Environment variables\n" "$BLUE" "$NC"
+    printf "│   ├── %b[VALIDATING]%b Environment variables\n" "$BLUE" "$NC" >&2
     if [[ -z "${MCP_MEMORY_CHROMA_PATH:-}" ]]; then
-      printf "│   └── %b[ERROR]%b MCP_MEMORY_CHROMA_PATH must be set\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b MCP_MEMORY_CHROMA_PATH must be set\n" "$RED" "$NC" >&2
       return 1
     fi
 
     if [[ -z "${MCP_MEMORY_BACKUPS_PATH:-}" ]]; then
-      printf "│   └── %b[ERROR]%b MCP_MEMORY_BACKUPS_PATH must be set\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b MCP_MEMORY_BACKUPS_PATH must be set\n" "$RED" "$NC" >&2
       return 1
     fi
 
     # Create directories if they don't exist
     if [[ ! -d "$MCP_MEMORY_CHROMA_PATH" ]]; then
-      printf "│   ├── %b[CREATING]%b Creating directory: %s\n" "$BLUE" "$NC" "$MCP_MEMORY_CHROMA_PATH"
+      printf "│   ├── %b[CREATING]%b Creating directory: %s\n" "$BLUE" "$NC" "$MCP_MEMORY_CHROMA_PATH" >&2
       mkdir -p "$MCP_MEMORY_CHROMA_PATH"
     else
-      printf "│   ├── %b[FOUND]%b Directory already exists: %s\n" "$GREEN" "$NC" "$MCP_MEMORY_CHROMA_PATH"
+      printf "│   ├── %b[FOUND]%b Directory already exists: %s\n" "$GREEN" "$NC" "$MCP_MEMORY_CHROMA_PATH" >&2
     fi
 
     if [[ ! -d "$MCP_MEMORY_BACKUPS_PATH" ]]; then
-      printf "│   ├── %b[CREATING]%b Creating directory: %s\n" "$BLUE" "$NC" "$MCP_MEMORY_BACKUPS_PATH"
+      printf "│   ├── %b[CREATING]%b Creating directory: %s\n" "$BLUE" "$NC" "$MCP_MEMORY_BACKUPS_PATH" >&2
       mkdir -p "$MCP_MEMORY_BACKUPS_PATH"
     else
-      printf "│   ├── %b[FOUND]%b Directory already exists: %s\n" "$GREEN" "$NC" "$MCP_MEMORY_BACKUPS_PATH"
+      printf "│   ├── %b[FOUND]%b Directory already exists: %s\n" "$GREEN" "$NC" "$MCP_MEMORY_BACKUPS_PATH" >&2
     fi
   fi
 
@@ -553,68 +553,68 @@ setup_build_server() {
 
   # CI environment: skip Docker operations
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[SKIPPED]%b Docker build for %s (CI environment)\n" "$YELLOW" "$NC" "$image_name"
+    printf "│   └── %b[SKIPPED]%b Docker build for %s (CI environment)\n" "$YELLOW" "$NC" "$image_name" >&2
     return 0
   fi
 
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   └── %b[WARNING]%b Docker not available\n" "$YELLOW" "$NC"
+    printf "│   └── %b[WARNING]%b Docker not available\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 
   # Check if Docker image already exists
   if docker images | grep -q "$(echo "$image_name" | cut -d: -f1)"; then
-    printf "│   ├── %b[FOUND]%b Build image already exists: %s\n" "$GREEN" "$NC" "$image_name"
-    printf "│   └── %b[SUCCESS]%b Using existing build image\n" "$GREEN" "$NC"
+    printf "│   ├── %b[FOUND]%b Build image already exists: %s\n" "$GREEN" "$NC" "$image_name" >&2
+    printf "│   └── %b[SUCCESS]%b Using existing build image\n" "$GREEN" "$NC" >&2
     return 0
   fi
 
   # Check if we have a custom Dockerfile
   if [[ -f "$dockerfile_path" ]]; then
-    printf "│   ├── %b[BUILDING]%b Using custom Dockerfile: %s\n" "$BLUE" "$NC" "$dockerfile_path"
+    printf "│   ├── %b[BUILDING]%b Using custom Dockerfile: %s\n" "$BLUE" "$NC" "$dockerfile_path" >&2
 
     # Build context is the directory containing the Dockerfile
     local build_context
     build_context=$(dirname "$dockerfile_path")
 
     if docker build -t "$image_name" -f "$dockerfile_path" "$build_context" > /dev/null 2>&1; then
-      printf "│   └── %b[SUCCESS]%b Custom build complete\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b Custom build complete\n" "$GREEN" "$NC" >&2
       return 0
     else
-      printf "│   └── %b[ERROR]%b Custom build failed\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b Custom build failed\n" "$RED" "$NC" >&2
       return 1
     fi
   fi
 
   # Clone and build from repository if needed
   if [[ -n "$repo_url" ]] && [[ "$repo_url" != "null" ]]; then
-    printf "│   ├── %b[CLONING]%b Repository: %s\n" "$BLUE" "$NC" "$repo_url"
+    printf "│   ├── %b[CLONING]%b Repository: %s\n" "$BLUE" "$NC" "$repo_url" >&2
 
     local temp_dir="tmp/repositories/$server_id"
     rm -rf "$temp_dir"
     mkdir -p "$(dirname "$temp_dir")"
 
     if ! git clone --depth 1 "$repo_url" "$temp_dir" > /dev/null 2>&1; then
-      printf "│   └── %b[ERROR]%b Failed to clone repository\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b Failed to clone repository\n" "$RED" "$NC" >&2
       return 1
     fi
 
-    printf "│   ├── %b[BUILDING]%b Docker image: %s\n" "$BLUE" "$NC" "$image_name"
+    printf "│   ├── %b[BUILDING]%b Docker image: %s\n" "$BLUE" "$NC" "$image_name" >&2
 
     if docker build -t "$image_name" "$temp_dir" > /dev/null 2>&1; then
-      printf "│   ├── %b[SUCCESS]%b Build complete\n" "$GREEN" "$NC"
-      printf "│   ├── %b[CLEANING]%b Removing cloned repository\n" "$BLUE" "$NC"
+      printf "│   ├── %b[SUCCESS]%b Build complete\n" "$GREEN" "$NC" >&2
+      printf "│   ├── %b[CLEANING]%b Removing cloned repository\n" "$BLUE" "$NC" >&2
       rm -rf "$temp_dir"
-      printf "│   └── %b[SUCCESS]%b Build server ready\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b Build server ready\n" "$GREEN" "$NC" >&2
       return 0
     else
-      printf "│   └── %b[ERROR]%b Build failed\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b Build failed\n" "$RED" "$NC" >&2
       rm -rf "$temp_dir"
       return 1
     fi
   fi
 
-  printf "│   └── %b[ERROR]%b No build source specified\n" "$RED" "$NC"
+  printf "│   └── %b[ERROR]%b No build source specified\n" "$RED" "$NC" >&2
   return 1
 }
 
@@ -655,7 +655,7 @@ test_github_advanced_functionality() {
   local server_name="$2"
   local image="$3"
 
-  printf "│       ├── %b[TESTING]%b GitHub API access\\n" "$BLUE" "$NC"
+  printf "│       ├── %b[TESTING]%b GitHub API access\\n" "$BLUE" "$NC" >&2
 
   # Create a test request to list user repos
   local test_request='{"jsonrpc":"2.0","id":2,"method":"github_list_repos","params":{"owner":"anthropics"}}'
@@ -664,10 +664,10 @@ test_github_advanced_functionality() {
   response=$(echo "$test_request" | docker run --rm -i --env-file .env "$image" 2>&1 | head -50)
 
   if echo "$response" | grep -q '"result".*"repositories"'; then
-    printf "│       └── %b[SUCCESS]%b GitHub API access verified\\n" "$GREEN" "$NC"
+    printf "│       └── %b[SUCCESS]%b GitHub API access verified\\n" "$GREEN" "$NC" >&2
     return 0
   else
-    printf "│       └── %b[FAILED]%b Could not access GitHub API\\n" "$RED" "$NC"
+    printf "│       └── %b[FAILED]%b Could not access GitHub API\\n" "$RED" "$NC" >&2
     return 1
   fi
 }
@@ -677,10 +677,10 @@ test_kubernetes_advanced_functionality() {
   local server_name="$2"
   local image="$3"
 
-  printf "│       ├── %b[TESTING]%b Kubernetes cluster access\\n" "$BLUE" "$NC"
+  printf "│       ├── %b[TESTING]%b Kubernetes cluster access\\n" "$BLUE" "$NC" >&2
 
   # For Kubernetes, we just verify the image can start with proper config
-  printf "│       └── %b[INFO]%b Kubernetes testing requires active cluster\\n" "$BLUE" "$NC"
+  printf "│       └── %b[INFO]%b Kubernetes testing requires active cluster\\n" "$BLUE" "$NC" >&2
   return 0
 }
 
@@ -689,14 +689,14 @@ test_docker_advanced_functionality() {
   local server_name="$2"
   local image="$3"
 
-  printf "│       ├── %b[TESTING]%b Docker daemon access\\n" "$BLUE" "$NC"
+  printf "│       ├── %b[TESTING]%b Docker daemon access\\n" "$BLUE" "$NC" >&2
 
   # For Docker, verify socket access
   if [[ -S "/var/run/docker.sock" ]]; then
-    printf "│       └── %b[SUCCESS]%b Docker socket accessible\\n" "$GREEN" "$NC"
+    printf "│       └── %b[SUCCESS]%b Docker socket accessible\\n" "$GREEN" "$NC" >&2
     return 0
   else
-    printf "│       └── %b[WARNING]%b Docker socket not accessible\\n" "$YELLOW" "$NC"
+    printf "│       └── %b[WARNING]%b Docker socket not accessible\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 }
@@ -1001,7 +1001,7 @@ get_formatted_config_json() {
 
 # Preview: show config on stdout (pretty-printed if jq is available)
 handle_config_preview() {
-  echo "=== MCP Client Configuration Preview ==="
+  echo "=== MCP Client Configuration Preview ===" >&2
   get_formatted_config_json
 }
 
@@ -1018,7 +1018,7 @@ handle_config_write() {
   fi
 
   echo -e "\n=== MCP Client Configuration Generation ==="
-  printf "├── %b[INFO]%b Generating configuration for Docker-based MCP servers\\n" "$BLUE" "$NC"
+  printf "├── %b[INFO]%b Generating configuration for Docker-based MCP servers\\n" "$BLUE" "$NC" >&2
   # Generate .env_example file with all server environment variables
   local all_servers=()
   local server_name
@@ -1039,10 +1039,10 @@ handle_config_write() {
     fi
   done
   if [[ ${#servers_with_tokens[@]} -gt 0 ]]; then
-    printf "├── %b[TOKENS]%b Servers with authentication: %s\\n" "$GREEN" "$NC" "${servers_with_tokens[*]}"
+    printf "├── %b[TOKENS]%b Servers with authentication: %s\\n" "$GREEN" "$NC" "${servers_with_tokens[*]}" >&2
   fi
   if [[ ${#servers_with_placeholders[@]} -gt 0 ]]; then
-    printf "├── %b[PLACEHOLDERS]%b Servers using placeholders: %s\\n" "$YELLOW" "$NC" "${servers_with_placeholders[*]}"
+    printf "├── %b[PLACEHOLDERS]%b Servers using placeholders: %s\\n" "$YELLOW" "$NC" "${servers_with_placeholders[*]}" >&2
   fi
   # Write config to both files
   ensure_config_dirs
@@ -1053,8 +1053,8 @@ handle_config_write() {
   claude_path=$(get_config_path "claude")
   echo "$formatted_json" > "$cursor_path"
   echo "$formatted_json" > "$claude_path"
-  printf "├── %b[CONFIG]%b Cursor configuration: %s\n" "$GREEN" "$NC" "$cursor_path"
-  printf "└── %b[CONFIG]%b Claude Desktop configuration: %s\n" "$GREEN" "$NC" "$claude_path"
+  printf "├── %b[CONFIG]%b Cursor configuration: %s\n" "$GREEN" "$NC" "$cursor_path" >&2
+  printf "└── %b[CONFIG]%b Claude Desktop configuration: %s\n" "$GREEN" "$NC" "$claude_path" >&2
   echo
   printf "%b[SUCCESS]%b Client configurations written to files!\\n" "$GREEN" "$NC"
   echo "[NEXT STEPS]"
@@ -1184,6 +1184,21 @@ get_env_placeholder() {
 
 # --- Test functions ---
 
+# Get container logs safely without variable assignment pollution
+get_container_logs_safe() {
+  local container_id="$1"
+
+  # Use exec pattern to prevent variable assignment leakage
+  exec 3>&1 1>&2
+
+  local logs
+  logs=$(docker logs "$container_id" 2>&1 | tail -5 2> /dev/null)
+
+  # Restore stdout and return clean result
+  exec 1>&3 3>&-
+  echo "$logs"
+}
+
 # Wait for container to be ready for MCP communication
 # Uses Docker CLI and log monitoring for intelligent readiness detection
 wait_for_container_ready() {
@@ -1213,13 +1228,8 @@ wait_for_container_ready() {
     fi
 
     # Check container logs for MCP server readiness indicators
-    # Use temporary file to prevent zsh variable assignment leakage
-    local temp_logs
-    temp_logs=$(mktemp)
-    docker logs "$container_id" 2>&1 | tail -5 > "$temp_logs" 2> /dev/null
     local logs
-    logs=$(cat "$temp_logs")
-    rm -f "$temp_logs"
+    logs=$(docker logs "$container_id" 2>&1 | tail -5 2> /dev/null)
 
     # Look for signs that MCP server is ready (improved patterns)
     if echo "$logs" | grep -q -E "(initialization completed|capabilities registered|running on stdio|MCP.*[Ss]erver)" \
@@ -1554,8 +1564,6 @@ test_server_advanced_functionality() {
 # Usage: generate_mcp_data_json
 #
 generate_mcp_data_json() {
-  echo "=== MARKER: generate_mcp_data_json called ==="
-
   (
     exec 3>&1 1>&2
 
@@ -1677,9 +1685,6 @@ generate_mcp_data_json() {
     servers_json+="]"
     echo "{\"servers\":$servers_json}" >&3
   )
-
-  echo "=== MARKER: generate_mcp_data_json returning variable assignments ==="
-  echo "$output"
 }
 
 # Stub: get_available_servers returns all configured servers
@@ -1753,7 +1758,7 @@ apply_docker_patches() {
         cp "support/docker/mcp-server-heroku/Dockerfile" "$repo_dir/Dockerfile"
         return 0
       else
-        printf "│   ├── %b[WARNING]%b Heroku custom Dockerfile not found\\n" "$YELLOW" "$NC"
+        printf "│   ├── %b[WARNING]%b Heroku custom Dockerfile not found\\n" "$YELLOW" "$NC" >&2
         return 1
       fi
       ;;
@@ -1763,7 +1768,7 @@ apply_docker_patches() {
         cp "support/docker/mcp-server-circleci/Dockerfile" "$repo_dir/Dockerfile"
         return 0
       else
-        printf "│   ├── %b[WARNING]%b CircleCI custom Dockerfile not found\\n" "$YELLOW" "$NC"
+        printf "│   ├── %b[WARNING]%b CircleCI custom Dockerfile not found\\n" "$YELLOW" "$NC" >&2
         return 1
       fi
       ;;
@@ -1773,7 +1778,7 @@ apply_docker_patches() {
         cp "support/docker/mcp-server-kubernetes/Dockerfile" "$repo_dir/Dockerfile"
         return 0
       else
-        printf "│   ├── %b[WARNING]%b Kubernetes custom Dockerfile not found\\n" "$YELLOW" "$NC"
+        printf "│   ├── %b[WARNING]%b Kubernetes custom Dockerfile not found\\n" "$YELLOW" "$NC" >&2
         return 1
       fi
       ;;
@@ -1783,7 +1788,7 @@ apply_docker_patches() {
         cp "support/docker/mcp-server-docker/Dockerfile" "$repo_dir/Dockerfile"
         return 0
       else
-        printf "│   ├── %b[WARNING]%b Docker custom Dockerfile not found\\n" "$YELLOW" "$NC"
+        printf "│   ├── %b[WARNING]%b Docker custom Dockerfile not found\\n" "$YELLOW" "$NC" >&2
         return 1
       fi
       ;;
@@ -1793,7 +1798,7 @@ apply_docker_patches() {
         cp "support/docker/mcp-server-rails/Dockerfile" "$repo_dir/Dockerfile"
         return 0
       else
-        printf "│   ├── %b[WARNING]%b Rails custom Dockerfile not found\\n" "$YELLOW" "$NC"
+        printf "│   ├── %b[WARNING]%b Rails custom Dockerfile not found\\n" "$YELLOW" "$NC" >&2
         return 1
       fi
       ;;
@@ -1812,29 +1817,29 @@ setup_registry_server() {
 
   # CI environment: skip Docker operations
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[SKIPPED]%b Docker pull for %s (CI environment)\\n" "$YELLOW" "$NC" "$image"
+    printf "│   └── %b[SKIPPED]%b Docker pull for %s (CI environment)\\n" "$YELLOW" "$NC" "$image" >&2
     return 0
   fi
 
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   └── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 
   # Check if Docker image already exists
   if docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
-    printf "│   ├── %b[FOUND]%b Registry image already exists: %s\\n" "$GREEN" "$NC" "$image"
-    printf "│   └── %b[SUCCESS]%b Using existing registry image\\n" "$GREEN" "$NC"
+    printf "│   ├── %b[FOUND]%b Registry image already exists: %s\\n" "$GREEN" "$NC" "$image" >&2
+    printf "│   └── %b[SUCCESS]%b Using existing registry image\\n" "$GREEN" "$NC" >&2
     return 0
   fi
 
-  printf "│   ├── %b[PULLING]%b Registry image: %s\\n" "$BLUE" "$NC" "$image"
+  printf "│   ├── %b[PULLING]%b Registry image: %s\\n" "$BLUE" "$NC" "$image" >&2
 
   if docker pull "$image" > /dev/null 2>&1; then
-    printf "│   └── %b[SUCCESS]%b Registry image ready\\n" "$GREEN" "$NC"
+    printf "│   └── %b[SUCCESS]%b Registry image ready\\n" "$GREEN" "$NC" >&2
     return 0
   else
-    printf "│   └── %b[WARNING]%b Failed to pull registry image (Docker may not be running)\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[WARNING]%b Failed to pull registry image (Docker may not be running)\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 }
@@ -1852,37 +1857,37 @@ setup_build_server() {
 
   # Server-specific environment validation (before any other operations)
   if [[ "$server_id" == "memory-service" ]]; then
-    printf "│   ├── %b[VALIDATING]%b Environment variables\\n" "$BLUE" "$NC"
+    printf "│   ├── %b[VALIDATING]%b Environment variables\\n" "$BLUE" "$NC" >&2
     local has_errors=false
 
     if [[ -z "${MCP_MEMORY_CHROMA_PATH:-}" ]]; then
-      printf "│   ├── %b[ERROR]%b MCP_MEMORY_CHROMA_PATH must be set\\n" "$RED" "$NC"
+      printf "│   ├── %b[ERROR]%b MCP_MEMORY_CHROMA_PATH must be set\\n" "$RED" "$NC" >&2
       has_errors=true
     fi
 
     if [[ -z "${MCP_MEMORY_BACKUPS_PATH:-}" ]]; then
-      printf "│   ├── %b[ERROR]%b MCP_MEMORY_BACKUPS_PATH must be set\\n" "$RED" "$NC"
+      printf "│   ├── %b[ERROR]%b MCP_MEMORY_BACKUPS_PATH must be set\\n" "$RED" "$NC" >&2
       has_errors=true
     fi
 
     if [[ "$has_errors" == "true" ]]; then
-      printf "│   └── %b[FAILED]%b Environment validation failed\\n" "$RED" "$NC"
+      printf "│   └── %b[FAILED]%b Environment validation failed\\n" "$RED" "$NC" >&2
       return 1
     fi
 
     # Create directories if they don't exist
     if [[ ! -d "$MCP_MEMORY_CHROMA_PATH" ]]; then
-      printf "│   ├── %b[CREATING]%b Creating directory: %s\\n" "$BLUE" "$NC" "$MCP_MEMORY_CHROMA_PATH"
+      printf "│   ├── %b[CREATING]%b Creating directory: %s\\n" "$BLUE" "$NC" "$MCP_MEMORY_CHROMA_PATH" >&2
       mkdir -p "$MCP_MEMORY_CHROMA_PATH"
     else
-      printf "│   ├── %b[FOUND]%b Directory already exists: %s\\n" "$GREEN" "$NC" "$MCP_MEMORY_CHROMA_PATH"
+      printf "│   ├── %b[FOUND]%b Directory already exists: %s\\n" "$GREEN" "$NC" "$MCP_MEMORY_CHROMA_PATH" >&2
     fi
 
     if [[ ! -d "$MCP_MEMORY_BACKUPS_PATH" ]]; then
-      printf "│   ├── %b[CREATING]%b Creating directory: %s\\n" "$BLUE" "$NC" "$MCP_MEMORY_BACKUPS_PATH"
+      printf "│   ├── %b[CREATING]%b Creating directory: %s\\n" "$BLUE" "$NC" "$MCP_MEMORY_BACKUPS_PATH" >&2
       mkdir -p "$MCP_MEMORY_BACKUPS_PATH"
     else
-      printf "│   ├── %b[FOUND]%b Directory already exists: %s\\n" "$GREEN" "$NC" "$MCP_MEMORY_BACKUPS_PATH"
+      printf "│   ├── %b[FOUND]%b Directory already exists: %s\\n" "$GREEN" "$NC" "$MCP_MEMORY_BACKUPS_PATH" >&2
     fi
   fi
 
@@ -1911,34 +1916,34 @@ setup_build_server() {
   fi
 
   if [[ -f "$dockerfile_path" ]] && [[ -z "$repository" || "$repository" == "null" ]]; then
-    printf "│   ├── %b[BUILDING]%b Using custom Dockerfile: %s\\n" "$BLUE" "$NC" "$dockerfile_path"
+    printf "│   ├── %b[BUILDING]%b Using custom Dockerfile: %s\\n" "$BLUE" "$NC" "$dockerfile_path" >&2
 
     # Build context is the directory containing the Dockerfile
     local build_context
     build_context=$(dirname "$dockerfile_path")
 
     if docker build -t "$image" -f "$dockerfile_path" "$build_context" > /dev/null 2>&1; then
-      printf "│   └── %b[SUCCESS]%b Custom build complete\\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b Custom build complete\\n" "$GREEN" "$NC" >&2
       return 0
     else
-      printf "│   └── %b[ERROR]%b Custom build failed\\n" "$RED" "$NC"
+      printf "│   └── %b[ERROR]%b Custom build failed\\n" "$RED" "$NC" >&2
       return 1
     fi
   fi
 
   # CI environment: skip Docker operations, just validate repository access
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   ├── %b[INFO]%b Validating repository access: %s (CI environment)\\n" "$BLUE" "$NC" "$(basename "$repository" .git)"
+    printf "│   ├── %b[INFO]%b Validating repository access: %s (CI environment)\\n" "$BLUE" "$NC" "$(basename "$repository" .git)" >&2
     if git ls-remote --heads "$repository" > /dev/null 2>&1; then
-      printf "│   └── %b[SUCCESS]%b Repository accessible (skipping Docker build in CI)\\n" "$GREEN" "$NC"
+      printf "│   └── %b[SUCCESS]%b Repository accessible (skipping Docker build in CI)\\n" "$GREEN" "$NC" >&2
       return 0
     else
-      printf "│   └── %b[WARNING]%b Repository not accessible\\n" "$YELLOW" "$NC"
+      printf "│   └── %b[WARNING]%b Repository not accessible\\n" "$YELLOW" "$NC" >&2
       return 0
     fi
   fi
 
-  printf "│   ├── %b[CLONING]%b Repository: %s\\n" "$BLUE" "$NC" "$(basename "$repository" .git)"
+  printf "│   ├── %b[CLONING]%b Repository: %s\\n" "$BLUE" "$NC" "$(basename "$repository" .git)" >&2
 
   # Use standardized temporary directory for repositories
   local repo_basename
@@ -1949,53 +1954,53 @@ setup_build_server() {
   # Clone repository to temporary location
   mkdir -p "$temp_dir"
   if git clone "$repository" "$repo_dir" > /dev/null 2>&1; then
-    printf "│   ├── %b[SUCCESS]%b Repository cloned to temporary directory\\n" "$GREEN" "$NC"
+    printf "│   ├── %b[SUCCESS]%b Repository cloned to temporary directory\\n" "$GREEN" "$NC" >&2
   else
-    printf "│   └── %b[WARNING]%b Failed to clone repository\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[WARNING]%b Failed to clone repository\\n" "$YELLOW" "$NC" >&2
     rm -rf "$temp_dir"
     return 0
   fi
 
   # Apply Docker fixes for specific servers
   if apply_docker_patches "$server_id" "$repo_dir"; then
-    printf "│   ├── %b[PATCHED]%b Applied custom Dockerfile for containerization\\n" "$GREEN" "$NC"
+    printf "│   ├── %b[PATCHED]%b Applied custom Dockerfile for containerization\\n" "$GREEN" "$NC" >&2
   fi
 
   # Build Docker image (skip if Docker not available)
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   ├── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\\n" "$YELLOW" "$NC"
-    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC"
+    printf "│   ├── %b[WARNING]%b Docker not available - install OrbStack for local MCP testing\\n" "$YELLOW" "$NC" >&2
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC" >&2
     rm -rf "$repo_dir"
-    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\\n" "$GREEN" "$NC"
+    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\\n" "$GREEN" "$NC" >&2
     return 0
   fi
 
   # Check if Docker image already exists
   if docker images | grep -q "$(echo "$image" | cut -d: -f1)"; then
-    printf "│   ├── %b[FOUND]%b Docker image already exists: %s\\n" "$GREEN" "$NC" "$image"
-    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC"
+    printf "│   ├── %b[FOUND]%b Docker image already exists: %s\\n" "$GREEN" "$NC" "$image" >&2
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC" >&2
     rm -rf "$repo_dir"
-    printf "│   └── %b[SUCCESS]%b Using existing Docker image\\n" "$GREEN" "$NC"
+    printf "│   └── %b[SUCCESS]%b Using existing Docker image\\n" "$GREEN" "$NC" >&2
     return 0
   fi
 
-  printf "│   ├── %b[BUILDING]%b Docker image: %s\\n" "$BLUE" "$NC" "$image"
+  printf "│   ├── %b[BUILDING]%b Docker image: %s\\n" "$BLUE" "$NC" "$image" >&2
 
   local build_context
   build_context=$(parse_server_config "$server_id" "source.build_context")
   build_context="${build_context:-.}"
 
   if (cd "$repo_dir/$build_context" && docker build -t "$image" . > /dev/null 2>&1); then
-    printf "│   ├── %b[SUCCESS]%b Docker image built\\n" "$GREEN" "$NC"
-    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC"
+    printf "│   ├── %b[SUCCESS]%b Docker image built\\n" "$GREEN" "$NC" >&2
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC" >&2
     rm -rf "$repo_dir"
-    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\\n" "$GREEN" "$NC"
+    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\\n" "$GREEN" "$NC" >&2
     return 0
   else
-    printf "│   ├── %b[WARNING]%b Failed to build Docker image (Docker may not be running)\\n" "$YELLOW" "$NC"
-    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC"
+    printf "│   ├── %b[WARNING]%b Failed to build Docker image (Docker may not be running)\\n" "$YELLOW" "$NC" >&2
+    printf "│   ├── %b[CLEANUP]%b Removing cloned repository\\n" "$BLUE" "$NC" >&2
     rm -rf "$repo_dir"
-    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\\n" "$GREEN" "$NC"
+    printf "│   └── %b[SUCCESS]%b Repository cleanup completed\\n" "$GREEN" "$NC" >&2
     return 0
   fi
 }
@@ -2004,7 +2009,7 @@ setup_build_server() {
 setup_mcp_server() {
   local server_id="$1"
 
-  printf "├── %b[SETUP]%b %s\\n" "$BLUE" "$NC" "$(parse_server_config "$server_id" "name")"
+  printf "├── %b[SETUP]%b %s\\n" "$BLUE" "$NC" "$(parse_server_config "$server_id" "name")" >&2
 
   local source_type
   source_type=$(parse_server_config "$server_id" "source.type")
@@ -2017,7 +2022,7 @@ setup_mcp_server() {
       setup_build_server "$server_id"
       ;;
     *)
-      printf "│   └── %b[ERROR]%b Unknown source type: %s\\n" "$RED" "$NC" "$source_type"
+      printf "│   └── %b[ERROR]%b Unknown source type: %s\\n" "$RED" "$NC" "$source_type" >&2
       return 1
       ;;
   esac
@@ -2064,32 +2069,32 @@ handle_inspect_command() {
       ;;
     "--validate-config")
       echo "=== MCP Configuration Validation ==="
-      printf "├── %b[VALIDATE]%b Checking client configurations\\n" "$BLUE" "$NC"
+      printf "├── %b[VALIDATE]%b Checking client configurations\\n" "$BLUE" "$NC" >&2
 
       local cursor_path claude_path
       cursor_path=$(get_config_path "cursor")
       claude_path=$(get_config_path "claude")
 
-      printf "│   ├── %b[CURSOR]%b %s\\n" "$GREEN" "$NC" "$cursor_path"
+      printf "│   ├── %b[CURSOR]%b %s\\n" "$GREEN" "$NC" "$cursor_path" >&2
       if [[ -f "$cursor_path" ]]; then
         if jq empty "$cursor_path" 2> /dev/null; then
-          printf "│   │   └── %b[✓]%b Valid JSON structure\\n" "$GREEN" "$NC"
+          printf "│   │   └── %b[✓]%b Valid JSON structure\\n" "$GREEN" "$NC" >&2
         else
-          printf "│   │   └── %b[✗]%b Invalid JSON structure\\n" "$RED" "$NC"
+          printf "│   │   └── %b[✗]%b Invalid JSON structure\\n" "$RED" "$NC" >&2
         fi
       else
-        printf "│   │   └── %b[!]%b File not found\\n" "$YELLOW" "$NC"
+        printf "│   │   └── %b[!]%b File not found\\n" "$YELLOW" "$NC" >&2
       fi
 
-      printf "│   └── %b[CLAUDE]%b %s\\n" "$GREEN" "$NC" "$claude_path"
+      printf "│   └── %b[CLAUDE]%b %s\\n" "$GREEN" "$NC" "$claude_path" >&2
       if [[ -f "$claude_path" ]]; then
         if jq empty "$claude_path" 2> /dev/null; then
-          printf "│       └── %b[✓]%b Valid JSON structure\\n" "$GREEN" "$NC"
+          printf "│       └── %b[✓]%b Valid JSON structure\\n" "$GREEN" "$NC" >&2
         else
-          printf "│       └── %b[✗]%b Invalid JSON structure\\n" "$RED" "$NC"
+          printf "│       └── %b[✗]%b Invalid JSON structure\\n" "$RED" "$NC" >&2
         fi
       else
-        printf "│       └── %b[!]%b File not found\\n" "$YELLOW" "$NC"
+        printf "│       └── %b[!]%b File not found\\n" "$YELLOW" "$NC" >&2
       fi
 
       printf "\\n%b[INFO]%b Configuration Validation complete\\n" "$GREEN" "$NC"
@@ -2104,7 +2109,7 @@ handle_inspect_command() {
         [[ -n "$line" ]] && servers+=("$line")
       done < <(get_configured_servers)
 
-      printf "├── %b[CI-VALIDATE]%b Found %d configured servers\\n" "$BLUE" "$NC" "${#servers[@]}"
+      printf "├── %b[CI-VALIDATE]%b Found %d configured servers\\n" "$BLUE" "$NC" "${#servers[@]}" >&2
 
       for server_id in "${servers[@]}"; do
         local image
@@ -2112,9 +2117,9 @@ handle_inspect_command() {
           image=$(parse_server_config "$server_id" "source.image")
         } 2> /dev/null
         if [[ "$image" != "null" && -n "$image" ]]; then
-          printf "│   ├── %b[✓]%b %s\\n" "$GREEN" "$NC" "$server_id"
+          printf "│   ├── %b[✓]%b %s\\n" "$GREEN" "$NC" "$server_id" >&2
         else
-          printf "│   ├── %b[✗]%b %s (no image)\\n" "$RED" "$NC" "$server_id"
+          printf "│   ├── %b[✗]%b %s (no image)\\n" "$RED" "$NC" "$server_id" >&2
         fi
       done
 
@@ -2146,10 +2151,10 @@ handle_inspect_command() {
       done < <(get_configured_servers)
 
       for server_id in "${servers[@]}"; do
-        printf "\\n├── %b[INSPECT]%b %s\\n" "$BLUE" "$NC" "$(parse_server_config "$server_id" "name")"
-        printf "│   ├── Server ID: %s\\n" "$server_id"
-        printf "│   ├── Type: %s\\n" "$(parse_server_config "$server_id" "server_type")"
-        printf "│   └── Image: %s\\n" "$(parse_server_config "$server_id" "source.image")"
+        printf "\\n├── %b[INSPECT]%b %s\\n" "$BLUE" "$NC" "$(parse_server_config "$server_id" "name")" >&2
+        printf "│   ├── Server ID: %s\\n" "$server_id" >&2
+        printf "│   ├── Type: %s\\n" "$(parse_server_config "$server_id" "server_type")" >&2
+        printf "│   └── Image: %s\\n" "$(parse_server_config "$server_id" "source.image")" >&2
       done
 
       printf "\\n%b[INFO]%b Inspection complete\\n" "$GREEN" "$NC"
@@ -2167,12 +2172,12 @@ handle_inspect_command() {
         return 1
       fi
 
-      printf "├── %b[INSPECT]%b %s\\n" "$BLUE" "$NC" "$server_name"
-      printf "│   ├── Server ID: %s\\n" "$subcommand"
-      printf "│   ├── Type: %s\\n" "$(parse_server_config "$subcommand" "server_type")"
-      printf "│   ├── Image: %s\\n" "$(parse_server_config "$subcommand" "source.image")"
-      printf "│   ├── Entrypoint: %s\\n" "$(parse_server_config "$subcommand" "source.entrypoint")"
-      printf "│   └── Command: %s\\n" "$(parse_server_config "$subcommand" "source.cmd")"
+      printf "├── %b[INSPECT]%b %s\\n" "$BLUE" "$NC" "$server_name" >&2
+      printf "│   ├── Server ID: %s\\n" "$subcommand" >&2
+      printf "│   ├── Type: %s\\n" "$(parse_server_config "$subcommand" "server_type")" >&2
+      printf "│   ├── Image: %s\\n" "$(parse_server_config "$subcommand" "source.image")" >&2
+      printf "│   ├── Entrypoint: %s\\n" "$(parse_server_config "$subcommand" "source.entrypoint")" >&2
+      printf "│   └── Command: %s\\n" "$(parse_server_config "$subcommand" "source.cmd")" >&2
 
       printf "\\n%b[INFO]%b Server inspection complete\\n" "$GREEN" "$NC"
       return 0

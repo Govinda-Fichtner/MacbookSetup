@@ -208,7 +208,7 @@ AfterEach 'cleanup_integration_test_environment'
 
 It 'config and config-write generate identical JSON content'
 # Get JSON from config command (preview)
-preview_json=$(sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config 2>/dev/null | tail -n +2')
+preview_json=$(sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config 2>/dev/null')
 
 # Get JSON from config-write command (file output)
 sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" config-write > /dev/null 2>&1'
@@ -280,7 +280,7 @@ It 'performs comprehensive filesystem server testing'
 # Test filesystem server functionality with existing directories
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
-The output should include "Filesystem MCP Server"
+The stderr should include "Filesystem MCP Server"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
@@ -308,7 +308,7 @@ EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test filesystem'
 The status should be success
 # Note: Current implementation only tests container startup, not directory validation
-The output should include "Filesystem MCP Server"
+The stderr should include "Filesystem MCP Server"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
