@@ -1187,16 +1187,13 @@ get_env_placeholder() {
 # Get container logs safely without variable assignment pollution
 get_container_logs_safe() {
   local container_id="$1"
+  local temp_file
+  temp_file=$(mktemp)
 
-  # Use exec pattern to prevent variable assignment leakage
-  exec 3>&1 1>&2
-
-  local logs
-  logs=$(docker logs "$container_id" 2>&1 | tail -5 2> /dev/null)
-
-  # Restore stdout and return clean result
-  exec 1>&3 3>&-
-  echo "$logs"
+  # Get logs safely without variable assignment leakage
+  docker logs "$container_id" 2>&1 | tail -5 2> /dev/null > "$temp_file"
+  cat "$temp_file"
+  rm -f "$temp_file"
 }
 
 # Wait for container to be ready for MCP communication
@@ -1227,16 +1224,18 @@ wait_for_container_ready() {
       return 1
     fi
 
-    # Check container logs for MCP server readiness indicators
-    local logs
-    logs=$(docker logs "$container_id" 2>&1 | tail -5 2> /dev/null)
+    # Check container logs for MCP server readiness indicators using temp file
+    local temp_logs
+    temp_logs=$(mktemp)
+    get_container_logs_safe "$container_id" > "$temp_logs"
 
     # Look for signs that MCP server is ready (improved patterns)
-    if echo "$logs" | grep -q -E "(initialization completed|capabilities registered|running on stdio|MCP.*[Ss]erver)" \
-      || echo "$logs" | grep -q -E "(listening|ready|started|stdin.*ready|stdio.*mode)" \
-      || echo "$logs" | grep -q -E "(Server running|mcp.*server|stdio mode|initialization completed)"; then
+    if grep -q -E "(initialization completed|capabilities registered|running on stdio|MCP.*[Ss]erver)" "$temp_logs" \
+      || grep -q -E "(listening|ready|started|stdin.*ready|stdio.*mode)" "$temp_logs" \
+      || grep -q -E "(Server running|mcp.*server|stdio mode|initialization completed)" "$temp_logs"; then
       local elapsed_time=$((check_count / 4))
       printf "│   │   ├── %b[READY]%b MCP server ready after %ds\\n" "$GREEN" "$NC" "$elapsed_time" >&2
+      rm -f "$temp_logs"
 
       # Send a quick MCP protocol test to verify it's actually working
       if validate_mcp_protocol "$container_id"; then
@@ -1268,6 +1267,7 @@ wait_for_container_ready() {
         return 0
       else
         printf "│   │   ├── %b[WARNING]%b MCP server stable but protocol validation failed\\n" "$YELLOW" "$NC" >&2
+        rm -f "$temp_logs"
         return 0 # Don't fail - server is stable, might need auth
       fi
     fi
@@ -1278,6 +1278,7 @@ wait_for_container_ready() {
 
   # Timeout reached - container may still be starting
   printf "│   │   ├── %b[TIMEOUT]%b Container readiness timeout after %ds (proceeding anyway)\\n" "$YELLOW" "$NC" "$max_wait" >&2
+  rm -f "$temp_logs"
   return 0 # Don't fail - container might just be slow but working
 }
 

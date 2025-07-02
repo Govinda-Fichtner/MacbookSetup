@@ -402,12 +402,12 @@ It 'can test all servers efficiently in one batch'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test'
 # Status may fail if some containers can't start, but most should work
 The status should be failure
-The output should include "GitHub MCP Server"
-The output should include "Figma Context MCP Server"
-The output should include "Filesystem MCP Server"
-The output should include "Docker MCP Server"
-The output should include "Rails MCP Server"
-The output should include "Obsidian MCP Server"
+The stderr should include "GitHub MCP Server"
+The stderr should include "Figma Context MCP Server"
+The stderr should include "Filesystem MCP Server"
+The stderr should include "Docker MCP Server"
+The stderr should include "Rails MCP Server"
+The stderr should include "Obsidian MCP Server"
 # Improved readiness detection should show most servers as ready
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -417,7 +417,7 @@ End
 It 'can test context7 server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test context7'
 The status should be success
-The output should include "Context7 Documentation MCP Server"
+The stderr should include "Context7 Documentation MCP Server"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
@@ -425,7 +425,7 @@ End
 It 'can test heroku server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
 The status should be success
-The output should include "Heroku Platform MCP Server"
+The stderr should include "Heroku Platform MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -442,7 +442,7 @@ End
 It 'can test playwright server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test playwright'
 The status should be success
-The output should include "Playwright MCP Server"
+The stderr should include "Playwright MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The output should include "SUCCESS"
 The stderr should include "READY"
@@ -452,7 +452,7 @@ End
 It 'can test obsidian server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test obsidian'
 The status should be success
-The output should include "Obsidian MCP Server"
+The stderr should include "Obsidian MCP Server"
 # Obsidian should work with improved silent server detection
 The output should include "SUCCESS"
 # Should detect silent MCP servers quickly
@@ -495,7 +495,7 @@ if ! command -v docker > /dev/null 2>&1; then
 fi
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
-The output should include "Docker MCP Server"
+The stderr should include "Docker MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -520,7 +520,7 @@ ln -sf /opt/homebrew/bin/yq tmp/no_docker_bin/yq 2> /dev/null || true
 ln -sf /opt/homebrew/bin/jq tmp/no_docker_bin/jq 2> /dev/null || true
 When run env PATH="$PWD/tmp/no_docker_bin:/usr/bin:/bin" sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
-The output should include "Docker MCP Server"
+The stderr should include "Docker MCP Server"
 The output should include "Docker not available"
 End
 
@@ -551,7 +551,7 @@ It 'can test rails server and validate functionality'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test rails'
 # Rails server may fail due to container lifecycle but should show it attempted to start
 The status should be failure
-The output should include "Rails MCP Server"
+The stderr should include "Rails MCP Server"
 The stderr should include "Container"
 End
 End
@@ -579,7 +579,7 @@ End
 It 'can test memory-service server individually'
 When run zsh mcp_manager.sh test memory-service
 The status should be success
-The output should include "Memory Service MCP Server"
+The stderr should include "Memory Service MCP Server"
 The output should include "Basic protocol validation passed"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -666,7 +666,7 @@ AfterEach 'cleanup_integration_test_environment'
 It 'context7 server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup context7'
 The status should be success
-The output should include "Context7 Documentation MCP Server"
+The stderr should include "Context7 Documentation MCP Server"
 The output should include "[SUCCESS]"
 End
 
@@ -684,21 +684,21 @@ End
 It 'sonarqube server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup sonarqube'
 The status should be success
-The output should include "SonarQube MCP Server"
+The stderr should include "SonarQube MCP Server"
 The output should include "[SUCCESS]"
 End
 
 It 'mailgun server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup mailgun'
 The status should be success
-The output should include "Mailgun MCP Server"
+The stderr should include "Mailgun MCP Server"
 The output should include "[SUCCESS]"
 End
 
 It 'playwright server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup playwright'
 The status should be success
-The output should include "Playwright MCP Server"
+The stderr should include "Playwright MCP Server"
 The output should include "[SUCCESS]"
 End
 End
@@ -708,7 +708,7 @@ It 'can test GitHub server with real token'
 if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test github
 The status should be success
-The output should include "GitHub MCP Server"
+The stderr should include "GitHub MCP Server"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
@@ -717,7 +717,7 @@ It 'can test CircleCI server with real token'
 if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test circleci
 The status should be success
-The output should include "CircleCI MCP Server"
+The stderr should include "CircleCI MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -727,7 +727,7 @@ It 'can test Heroku server with real token'
 if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test heroku
 The status should be success
-The output should include "Heroku Platform MCP Server"
+The stderr should include "Heroku Platform MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -737,7 +737,7 @@ It 'can test SonarQube server with real token'
 if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test sonarqube
 The status should be success
-The output should include "SonarQube MCP Server"
+The stderr should include "SonarQube MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -747,7 +747,7 @@ It 'can test Mailgun server with real token'
 if ! has_real_tokens; then skip "No real .env present"; fi
 When run zsh "$PWD/mcp_manager.sh" test mailgun
 The status should be success
-The output should include "Mailgun MCP Server"
+The stderr should include "Mailgun MCP Server"
 The stderr should include "READY"
 End
 
