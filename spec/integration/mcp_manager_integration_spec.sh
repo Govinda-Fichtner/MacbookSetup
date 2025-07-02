@@ -459,6 +459,15 @@ The output should include "SUCCESS"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
+
+It 'can test linear remote server individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test linear'
+The status should be success
+The stderr should include "Linear MCP Server"
+# Remote servers should test connectivity instead of containers
+The stderr should include "SUCCESS"
+The stderr should include "REMOTE_READY"
+End
 End
 
 Describe 'Docker Server Integration'

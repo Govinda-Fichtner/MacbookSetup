@@ -760,10 +760,21 @@ generate_mcp_config_json() {
   local first=true
   for server_id in "${server_ids[@]}"; do
     # Use read to avoid command substitution variable assignment output in zsh
-    local server_type image cmd_args entrypoint mount_config privileged_config
+    local server_type image cmd_args entrypoint mount_config privileged_config url proxy_command
 
     read -r server_type < <(yq -r ".servers.$server_id.server_type // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
     read -r image < <(yq -r ".servers.$server_id.source.image // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
+
+    # Handle remote servers differently - they have url and proxy_command instead of image
+    if [[ "$server_type" == "remote" ]]; then
+      read -r url < <(yq -r ".servers.$server_id.source.url // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
+      read -r proxy_command < <(yq -r ".servers.$server_id.source.proxy_command // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
+      [[ -z "$url" || "$url" == "null" ]] && continue
+      [[ -z "$proxy_command" || "$proxy_command" == "null" ]] && continue
+    else
+      [[ -z "$image" || "$image" == "null" ]] && continue
+    fi
+
     # Parse cmd_args as JSON to handle arrays properly - use temp file to avoid command substitution
     local cmd_temp_file
     cmd_temp_file=$(mktemp)
@@ -773,8 +784,6 @@ generate_mcp_config_json() {
     read -r entrypoint < <(yq -r ".servers.$server_id.source.entrypoint // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
     read -r mount_config < <(yq -r ".servers.$server_id.mount_config // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
     read -r privileged_config < <(yq -r ".servers.$server_id.privileged_config // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
-
-    [[ -z "$image" || "$image" == "null" ]] && continue
 
     # Convert cmd_args to proper array format for Jinja2
     local cmd_args_array="[]"
@@ -939,7 +948,12 @@ generate_mcp_config_json() {
       servers_json+=","
     fi
 
-    servers_json+="{\"id\":\"$server_id\",\"env_file\":\"$PWD/.env\",\"image\":\"$image\",\"entrypoint\":\"$entrypoint\",\"cmd_args\":$cmd_args_array,\"mount_config\":$mount_config_obj,\"privileged_config\":$privileged_config_obj,\"server_type\":\"$server_type\",\"volumes\":$volumes_array,\"container_paths\":$container_paths_array,\"privileged_volumes\":$privileged_volumes_array,\"privileged_networks\":$privileged_networks_array}"
+    # Build server JSON with appropriate fields based on server type
+    if [[ "$server_type" == "remote" ]]; then
+      servers_json+="{\"id\":\"$server_id\",\"env_file\":\"$PWD/.env\",\"url\":\"$url\",\"proxy_command\":\"$proxy_command\",\"server_type\":\"$server_type\"}"
+    else
+      servers_json+="{\"id\":\"$server_id\",\"env_file\":\"$PWD/.env\",\"image\":\"$image\",\"entrypoint\":\"$entrypoint\",\"cmd_args\":$cmd_args_array,\"mount_config\":$mount_config_obj,\"privileged_config\":$privileged_config_obj,\"server_type\":\"$server_type\",\"volumes\":$volumes_array,\"container_paths\":$container_paths_array,\"privileged_volumes\":$privileged_volumes_array,\"privileged_networks\":$privileged_networks_array}"
+    fi
   done
   servers_json+="]"
   # Add debug marker to help trace output source
@@ -1303,21 +1317,21 @@ test_mcp_server_health() {
 
   # Validate that server exists
   if [[ "$server_name" == "null" || -z "$server_name" ]]; then
-    printf "├── %b[ERROR]%b Unknown server: %s\\n" "$RED" "$NC" "$server_id"
+    printf "├── %b[ERROR]%b Unknown server: %s\\n" "$RED" "$NC" "$server_id" >&2
     return 1
   fi
 
-  printf "├── %b[SERVER]%b %s\\n" "$BLUE" "$NC" "$server_name"
+  printf "├── %b[SERVER]%b %s\\n" "$BLUE" "$NC" "$server_name" >&2
 
   # Basic protocol testing (CI + local)
   if ! test_mcp_basic_protocol "$server_id" "$server_name" "$image" "$parse_mode"; then
-    printf "│   └── %b[ERROR]%b Basic protocol test failed\\n" "$RED" "$NC"
+    printf "│   └── %b[ERROR]%b Basic protocol test failed\\n" "$RED" "$NC" >&2
     return 1
   fi
 
   # Advanced functionality testing (local only, with real tokens)
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (CI environment)\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (CI environment)\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 
@@ -1325,7 +1339,7 @@ test_mcp_server_health() {
     test_server_advanced_functionality "$server_id" "$server_name" "$image"
     return $?
   else
-    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (no real tokens)\\n" "$YELLOW" "$NC"
+    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (no real tokens)\\n" "$YELLOW" "$NC" >&2
     return 0
   fi
 }
@@ -1337,14 +1351,14 @@ test_mcp_basic_protocol() {
   local image="$3"
   local parse_mode="$4"
 
-  printf "│   ├── %b[BASIC]%b MCP protocol validation (CI-friendly)\\n" "$BLUE" "$NC"
+  printf "│   ├── %b[BASIC]%b MCP protocol validation (CI-friendly)\\n" "$BLUE" "$NC" >&2
 
   # Use test tokens for basic protocol validation (CI pipeline doesn't need real tokens)
   local env_args=()
   if [[ -f ".env" ]]; then
     # Validate .env file before using it
     if grep -q -E "(EOF|<<|>>|< /dev|> /dev)" ".env"; then
-      printf "│   │   └── %b[ERROR]%b .env file appears corrupted (contains shell artifacts)\\n" "$RED" "$NC"
+      printf "│   │   └── %b[ERROR]%b .env file appears corrupted (contains shell artifacts)\\n" "$RED" "$NC" >&2
       return 1
     fi
     # Use existing .env file if available
@@ -1362,27 +1376,66 @@ test_mcp_basic_protocol() {
   fi
 
   # Test MCP initialization with basic protocol check
-  printf "│   │   ├── %b[TESTING]%b Protocol handshake\\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b Protocol handshake\\n" "$BLUE" "$NC" >&2
 
   # CI environment: skip Docker-based testing
   if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   │   └── %b[SUCCESS]%b MCP protocol functional (auth required or specific error)\\n" "$GREEN" "$NC"
-    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b MCP protocol functional (auth required or specific error)\\n" "$GREEN" "$NC" >&2
+    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
     return 0
   fi
 
-  # Skip Docker testing if Docker not available
+  # Get server type to determine testing approach
+  local server_type
+  server_type=$(get_server_type "$server_id")
+
+  # Handle remote servers differently - test connectivity instead of containers
+  if [[ "$server_type" == "remote" ]]; then
+    local url proxy_command
+    url=$(yq -r ".servers.$server_id.source.url // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
+    proxy_command=$(yq -r ".servers.$server_id.source.proxy_command // \"null\"" "$MCP_REGISTRY_FILE" 2> /dev/null)
+
+    if [[ "$url" == "null" || "$proxy_command" == "null" ]]; then
+      printf "│   │   └── %b[ERROR]%b Invalid remote server configuration\\n" "$RED" "$NC" >&2
+      printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC" >&2
+      return 1
+    fi
+
+    # Test URL connectivity
+    printf "│   │   ├── %b[TESTING]%b Remote connectivity to %s\\n" "$BLUE" "$NC" "$url" >&2
+    if command -v curl > /dev/null 2>&1; then
+      if curl -s --head --connect-timeout 10 "$url" > /dev/null 2>&1; then
+        printf "│   │   ├── %b[SUCCESS]%b Remote server reachable\\n" "$GREEN" "$NC" >&2
+        printf "│   │   └── %b[SUCCESS]%b Basic remote connectivity validated\\n" "$GREEN" "$NC" >&2
+        printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
+        echo "REMOTE_READY: $server_id" >&2
+        return 0
+      else
+        printf "│   │   └── %b[WARNING]%b Remote server not reachable (may still work via proxy)\\n" "$YELLOW" "$NC" >&2
+        printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
+        echo "REMOTE_READY: $server_id" >&2
+        return 0
+      fi
+    else
+      printf "│   │   └── %b[SKIPPED]%b curl not available for connectivity test\\n" "$YELLOW" "$NC" >&2
+      printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
+      echo "REMOTE_READY: $server_id" >&2
+      return 0
+    fi
+  fi
+
+  # Skip Docker testing if Docker not available (for non-remote servers)
   if ! command -v docker > /dev/null 2>&1; then
-    printf "│   │   └── %b[WARNING]%b Docker not available, protocol failed unexpectedly\\n" "$YELLOW" "$NC"
-    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[WARNING]%b Docker not available, protocol failed unexpectedly\\n" "$YELLOW" "$NC" >&2
+    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
     return 0
   fi
 
   # Load MCP test request template
   local test_request_file="$TEMPLATE_DIR/mcp_test_request.json"
   if [[ ! -f "$test_request_file" ]]; then
-    printf "│   │   └── %b[ERROR]%b MCP test template not found: %s\\n" "$RED" "$NC" "$test_request_file"
-    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC"
+    printf "│   │   └── %b[ERROR]%b MCP test template not found: %s\\n" "$RED" "$NC" "$test_request_file" >&2
+    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC" >&2
     return 1
   fi
 
@@ -1392,18 +1445,18 @@ test_mcp_basic_protocol() {
   # Start container in background and manage its lifecycle properly
   local container_id
 
-  printf "│   │   ├── %b[STARTING]%b Container for MCP testing\\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[STARTING]%b Container for MCP testing\\n" "$BLUE" "$NC" >&2
 
   # Use proper stdio communication instead of detached mode
-  printf "│   │   ├── %b[TESTING]%b Sending MCP initialization request\\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[TESTING]%b Sending MCP initialization request\\n" "$BLUE" "$NC" >&2
 
   # Start container in background for proper MCP testing using full configuration
   # Get the full docker command from the configuration
   local docker_cmd_json
   docker_cmd_json=$(get_formatted_config_json 2> /dev/null | jq -r ".mcpServers.\"$server_id\".args[]" 2> /dev/null)
   if [[ -z "$docker_cmd_json" ]]; then
-    printf "│   │   └── %b[ERROR]%b Could not generate container configuration\\n" "$RED" "$NC"
-    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC"
+    printf "│   │   └── %b[ERROR]%b Could not generate container configuration\\n" "$RED" "$NC" >&2
+    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC" >&2
     return 1
   fi
 
@@ -1417,69 +1470,69 @@ test_mcp_basic_protocol() {
   local start_status=$?
 
   if [[ $start_status -ne 0 || -z "$container_id" ]]; then
-    printf "│   │   └── %b[ERROR]%b Failed to start container (status: %d)\\n" "$RED" "$NC" "$start_status"
+    printf "│   │   └── %b[ERROR]%b Failed to start container (status: %d)\\n" "$RED" "$NC" "$start_status" >&2
     if [[ -n "$container_id" ]]; then
-      printf "│   │       Docker error: %.100s\\n" "$container_id"
+      printf "│   │       Docker error: %.100s\\n" "$container_id" >&2
     fi
-    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC"
+    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC" >&2
     return 1
   fi
 
-  printf "│   │   ├── %b[STARTED]%b Container ID: ${container_id:0:12}\\n" "$GREEN" "$NC"
+  printf "│   │   ├── %b[STARTED]%b Container ID: ${container_id:0:12}\\n" "$GREEN" "$NC" >&2
 
   # Get server-specific timeout for cache building (e.g., Obsidian with OBSIDIAN_ENABLE_CACHE=true)
   local startup_timeout
   startup_timeout=$(yq -r ".servers.$server_id.startup_timeout // 8" "$MCP_REGISTRY_FILE")
 
   # Wait for container to be ready using intelligent detection
-  printf "│   │   ├── %b[WAITING]%b For container readiness (timeout: ${startup_timeout}s)\\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[WAITING]%b For container readiness (timeout: ${startup_timeout}s)\\n" "$BLUE" "$NC" >&2
   if ! wait_for_container_ready "$container_id" "$startup_timeout"; then
-    printf "│   │   └── %b[ERROR]%b Container failed to become ready\\n" "$RED" "$NC"
+    printf "│   │   └── %b[ERROR]%b Container failed to become ready\\n" "$RED" "$NC" >&2
     docker stop "$container_id" > /dev/null 2>&1
     docker rm "$container_id" > /dev/null 2>&1
-    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC"
+    printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC" >&2
     return 1
   fi
 
   # Send actual MCP initialization request to container's stdin
   local container_output
-  printf "│   │   ├── %b[SENDING]%b MCP initialization request\\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[SENDING]%b MCP initialization request\\n" "$BLUE" "$NC" >&2
 
   # Get container output to verify MCP server is working
   container_output=$(docker logs "$container_id" 2>&1 | tail -10)
 
   # Stop and remove the container (critical cleanup)
-  printf "│   │   ├── %b[STOPPING]%b Container cleanup\\n" "$BLUE" "$NC"
+  printf "│   │   ├── %b[STOPPING]%b Container cleanup\\n" "$BLUE" "$NC" >&2
   docker stop "$container_id" > /dev/null 2>&1
   docker rm "$container_id" > /dev/null 2>&1
 
-  printf "│   │   ├── %b[COMPLETED]%b Container lifecycle completed\\n" "$GREEN" "$NC"
+  printf "│   │   ├── %b[COMPLETED]%b Container lifecycle completed\\n" "$GREEN" "$NC" >&2
 
   # Evaluate the response - now with proper pass/fail logic
   if echo "$container_output" | grep -q '"result".*"protocolVersion"'; then
-    printf "│   │   └── %b[SUCCESS]%b MCP protocol handshake successful\\n" "$GREEN" "$NC"
-    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b MCP protocol handshake successful\\n" "$GREEN" "$NC" >&2
+    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
     return 0
   elif echo "$container_output" | grep -q '"jsonrpc":"2.0"'; then
-    printf "│   │   └── %b[SUCCESS]%b MCP server responded with JSON-RPC\\n" "$GREEN" "$NC"
-    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b MCP server responded with JSON-RPC\\n" "$GREEN" "$NC" >&2
+    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
     return 0
   elif echo "$container_output" | grep -q -E "(running on stdio|MCP.*[Ss]erver|tfmcp)"; then
-    printf "│   │   └── %b[SUCCESS]%b MCP server started successfully\\n" "$GREEN" "$NC"
-    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC"
+    printf "│   │   └── %b[SUCCESS]%b MCP server started successfully\\n" "$GREEN" "$NC" >&2
+    printf "│   └── %b[SUCCESS]%b Basic protocol validation passed\\n" "$GREEN" "$NC" >&2
     return 0
   else
     # Check if there were actual errors vs just no output
     if echo "$container_output" | grep -q -E "(error|Error|ERROR|failed|Failed|exception)" \
       && ! echo "$container_output" | grep -q -E "(auth|Auth|token|Token|permission)"; then
-      printf "│   │   └── %b[FAILED]%b MCP server errors detected\\n" "$RED" "$NC"
-      printf "│   │       Error: %.80s\\n" "$(echo "$container_output" | grep -E "(error|Error|ERROR)" | head -1)"
-      printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC"
+      printf "│   │   └── %b[FAILED]%b MCP server errors detected\\n" "$RED" "$NC" >&2
+      printf "│   │       Error: %.80s\\n" "$(echo "$container_output" | grep -E "(error|Error|ERROR)" | head -1)" >&2
+      printf "│   └── %b[FAILED]%b Basic protocol validation failed\\n" "$RED" "$NC" >&2
       return 1
     else
       # Server might be working but needs auth or stdin input - treat as success with warning
-      printf "│   │   └── %b[WARNING]%b Container started but needs authentication/input\\n" "$YELLOW" "$NC"
-      printf "│   └── %b[SUCCESS]%b Basic protocol validation passed (auth required)\\n" "$GREEN" "$NC"
+      printf "│   │   └── %b[WARNING]%b Container started but needs authentication/input\\n" "$YELLOW" "$NC" >&2
+      printf "│   └── %b[SUCCESS]%b Basic protocol validation passed (auth required)\\n" "$GREEN" "$NC" >&2
       return 0
     fi
   fi
@@ -1491,8 +1544,8 @@ test_server_advanced_functionality() {
   local server_name="$2"
   local image="$3"
 
-  printf "│   ├── %b[ADVANCED]%b Functionality testing (with real tokens)\\n" "$BLUE" "$NC"
-  printf "│   └── %b[SUCCESS]%b Advanced functionality validation passed\\n" "$GREEN" "$NC"
+  printf "│   ├── %b[ADVANCED]%b Functionality testing (with real tokens)\\n" "$BLUE" "$NC" >&2
+  printf "│   └── %b[SUCCESS]%b Advanced functionality validation passed\\n" "$GREEN" "$NC" >&2
   return 0
 }
 
@@ -1660,10 +1713,10 @@ test_all_mcp_servers() {
     for server_id in "${servers[@]}"; do
       local server_name
       server_name=$(parse_server_config "$server_id" "name" 2> /dev/null)
-      printf "├── %b[SKIPPED]%b %s (CI environment)\\n" "$YELLOW" "$NC" "$server_name"
+      printf "├── %b[SKIPPED]%b %s (CI environment)\\n" "$YELLOW" "$NC" "$server_name" >&2
     done
 
-    printf "%b[INFO]%b Docker-based MCP testing skipped in CI\\n" "$BLUE" "$NC"
+    printf "%b[INFO]%b Docker-based MCP testing skipped in CI\\n" "$BLUE" "$NC" >&2
     return 0
   fi
 
@@ -1680,10 +1733,10 @@ test_all_mcp_servers() {
   done
 
   if [[ $failed -gt 0 ]]; then
-    printf "\\n%b[SUMMARY]%b %d server(s) failed health checks\\n" "$RED" "$NC" "$failed"
+    printf "\\n%b[SUMMARY]%b %d server(s) failed health checks\\n" "$RED" "$NC" "$failed" >&2
     return 1
   else
-    printf "\\n%b[SUCCESS]%b All servers passed health checks\\n" "$GREEN" "$NC"
+    printf "\\n%b[SUCCESS]%b All servers passed health checks\\n" "$GREEN" "$NC" >&2
     return 0
   fi
 }

@@ -51,31 +51,6 @@ rm -rf tmp/*
 ./mcp_manager.sh inspect --stop           # Stop inspector
 ```
 
-### Development Workflow Commands (Simple Continuous Testing - SCT)
-```bash
-# Fast tests (<10 seconds) - run frequently
-sct-fast() {
-  echo "⚡ Fast tests..."
-  zsh -n setup.sh && zsh -n verify_setup.sh && zsh -n mcp_manager.sh
-  shellspec --shell zsh spec/unit/mcp_manager_unit_spec.sh --format progress
-}
-
-# Full tests (30+ seconds) - run periodically
-sct-full() {
-  echo "🔍 Full test suite..."
-  shellspec --shell zsh spec/ --format documentation
-  ./verify_setup.sh > /dev/null
-  pre-commit run --all-files
-}
-
-# Commit with fast tests (use for most changes)
-sct-commit() {
-  sct-fast || { echo "❌ Fast tests failed"; return 1; }
-  git add .
-  git commit -m "${1:-feat: incremental change}"
-  # Tracks changes and runs full tests every 5 commits
-}
-```
 
 ## High-Level Architecture
 

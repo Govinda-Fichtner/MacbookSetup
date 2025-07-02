@@ -48,6 +48,19 @@ validate_server_command() {
   tail -n +2 | jq ".mcpServers.\"$server\".command == \"docker\"" 2> /dev/null | grep -q "true"
 }
 
+validate_linear_command() {
+  tail -n +2 | jq ".mcpServers.linear.command == \"npx\"" 2> /dev/null | grep -q "true"
+}
+
+validate_linear_args() {
+  tail -n +2 | jq ".mcpServers.linear.args | contains([\"-y\", \"mcp-remote\", \"https://mcp.linear.app/sse\"])" 2> /dev/null | grep -q "true"
+}
+
+validate_remote_server_command() {
+  local server="$1"
+  tail -n +2 | jq ".mcpServers.\"$server\".command == \"npx\"" 2> /dev/null | grep -q "true"
+}
+
 validate_server_args_array() {
   local server="$1"
   tail -n +2 | jq ".mcpServers.\"$server\".args | type == \"array\"" 2> /dev/null | grep -q "true"
@@ -149,6 +162,16 @@ When run sh -c 'grep -q "{{ server.id }}" "support/templates/docker.tpl" && grep
 The status should be success
 End
 
+It 'validates linear template exists'
+When run test -f "support/templates/linear.tpl"
+The status should be success
+End
+
+It 'validates linear template has proper Jinja2 structure for remote servers'
+When run sh -c 'grep -q "{{ server.id }}" "support/templates/linear.tpl" && grep -q "{{ server.proxy_command }}" "support/templates/linear.tpl" && grep -q "{{ server.url }}" "support/templates/linear.tpl"'
+The status should be success
+End
+
 It 'validates registry-template consistency'
 # Count servers in registry
 registry_count=$(yq -r '.servers | keys | length' mcp_server_registry.yml)
@@ -215,6 +238,16 @@ The status should be success
 The output should satisfy validate_figma_cmd_args
 # Terraform-cli-controller should have mcp command
 The output should satisfy validate_terraform_cli_mcp
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
+End
+
+It 'generates correct template data for remote servers'
+When run zsh "$PWD/mcp_manager.sh" config
+The status should be success
+# Linear should have npx command
+The output should satisfy validate_linear_command
+# Linear should have correct args array
+The output should satisfy validate_linear_args
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 End

@@ -221,6 +221,30 @@ When run zsh "$PWD/mcp_manager.sh" parse obsidian source.type
 The status should be success
 The output should equal "build"
 End
+
+It 'recognizes linear as remote server type'
+When run zsh "$PWD/mcp_manager.sh" parse linear server_type
+The status should be success
+The output should equal "remote"
+End
+
+It 'parses linear source URL correctly'
+When run zsh "$PWD/mcp_manager.sh" parse linear source.url
+The status should be success
+The output should equal "https://mcp.linear.app/sse"
+End
+
+It 'parses linear proxy command correctly'
+When run zsh "$PWD/mcp_manager.sh" parse linear source.proxy_command
+The status should be success
+The output should equal "mcp-remote"
+End
+
+It 'parses linear source type correctly'
+When run zsh "$PWD/mcp_manager.sh" parse linear source.type
+The status should be success
+The output should equal "remote"
+End
 End
 
 Describe 'Environment Variable Handling'
