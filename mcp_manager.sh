@@ -19,7 +19,7 @@ TEMPLATE_DIR="$SCRIPT_DIR/support/templates"
 # Show help message
 show_help() {
   cat << EOF
-Usage: ${BASH_SOURCE[0]##*/} <command> [options]
+Usage: mcp_manager.sh <command> [options]
 
 Commands:
   list                    List configured MCP servers
@@ -90,8 +90,8 @@ main() {
       if [[ -n "$2" ]] && [[ -n "$3" ]]; then
         parse_server_config "$2" "$3"
       else
-        echo "Usage: $0 parse <server_id> <config_key>" >&2
-        echo "Example: $0 parse github source.image" >&2
+        echo "Usage: mcp_manager.sh parse <server_id> <config_key>" >&2
+        echo "Example: mcp_manager.sh parse github source.image" >&2
         exit 1
       fi
       ;;
@@ -121,8 +121,8 @@ main() {
       ;;
     *)
       echo "Unknown command: $1" >&2
-      echo "Usage: $0 {config|config-write|list|parse|test|setup|inspect|help}" >&2
-      echo "Run '$0 help' for detailed usage information." >&2
+      echo "Usage: mcp_manager.sh {config|config-write|list|parse|test|setup|inspect|help}" >&2
+      echo "Run 'mcp_manager.sh help' for detailed usage information." >&2
       exit 1
       ;;
   esac
