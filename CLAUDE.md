@@ -868,7 +868,13 @@ Use Conventional Commits format:
 
 Subject line: 50 chars max, imperative mood, no period
 
-**IMPORTANT**: Never add Co-Authored-By statements or any AI attribution to commit messages.
+**🚨 CRITICAL BINDING RULE**: NEVER add ANY AI attribution to commit messages or pull requests. This includes but is not limited to:
+- "Generated with [Claude Code]" or similar tool references
+- "Co-Authored-By: Claude" or any AI co-author attributions
+- Any mention of AI assistance, AI tools, or automated generation
+- Links to claude.ai/code or similar AI platforms
+
+ALL commit messages and pull requests MUST appear as if written entirely by a human developer. This rule is non-negotiable and applies to all contributions.
 
 ### Development Philosophy
 
