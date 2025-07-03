@@ -29,8 +29,9 @@ End
 It 'accepts config command'
 When run zsh "$PWD/mcp_manager.sh" config
 The status should be success
-The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "=== MCP Client Configuration Preview ==="
 The stderr should include "[INFO]"
+The output should include '"mcpServers"'
 End
 
 It 'accepts config-write command'
@@ -70,7 +71,7 @@ End
 
 Describe 'Config Command Behavior'
 It 'generates valid JSON structure'
-When run sh -c "zsh '$PWD/mcp_manager.sh' config 2>/dev/null | tail -n +2 | jq '.mcpServers | type'"
+When run sh -c "zsh '$PWD/mcp_manager.sh' config 2>/dev/null  | jq '.mcpServers | type'"
 The status should be success
 The output should include "object"
 End
@@ -79,11 +80,12 @@ It 'includes debug information on stderr'
 When run zsh "$PWD/mcp_manager.sh" config
 The status should be success
 The stderr should include "[INFO]"
-The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "=== MCP Client Configuration Preview ==="
+The output should include '"mcpServers"'
 End
 
 It 'produces clean JSON without debug contamination'
-When run sh -c "zsh '$PWD/mcp_manager.sh' config 2>/dev/null | tail -n +2 | jq empty"
+When run sh -c "zsh '$PWD/mcp_manager.sh' config 2>/dev/null  | jq empty"
 The status should be success
 End
 
@@ -96,7 +98,8 @@ fi
 When run zsh "$PWD/mcp_manager.sh" config
 The status should be success
 The stderr should include "[WARNING]"
-The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "=== MCP Client Configuration Preview ==="
+The output should include '"mcpServers"'
 
 # Restore .env if it was hidden
 if [[ -f ".env.hidden" ]]; then
@@ -149,10 +152,9 @@ mkdir -p "$config_test_home/Library/Application Support/Claude"
 
 When run sh -c "cd \"$config_test_home\" && export HOME=\"$config_test_home\" && zsh \"$PWD/mcp_manager.sh\" config-write"
 The status should be success
-The output should include "[CONFIG]"
-The output should include "Cursor configuration"
-The output should include "Claude Desktop configuration"
+The output should include "=== MCP Client Configuration Generation ==="
 The output should include "[SUCCESS]"
+The output should include "Client configurations written to files!"
 The stderr should include "[WARNING] No .env file found - some variables may not expand"
 
 # Cleanup
@@ -254,7 +256,7 @@ It 'config and parse commands use same data source'
 parse_result=$(zsh "$PWD/mcp_manager.sh" parse github server_type)
 
 # Get server type from config JSON
-config_json=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null | tail -n +2)
+config_json=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null)
 # Should be api_based type with minimal args
 echo "$config_json" | jq '.mcpServers.github.args | length <= 6' | grep -q true
 
@@ -264,7 +266,7 @@ End
 
 It 'list and config commands show same servers'
 list_servers=$(zsh "$PWD/mcp_manager.sh" list | grep -E "^  - " | awk -F: '{print $1}' | sed 's/^  - //' | sort)
-config_servers=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null | tail -n +2 | jq -r '.mcpServers | keys[]' | sort)
+config_servers=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null | jq -r '.mcpServers | keys[]' | sort)
 
 When run test "$list_servers" = "$config_servers"
 The status should be success

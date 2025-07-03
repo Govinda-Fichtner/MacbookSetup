@@ -512,6 +512,26 @@ servers:
       - "link_management"
       - "metadata_access"
 
+  linear:
+    name: "Linear MCP Server"
+    server_type: "remote"
+    description: "Linear project management via Cloudflare-hosted MCP server"
+    category: "project_management"
+    source:
+      type: remote
+      url: "https://mcp.linear.app/sse"
+      proxy_command: "mcp-remote"
+    environment_variables: []
+    health_test:
+      type: "remote_connectivity"
+      expected_response: "connection_established"
+    capabilities:
+      - "issue_management"
+      - "project_tracking"
+      - "team_collaboration"
+      - "comment_management"
+      - "status_management"
+
 # Global MCP configuration
 global:
   build_directory: "./mcp_builds"

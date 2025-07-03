@@ -6,7 +6,7 @@ Describe 'Unified Configuration Generation'
 It 'generates valid JSON with mcpServers structure'
 When run zsh "$PWD/mcp_manager.sh" config
 The status should be success
-The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "=== MCP Client Configuration Preview ==="
 The output should include '"mcpServers"'
 The output should include '"command": "docker"'
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
@@ -14,8 +14,8 @@ End
 
 It 'generates identical JSON for repeated calls'
 # Test architectural guarantee of deterministic output
-run1=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null | tail -n +2)
-run2=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null | tail -n +2)
+run1=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null)
+run2=$(zsh "$PWD/mcp_manager.sh" config 2> /dev/null)
 When run test "$run1" = "$run2"
 The status should be success
 End
@@ -33,7 +33,7 @@ It 'produces clean JSON output without debug contamination'
 When run zsh "$PWD/mcp_manager.sh" config
 The status should be success
 # Debug info should be in header, not JSON
-The output should include "=== MCP Client Configuration Preview ==="
+The stderr should include "=== MCP Client Configuration Preview ==="
 The output should not include "server_type="
 The output should not include "image="
 The stderr should include "[INFO]"

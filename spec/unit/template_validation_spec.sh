@@ -4,97 +4,110 @@
 
 # Helper functions for JSON validation
 validate_github_command() {
-  tail -n +2 | jq ".mcpServers.github.command == \"docker\"" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.github.command == \"docker\"" 2> /dev/null | grep -q "true"
 }
 
 validate_github_args() {
-  tail -n +2 | jq ".mcpServers.github.args | contains([\"run\", \"--rm\", \"-i\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.github.args | contains([\"run\", \"--rm\", \"-i\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_github_env_file() {
-  tail -n +2 | jq ".mcpServers.github.args | contains([\"--env-file\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.github.args | contains([\"--env-file\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_filesystem_volumes() {
-  tail -n +2 | jq ".mcpServers.filesystem.args | map(select(test(\"--volume\"))) | length > 0" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.filesystem.args | map(select(test(\"--volume\"))) | length > 0" 2> /dev/null | grep -q "true"
 }
 
 validate_filesystem_projects() {
-  tail -n +2 | jq ".mcpServers.filesystem.args | map(select(test(\"/projects/\"))) | length > 0" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.filesystem.args | map(select(test(\"/projects/\"))) | length > 0" 2> /dev/null | grep -q "true"
 }
 
 validate_docker_sock() {
-  tail -n +2 | jq ".mcpServers.docker.args | contains([\"/var/run/docker.sock:/var/run/docker.sock\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.docker.args | contains([\"/var/run/docker.sock:/var/run/docker.sock\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_kubernetes_network() {
-  tail -n +2 | jq ".mcpServers.kubernetes.args | contains([\"--network\", \"host\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.kubernetes.args | contains([\"--network\", \"host\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_figma_entrypoint() {
-  tail -n +2 | jq ".mcpServers.figma.args | contains([\"--entrypoint\", \"node\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.figma.args | contains([\"--entrypoint\", \"node\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_figma_cmd_args() {
-  tail -n +2 | jq ".mcpServers.figma.args | contains([\"dist/cli.js\", \"--stdio\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.figma.args | contains([\"dist/cli.js\", \"--stdio\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_terraform_cli_mcp() {
-  tail -n +2 | jq ".mcpServers.\"terraform-cli-controller\".args[-1] == \"mcp\"" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.\"terraform-cli-controller\".args[-1] == \"mcp\"" 2> /dev/null | grep -q "true"
 }
 
 validate_server_command() {
   local server="$1"
-  tail -n +2 | jq ".mcpServers.\"$server\".command == \"docker\"" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.\"$server\".command == \"docker\"" 2> /dev/null | grep -q "true"
+}
+
+validate_linear_command() {
+  jq ".mcpServers.linear.command == \"npx\"" 2> /dev/null | grep -q "true"
+}
+
+validate_linear_args() {
+  jq ".mcpServers.linear.args | contains([\"-y\", \"mcp-remote\", \"https://mcp.linear.app/sse\"])" 2> /dev/null | grep -q "true"
+}
+
+validate_remote_server_command() {
+  local server="$1"
+  jq ".mcpServers.\"$server\".command == \"npx\"" 2> /dev/null | grep -q "true"
 }
 
 validate_server_args_array() {
   local server="$1"
-  tail -n +2 | jq ".mcpServers.\"$server\".args | type == \"array\"" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.\"$server\".args | type == \"array\"" 2> /dev/null | grep -q "true"
 }
 
 validate_no_variable_expansion() {
-  tail -n +2 | grep -qv '\$HOME\|\$KUBECONFIG_HOST\|\${'
+  grep -qv '\$HOME\|\$KUBECONFIG_HOST\|\${'
 }
 
 validate_json_structure() {
-  tail -n +2 | jq empty 2> /dev/null
+  jq empty 2> /dev/null
 }
 
 validate_mcpservers_object() {
-  tail -n +2 | jq ".mcpServers | type == \"object\"" 2> /dev/null | grep -q "true"
+  jq ".mcpServers | type == \"object\"" 2> /dev/null | grep -q "true"
 }
 
 validate_mcpservers_not_empty() {
-  tail -n +2 | jq ".mcpServers | keys | length > 0" 2> /dev/null | grep -q "true"
+  jq ".mcpServers | keys | length > 0" 2> /dev/null | grep -q "true"
 }
 
 validate_no_template_syntax() {
-  tail -n +2 | grep -qv '{{\|}}{\|{%-'
+  grep -qv '{{\|}}{\|{%-'
 }
 
 validate_github_image() {
-  tail -n +2 | jq ".mcpServers.github.args[-1] == \"mcp/github-mcp-server:latest\"" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.github.args[-1] == \"mcp/github-mcp-server:latest\"" 2> /dev/null | grep -q "true"
 }
 
 validate_filesystem_image() {
-  tail -n +2 | jq ".mcpServers.filesystem.args" | grep -q "mcp/filesystem:latest"
+  jq ".mcpServers.filesystem.args" | grep -q "mcp/filesystem:latest"
 }
 
 validate_figma_args_contains() {
-  tail -n +2 | jq ".mcpServers.figma.args | contains([\"dist/cli.js\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.figma.args | contains([\"dist/cli.js\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_figma_stdio() {
-  tail -n +2 | jq ".mcpServers.figma.args | contains([\"--stdio\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.figma.args | contains([\"--stdio\"])" 2> /dev/null | grep -q "true"
 }
 
 validate_docker_sock_volume() {
-  tail -n +2 | jq ".mcpServers.docker.args" | grep -q "/var/run/docker.sock"
+  jq ".mcpServers.docker.args" | grep -q "/var/run/docker.sock"
 }
 
 validate_kubernetes_kubeconfig() {
-  tail -n +2 | jq ".mcpServers.kubernetes.args" | grep -q "/.kube/config"
+  jq ".mcpServers.kubernetes.args" | grep -q "/.kube/config"
 }
 
 # Global setup for all template tests
@@ -146,6 +159,16 @@ End
 
 It 'validates docker template has proper Jinja2 structure'
 When run sh -c 'grep -q "{{ server.id }}" "support/templates/docker.tpl" && grep -q "{{ server.image }}" "support/templates/docker.tpl"'
+The status should be success
+End
+
+It 'validates linear template exists'
+When run test -f "support/templates/linear.tpl"
+The status should be success
+End
+
+It 'validates linear template has proper Jinja2 structure for remote servers'
+When run sh -c 'grep -q "{{ server.id }}" "support/templates/linear.tpl" && grep -q "{{ server.proxy_command }}" "support/templates/linear.tpl" && grep -q "{{ server.url }}" "support/templates/linear.tpl"'
 The status should be success
 End
 
@@ -215,6 +238,16 @@ The status should be success
 The output should satisfy validate_figma_cmd_args
 # Terraform-cli-controller should have mcp command
 The output should satisfy validate_terraform_cli_mcp
+The stderr should include "[INFO] Sourcing .env file for variable expansion"
+End
+
+It 'generates correct template data for remote servers'
+When run zsh "$PWD/mcp_manager.sh" config
+The status should be success
+# Linear should have npx command
+The output should satisfy validate_linear_command
+# Linear should have correct args array
+The output should satisfy validate_linear_args
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 End

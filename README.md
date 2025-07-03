@@ -185,6 +185,35 @@ The setup includes comprehensive integration with Model Context Protocol (MCP) s
 
   **Note**: Context7 requires no authentication and provides immediate access to library documentation. The server is built from source during setup and provides comprehensive programming library assistance.
 
+- **Linear MCP Server**: Project management via Cloudflare-hosted MCP server
+  - **Features**: Issue tracking, project management, team collaboration
+  - **Type**: Remote (hosted by Cloudflare)
+  - **Purpose**: AI-enhanced Linear project management workflows
+  - **URL**: `https://mcp.linear.app/sse`
+  - **Proxy**: Uses `mcp-remote` via npx for remote server connectivity
+
+  **Prerequisites**:
+  - **Node.js and npm**: Required for `npx` command (included in MacbookSetup via nvm)
+  - **Internet connection**: For connecting to Cloudflare-hosted server
+  - **mcp-remote package**: Auto-installed via `npx -y mcp-remote` (no manual setup needed)
+
+  **What's NOT Required**:
+  - ❌ Docker (remote servers don't use containers)
+  - ❌ Local server setup (everything runs in the cloud)
+  - ❌ API tokens (Linear MCP server handles authentication)
+  - ❌ Manual package installation (npx handles dependencies)
+
+  **Usage**:
+  ```bash
+  # Test the Linear MCP server connectivity
+  ./mcp_manager.sh test linear
+
+  # Generate configuration for AI tools
+  ./mcp_manager.sh config-write
+  ```
+
+  **Note**: Linear MCP server is hosted remotely by Cloudflare and requires minimal local setup. It uses Server-Sent Events (SSE) for real-time communication and is accessed via the `mcp-remote` proxy command. This is the first example of our remote MCP server architecture that enables AI tools to connect to cloud-hosted MCP services.
+
 - **Obsidian MCP Server**: Comprehensive vault management for knowledge workers
   - **Features**: Note management, vault search, tag operations, frontmatter manipulation, file operations, folder management, link management, metadata access
   - **Docker Image**: `local/obsidian-mcp-server:latest`

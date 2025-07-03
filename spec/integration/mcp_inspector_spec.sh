@@ -75,15 +75,15 @@ AfterEach 'cleanup_inspector_test_environment'
 It 'should run inspect command successfully regardless of container state'
 When run ./mcp_manager.sh inspect
 The status should be success
-The output should include "MCP Server Inspection"
-The output should include "[INFO]"
+The stderr should include "MCP Server Inspection"
+The stderr should include "[INFO]"
 End
 
 It 'should show appropriate results for the current environment'
 When run ./mcp_manager.sh inspect
 The status should be success
 # Test adapts to whether containers are running or not - focus on what we can always test
-The output should include "[INFO]"
+The stderr should include "[INFO]"
 End
 End
 
@@ -95,14 +95,14 @@ It 'should provide consistent output structure'
 When run ./mcp_manager.sh inspect
 The status should be success
 The output should include "=== MCP Server Inspection"
-The output should include "[INFO]"
+The stderr should include "[INFO]"
 End
 
 It 'should handle Docker availability gracefully'
 When run ./mcp_manager.sh inspect
 The status should be success
 # Should work whether Docker is available or not - test basic structure
-The output should include "MCP Server Inspection"
+The stderr should include "MCP Server Inspection"
 End
 End
 End
@@ -115,7 +115,7 @@ AfterEach 'cleanup_inspector_test_environment'
 It 'should show server information from registry'
 When run ./mcp_manager.sh inspect github
 The output should include "=== MCP Server Inspection: github ==="
-The output should include "GitHub MCP Server"
+The stderr should include "GitHub MCP Server"
 The status should be success
 End
 
@@ -123,7 +123,8 @@ It 'should handle server inspection regardless of container state'
 When run ./mcp_manager.sh inspect github
 The status should be success
 # Should work whether container is running or not
-The output should include "GitHub MCP Server"
+The output should include "=== MCP Server Inspection: github ==="
+The stderr should include "GitHub MCP Server"
 End
 End
 
@@ -133,7 +134,7 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should show error for unknown server'
 When run ./mcp_manager.sh inspect nonexistent
-The output should include "not found in registry"
+The stderr should include "not found in registry"
 The status should be failure
 End
 End
@@ -164,7 +165,7 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should validate Cursor and Claude configurations'
 When run ./mcp_manager.sh inspect --validate-config
-The output should include "Configuration Validation"
+The stderr should include "Configuration Validation"
 The output should include "CURSOR"
 The output should include "CLAUDE"
 The status should be success
@@ -179,7 +180,7 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should run validation without Docker dependencies'
 When run env CI=true ./mcp_manager.sh inspect --ci-mode
-The output should include "Validation completed"
+The stderr should include "Validation completed"
 The status should be success
 End
 End
@@ -193,7 +194,7 @@ AfterEach 'cleanup_inspector_test_environment'
 It 'should test connectivity to running servers'
 Skip unless "Docker is available" docker version > /dev/null 2>&1
 When run ./mcp_manager.sh inspect --connectivity
-The output should include "Testing server connectivity"
+The stderr should include "Testing server connectivity"
 The status should be success
 End
 End
@@ -214,7 +215,7 @@ mkdir -p tmp/no_docker_bin
 ln -sf /opt/homebrew/bin/yq tmp/no_docker_bin/yq 2> /dev/null || true
 ln -sf /opt/homebrew/bin/jq tmp/no_docker_bin/jq 2> /dev/null || true
 When run env PATH="$PWD/tmp/no_docker_bin:/usr/bin:/bin" ./mcp_manager.sh inspect
-The output should include "Docker not available"
+The stderr should include "Docker not available"
 The status should be success
 End
 End
@@ -227,7 +228,7 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should skip Docker-based operations'
 When run env CI=true ./mcp_manager.sh inspect
-The output should include "CI environment"
+The stderr should include "CI environment"
 The status should be success
 End
 End
