@@ -258,6 +258,7 @@ When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mc
 The status should be success
 The stderr should include "=== MCP Client Configuration Preview ==="
 The stderr should include "[WARNING] No .env file found - some variables may not expand"
+The output should include "mcpServers"
 End
 
 It 'reads environment variables from .env file'
@@ -265,6 +266,7 @@ When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mc
 The status should be success
 The stderr should include "=== MCP Client Configuration Preview ==="
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
+The output should include "mcpServers"
 End
 
 It 'handles empty FILESYSTEM_ALLOWED_DIRS'
@@ -276,6 +278,7 @@ When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mc
 The status should be success
 The stderr should include "=== MCP Client Configuration Preview ==="
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
+The output should include "mcpServers"
 End
 
 It 'handles malformed environment file'
@@ -287,6 +290,7 @@ When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mc
 The status should be success
 The stderr should include "=== MCP Client Configuration Preview ==="
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
+The output should include "mcpServers"
 End
 End
 
@@ -323,6 +327,7 @@ When run env CI=true sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh
 The status should be success
 The stderr should include "=== MCP Client Configuration Preview ==="
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
+The output should include "mcpServers"
 End
 End
 

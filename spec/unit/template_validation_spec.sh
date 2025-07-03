@@ -53,7 +53,7 @@ validate_linear_command() {
 }
 
 validate_linear_args() {
-  jq ".mcpServers.linear.args | contains([\"-y\", \"mcp-remote\", \"https://mcp.linear.app/sse\"])" 2> /dev/null | grep -q "true"
+  jq ".mcpServers.linear.args[0] == \"-y\" and .mcpServers.linear.args[1] == \"mcp-remote\" and .mcpServers.linear.args[2] == \"https://mcp.linear.app/sse\"" 2> /dev/null | grep -q "true"
 }
 
 validate_remote_server_command() {
@@ -253,19 +253,21 @@ End
 End
 
 Describe 'Template Data Consistency'
-It 'ensures all servers have required Docker structure'
+It 'ensures all Docker-based servers have required structure'
 When run zsh "$PWD/mcp_manager.sh" config
 The status should be success
-# All servers should have docker command and array args
+# Most servers should have docker command and array args
 The output should include '"command": "docker"'
 The output should include '"args": ['
+# Remote servers like Linear should have npx command
+The output should include '"command": "npx"'
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
 
-It 'ensures all servers have env-file reference'
+It 'ensures Docker-based servers have env-file reference'
 When run zsh "$PWD/mcp_manager.sh" config
 The status should be success
-# All servers should reference .env file
+# Docker-based servers should reference .env file
 The output should include "--env-file"
 The stderr should include "[INFO] Sourcing .env file for variable expansion"
 End
