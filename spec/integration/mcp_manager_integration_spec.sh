@@ -138,6 +138,11 @@ has_real_tokens() {
   test -f "$PWD/.env" && test "$(grep -v "placeholder" "$PWD/.env" | grep -c "=")" -gt 0
 }
 
+# Helper function for Skip if - returns true when real tokens are NOT available
+no_real_tokens() {
+  ! has_real_tokens
+}
+
 Describe 'MCP Manager Integration Tests'
 
 Describe 'Configuration File Generation (Integration)'
@@ -402,6 +407,9 @@ It 'can test all servers efficiently in one batch'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test'
 # Status may fail if some containers can't start, but most should work
 The status should be failure
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
+The output should include "=== MCP Server Health Testing"
 The stderr should include "GitHub MCP Server"
 The stderr should include "Figma Context MCP Server"
 The stderr should include "Filesystem MCP Server"
@@ -425,6 +433,8 @@ End
 It 'can test heroku server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "Heroku Platform MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -434,7 +444,7 @@ End
 It 'can test terraform-cli-controller server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test terraform-cli-controller'
 The status should be success
-The output should include "Terraform CLI Controller"
+The stderr should include "Terraform CLI Controller"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
@@ -442,9 +452,11 @@ End
 It 'can test playwright server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test playwright'
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "Playwright MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
-The output should include "SUCCESS"
+The stderr should include "SUCCESS"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
@@ -452,9 +464,11 @@ End
 It 'can test obsidian server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test obsidian'
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "Obsidian MCP Server"
 # Obsidian should work with improved silent server detection
-The output should include "SUCCESS"
+The stderr should include "SUCCESS"
 # Should detect silent MCP servers quickly
 The stderr should include "READY"
 The stderr should include "VALIDATED"
@@ -495,6 +509,8 @@ if ! command -v docker > /dev/null 2>&1; then
 fi
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "Docker MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -521,15 +537,15 @@ ln -sf /opt/homebrew/bin/jq tmp/no_docker_bin/jq 2> /dev/null || true
 When run env PATH="$PWD/tmp/no_docker_bin:/usr/bin:/bin" sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
 The stderr should include "Docker MCP Server"
-The output should include "Docker not available"
+The stderr should include "Docker not available"
 End
 
 It 'skips Docker tests in CI environment'
 When run env CI=true sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
-The output should include "MCP protocol functional (auth required or specific error)"
-The output should include "Basic protocol validation passed"
-The output should include "Advanced functionality tests (CI environment)"
+The stderr should include "MCP protocol functional (auth required or specific error)"
+The stderr should include "Basic protocol validation passed"
+The stderr should include "Advanced functionality tests (CI environment)"
 End
 End
 
@@ -579,8 +595,10 @@ End
 It 'can test memory-service server individually'
 When run zsh mcp_manager.sh test memory-service
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "Memory Service MCP Server"
-The output should include "Basic protocol validation passed"
+The stderr should include "Basic protocol validation passed"
 The stderr should include "READY"
 The stderr should include "VALIDATED"
 End
@@ -604,8 +622,8 @@ MCP_MEMORY_BACKUPS_PATH=$PWD/tmp/test_home/ChromaDB/backup
 EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
 The status should not be success
-The output should include "MCP_MEMORY_CHROMA_PATH"
-The output should include "must be set"
+The stderr should include "MCP_MEMORY_CHROMA_PATH"
+The stderr should include "must be set"
 End
 
 It 'fails with clear error if MCP_MEMORY_BACKUPS_PATH is missing'
@@ -615,8 +633,8 @@ MCP_MEMORY_CHROMA_PATH=$PWD/tmp/test_home/ChromaDB/db
 EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
 The status should not be success
-The output should include "MCP_MEMORY_BACKUPS_PATH"
-The output should include "must be set"
+The stderr should include "MCP_MEMORY_BACKUPS_PATH"
+The stderr should include "must be set"
 End
 
 It 'fails with clear error if either variable is empty'
@@ -626,10 +644,10 @@ MCP_MEMORY_BACKUPS_PATH=
 EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
 The status should not be success
-The output should include "MCP_MEMORY_CHROMA_PATH"
-The output should include "must be set"
-The output should include "MCP_MEMORY_BACKUPS_PATH"
-The output should include "must be set"
+The stderr should include "MCP_MEMORY_CHROMA_PATH"
+The stderr should include "must be set"
+The stderr should include "MCP_MEMORY_BACKUPS_PATH"
+The stderr should include "must be set"
 End
 
 It 'creates directories if both variables are set and non-empty'
@@ -641,7 +659,7 @@ EOF
 rm -rf tmp/test_home/ChromaDB
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
 The status should be success
-The output should include "Creating directory"
+The stderr should include "Creating directory"
 The directory "tmp/test_home/ChromaDB/db" should be exist
 The directory "tmp/test_home/ChromaDB/backup" should be exist
 End
@@ -655,7 +673,7 @@ MCP_MEMORY_BACKUPS_PATH=$PWD/tmp/test_home/ChromaDB/backup
 EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
 The status should be success
-The output should include "already exists"
+The stderr should include "already exists"
 End
 End
 
@@ -667,7 +685,7 @@ It 'context7 server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup context7'
 The status should be success
 The stderr should include "Context7 Documentation MCP Server"
-The output should include "[SUCCESS]"
+The stderr should include "[SUCCESS]"
 End
 
 It 'memory-service server supports setup command for building'
@@ -678,34 +696,34 @@ MCP_MEMORY_BACKUPS_PATH=$PWD/tmp/test_home/ChromaDB/backup
 EOF
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup memory-service'
 The status should be success
-The output should include "[SUCCESS]"
+The stderr should include "[SUCCESS]"
 End
 
 It 'sonarqube server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup sonarqube'
 The status should be success
 The stderr should include "SonarQube MCP Server"
-The output should include "[SUCCESS]"
+The stderr should include "[SUCCESS]"
 End
 
 It 'mailgun server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup mailgun'
 The status should be success
 The stderr should include "Mailgun MCP Server"
-The output should include "[SUCCESS]"
+The stderr should include "[SUCCESS]"
 End
 
 It 'playwright server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup playwright'
 The status should be success
 The stderr should include "Playwright MCP Server"
-The output should include "[SUCCESS]"
+The stderr should include "[SUCCESS]"
 End
 End
 
 Describe 'Real Token Integration Tests'
 It 'can test GitHub server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test github
 The status should be success
 The stderr should include "GitHub MCP Server"
@@ -714,9 +732,11 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test CircleCI server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test circleci
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "CircleCI MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -724,9 +744,11 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test Heroku server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test heroku
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "Heroku Platform MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -734,9 +756,11 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test SonarQube server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test sonarqube
 The status should be success
+# Expect temp_logs variable assignments in stdout (zsh behavior)
+The output should include "temp_logs="
 The stderr should include "SonarQube MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -744,7 +768,7 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test Mailgun server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test mailgun
 The status should be success
 The stderr should include "Mailgun MCP Server"

@@ -1077,7 +1077,6 @@ generate_env_example() {
 
   # Print header
   echo "# MCP Server Environment Variables"
-  echo "# Generated: $(date)"
   echo
 
   # Process each server
