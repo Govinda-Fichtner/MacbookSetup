@@ -1123,6 +1123,9 @@ get_env_placeholder() {
     "OBSIDIAN_ENABLE_CACHE") echo "true" ;;
     "MCP_TRANSPORT_TYPE") echo "stdio" ;;
     "MCP_LOG_LEVEL") echo "debug" ;;
+    "RECRAFT_API_KEY") echo "your_recraft_api_key_here" ;;
+    "IMAGE_STORAGE_DIRECTORY") echo "$HOME/recraft-images" ;;
+    "RECRAFT_REMOTE_RESULTS_STORAGE") echo "0" ;;
     *)
       # Zsh-compatible lowercase conversion
       local lower_var
