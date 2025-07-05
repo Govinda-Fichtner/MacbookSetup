@@ -75,15 +75,15 @@ AfterEach 'cleanup_inspector_test_environment'
 It 'should run inspect command successfully regardless of container state'
 When run ./mcp_manager.sh inspect
 The status should be success
-The stderr should include "MCP Server Inspection"
-The stderr should include "[INFO]"
+The output should include "MCP Server Inspection"
+The output should include "[INFO]"
 End
 
 It 'should show appropriate results for the current environment'
 When run ./mcp_manager.sh inspect
 The status should be success
 # Test adapts to whether containers are running or not - focus on what we can always test
-The stderr should include "[INFO]"
+The output should include "[INFO]"
 End
 End
 
@@ -95,14 +95,14 @@ It 'should provide consistent output structure'
 When run ./mcp_manager.sh inspect
 The status should be success
 The output should include "=== MCP Server Inspection"
-The stderr should include "[INFO]"
+The output should include "[INFO]"
 End
 
 It 'should handle Docker availability gracefully'
 When run ./mcp_manager.sh inspect
 The status should be success
 # Should work whether Docker is available or not - test basic structure
-The stderr should include "MCP Server Inspection"
+The output should include "MCP Server Inspection"
 End
 End
 End

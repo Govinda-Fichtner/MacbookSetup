@@ -1226,7 +1226,7 @@ wait_for_container_ready() {
 
     # Check container logs for MCP server readiness indicators using temp file
     local temp_logs
-    temp_logs=$(mktemp)
+    temp_logs=$(mktemp 2> /dev/null)
     get_container_logs_safe "$container_id" > "$temp_logs"
 
     # Look for signs that MCP server is ready (improved patterns)

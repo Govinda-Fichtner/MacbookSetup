@@ -98,6 +98,7 @@ setup_integration_test_environment() {
   source "$PWD/spec/test_helpers.sh"
   create_safe_env_file "$TEST_HOME/.env" \
     "GITHUB_PERSONAL_ACCESS_TOKEN=test_github_token_placeholder" \
+    "APPSIGNAL_API_KEY=test_appsignal_api_key_placeholder" \
     "CIRCLECI_TOKEN=test_circleci_token_placeholder" \
     "FILESYSTEM_ALLOWED_DIRS=$TEST_HOME,/tmp" \
     "HEROKU_API_KEY=test_heroku_api_key_placeholder" \
@@ -414,6 +415,14 @@ The stderr should include "VALIDATED"
 # Some servers may still have issues, so we might see errors
 End
 
+It 'can test appsignal server individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test appsignal'
+The status should be success
+The stderr should include "AppSignal MCP Server"
+The stderr should include "READY"
+The stderr should include "VALIDATED"
+End
+
 It 'can test context7 server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test context7'
 The status should be success
@@ -662,6 +671,13 @@ End
 Describe 'Setup Command Integration'
 BeforeEach 'setup_integration_test_environment'
 AfterEach 'cleanup_integration_test_environment'
+
+It 'appsignal server supports setup command for building'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup appsignal'
+The status should be success
+The stderr should include "AppSignal MCP Server"
+The stderr should include "[SUCCESS]"
+End
 
 It 'context7 server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup context7'

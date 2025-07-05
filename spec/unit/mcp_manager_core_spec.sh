@@ -50,6 +50,7 @@ OBSIDIAN_VERIFY_SSL=false
 OBSIDIAN_ENABLE_CACHE=true
 MCP_TRANSPORT_TYPE=stdio
 MCP_LOG_LEVEL=debug
+APPSIGNAL_API_KEY=test_appsignal_api_key_placeholder
 EOF
 }
 
@@ -244,6 +245,24 @@ It 'parses linear source type correctly'
 When run zsh "$PWD/mcp_manager.sh" parse linear source.type
 The status should be success
 The output should equal "remote"
+End
+
+It 'recognizes appsignal as api_based server type'
+When run zsh "$PWD/mcp_manager.sh" parse appsignal server_type
+The status should be success
+The output should equal "api_based"
+End
+
+It 'parses appsignal source image correctly'
+When run zsh "$PWD/mcp_manager.sh" parse appsignal source.image
+The status should be success
+The output should equal "local/appsignal-mcp-server:latest"
+End
+
+It 'parses appsignal source type correctly'
+When run zsh "$PWD/mcp_manager.sh" parse appsignal source.type
+The status should be success
+The output should equal "build"
 End
 End
 
