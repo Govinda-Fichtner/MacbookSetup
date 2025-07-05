@@ -21,10 +21,18 @@ FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
-COPY --from=uv --chown=app:app /app/.venv /app/.venv
+# Create non-root user for security
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd --system --uid 1001 --gid 1001 --no-create-home --home-dir /app appuser && \
+    chown -R appuser:appgroup /app
+
+COPY --from=uv --chown=appuser:appgroup /app/.venv /app/.venv
 
 # Ensure executables in the venv take precedence over system executables
 ENV PATH="/app/.venv/bin:$PATH"
+
+# Switch to non-root user
+USER appuser
 
 # when running the container, add --db-path and a bind mount to the host's db file
 ENTRYPOINT ["mcp-server-docker"]
