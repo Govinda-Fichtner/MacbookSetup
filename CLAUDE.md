@@ -362,6 +362,21 @@ rm -f "$temp_file"
 
 # ✅ ALTERNATIVE: Explicit Redirection
 result=$(complex_command_with_debug_output 2>/dev/null)
+
+# ⚠️ CRITICAL mktemp-Specific Issue (June 2025 Discovery)
+# Even with 2>/dev/null redirection, mktemp can leak variable assignments in loops
+# ❌ DEADLY PATTERN - Variable assignment leakage in polling loops
+while ((check_count < max_checks)); do
+  local temp_logs
+  temp_logs=$(mktemp 2>/dev/null)  # Still outputs "temp_logs=/tmp/..." to stdout in zsh
+  # Process continues...
+done
+
+# ✅ SOLUTION: Direct Path Assignment (Eliminates Command Substitution)
+while ((check_count < max_checks)); do
+  local temp_logs="/tmp/mcp_logs_$$_$RANDOM"  # No command substitution = no leakage
+  # Process continues...
+done
 ```
 
 #### **🔥 Function Return Value Contamination**

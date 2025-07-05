@@ -188,53 +188,6 @@ parse_server_config() {
 
 # --- Test and Setup functions ---
 
-# Test MCP server health
-# shellcheck disable=SC2317  # Functions called indirectly via case statements
-test_mcp_server_health() {
-  local server_id="$1"
-  local server_name
-  local image
-  local parse_mode
-
-  # Clean environment variable gathering without debug output
-  local server_name_temp image_temp parse_mode_temp
-  server_name_temp=$(parse_server_config "$server_id" "name" 2> /dev/null)
-  image_temp=$(parse_server_config "$server_id" "source.image" 2> /dev/null)
-  parse_mode_temp=$(parse_server_config "$server_id" "health_test.parse_mode" 2> /dev/null)
-
-  server_name="$server_name_temp"
-  image="$image_temp"
-  parse_mode="$parse_mode_temp"
-
-  # Validate that server exists
-  if [[ "$server_name" == "null" || -z "$server_name" ]]; then
-    printf "├── %b[ERROR]%b Unknown server: %s\\n" "$RED" "$NC" "$server_id" >&2
-    return 1
-  fi
-
-  printf "├── %b[SERVER]%b %s\\n" "$BLUE" "$NC" "$server_name" >&2
-
-  # Basic protocol testing (CI + local)
-  if ! test_mcp_basic_protocol "$server_id" "$server_name" "$image" "$parse_mode"; then
-    printf "│   └── %b[ERROR]%b Basic protocol test failed\\n" "$RED" "$NC" >&2
-    return 1
-  fi
-
-  # Advanced functionality testing (local only, with real tokens)
-  if [[ "${CI:-false}" == "true" ]]; then
-    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (CI environment)\\n" "$YELLOW" "$NC" >&2
-    return 0
-  fi
-
-  if server_has_real_tokens "$server_id" || [[ "$(get_server_type "$server_id")" == "standalone" ]]; then
-    test_server_advanced_functionality "$server_id" "$server_name" "$image"
-    return $?
-  else
-    printf "│   └── %b[SKIPPED]%b Advanced functionality tests (no real tokens)\\n" "$YELLOW" "$NC" >&2
-    return 0
-  fi
-}
-
 # Basic MCP protocol test (no authentication required - CI pipeline compatible)
 test_mcp_basic_protocol() {
   local server_id="$1"
@@ -266,7 +219,9 @@ test_mcp_basic_protocol() {
 
   # Create a temporary file for the request
   local temp_request_file
-  temp_request_file=$(mktemp)
+  {
+    temp_request_file=$(mktemp)
+  } 2> /dev/null
   echo "$test_request" > "$temp_request_file"
 
   # Build Docker command based on server type and configuration
@@ -752,7 +707,7 @@ generate_mcp_config_json() {
     [[ -n "$line" ]] && server_ids+=("$line")
   done < <(get_configured_servers)
   local context_file template_file
-  context_file=$(mktemp).json
+  context_file=$(mktemp 2> /dev/null).json
   template_file="$TEMPLATE_DIR/mcp_config.tpl"
 
   # Build context for Jinja2 template
@@ -777,7 +732,7 @@ generate_mcp_config_json() {
 
     # Parse cmd_args as JSON to handle arrays properly - use temp file to avoid command substitution
     local cmd_temp_file
-    cmd_temp_file=$(mktemp)
+    cmd_temp_file=$(mktemp 2> /dev/null)
     yq -o json ".servers.$server_id.source.cmd // null" "$MCP_REGISTRY_FILE" 2> /dev/null > "$cmd_temp_file"
     cmd_args=$(cat "$cmd_temp_file")
     rm -f "$cmd_temp_file"
@@ -1186,11 +1141,18 @@ get_env_placeholder() {
 # Get container logs safely without variable assignment pollution
 get_container_logs_safe() {
   local container_id="$1"
+
+  # Isolate stdout from stderr during function execution
+  exec 3>&1 1>&2
+
   local temp_file
   temp_file=$(mktemp)
 
   # Get logs safely without variable assignment leakage
   docker logs "$container_id" 2>&1 | tail -5 2> /dev/null > "$temp_file"
+
+  # Restore stdout and return clean result
+  exec 1>&3 3>&-
   cat "$temp_file"
   rm -f "$temp_file"
 }
@@ -1224,8 +1186,7 @@ wait_for_container_ready() {
     fi
 
     # Check container logs for MCP server readiness indicators using temp file
-    local temp_logs
-    temp_logs=$(mktemp)
+    local temp_logs="/tmp/mcp_logs_$$_$RANDOM"
     get_container_logs_safe "$container_id" > "$temp_logs"
 
     # Look for signs that MCP server is ready (improved patterns)
@@ -1704,7 +1665,13 @@ generate_env_file() {
 
 # Test all MCP servers
 test_all_mcp_servers() {
+  # Isolate stdout from stderr during function execution to prevent pollution
+  exec 3>&1 1>&2
+
+  # Restore stdout for this specific output
+  exec 1>&3
   echo "=== MCP Server Health Testing (Generalized stdio/JSON-RPC) ==="
+  exec 1>&2
 
   # CI environment: list servers but skip Docker-based testing
   if [[ "${CI:-false}" == "true" ]]; then
@@ -1739,9 +1706,11 @@ test_all_mcp_servers() {
 
   if [[ $failed -gt 0 ]]; then
     printf "\\n%b[SUMMARY]%b %d server(s) failed health checks\\n" "$RED" "$NC" "$failed" >&2
+    exec 1>&3 3>&-
     return 1
   else
     printf "\\n%b[SUCCESS]%b All servers passed health checks\\n" "$GREEN" "$NC" >&2
+    exec 1>&3 3>&-
     return 0
   fi
 }

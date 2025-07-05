@@ -26,6 +26,26 @@ servers:
       - "pull_requests"
       - "code_search"
 
+  appsignal:
+    name: "AppSignal MCP Server"
+    server_type: "api_based"  # Uses environment variables for API authentication
+    description: "AppSignal application performance monitoring and error tracking"
+    category: "monitoring"
+    source:
+      type: build
+      image: "local/appsignal-mcp-server:latest"
+      dockerfile: "support/docker/appsignal/Dockerfile"
+      repository: "https://github.com/appsignal/appsignal-mcp"
+    environment_variables:
+      - "APPSIGNAL_API_KEY"
+    placeholders:
+      APPSIGNAL_API_KEY: "your_appsignal_api_key_here"
+    features:
+      - "exception_tracking"
+      - "incident_management"
+      - "namespace_filtering"
+      - "performance_monitoring"
+
   circleci:
     name: CircleCI MCP Server
     server_type: "api_based"  # Uses environment variables for API authentication

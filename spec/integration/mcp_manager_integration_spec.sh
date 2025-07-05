@@ -98,6 +98,7 @@ setup_integration_test_environment() {
   source "$PWD/spec/test_helpers.sh"
   create_safe_env_file "$TEST_HOME/.env" \
     "GITHUB_PERSONAL_ACCESS_TOKEN=test_github_token_placeholder" \
+    "APPSIGNAL_API_KEY=test_appsignal_api_key_placeholder" \
     "CIRCLECI_TOKEN=test_circleci_token_placeholder" \
     "FILESYSTEM_ALLOWED_DIRS=$TEST_HOME,/tmp" \
     "HEROKU_API_KEY=test_heroku_api_key_placeholder" \
@@ -407,8 +408,6 @@ It 'can test all servers efficiently in one batch'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test'
 # Status may fail if some containers can't start, but most should work
 The status should be failure
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The output should include "=== MCP Server Health Testing"
 The stderr should include "GitHub MCP Server"
 The stderr should include "Figma Context MCP Server"
@@ -422,6 +421,14 @@ The stderr should include "VALIDATED"
 # Some servers may still have issues, so we might see errors
 End
 
+It 'can test appsignal server individually'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test appsignal'
+The status should be success
+The stderr should include "AppSignal MCP Server"
+The stderr should include "READY"
+The stderr should include "VALIDATED"
+End
+
 It 'can test context7 server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test context7'
 The status should be success
@@ -433,8 +440,6 @@ End
 It 'can test heroku server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test heroku'
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "Heroku Platform MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -452,8 +457,6 @@ End
 It 'can test playwright server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test playwright'
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "Playwright MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "SUCCESS"
@@ -464,8 +467,6 @@ End
 It 'can test obsidian server individually'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test obsidian'
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "Obsidian MCP Server"
 # Obsidian should work with improved silent server detection
 The stderr should include "SUCCESS"
@@ -509,8 +510,6 @@ if ! command -v docker > /dev/null 2>&1; then
 fi
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" test docker'
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "Docker MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -595,8 +594,6 @@ End
 It 'can test memory-service server individually'
 When run zsh mcp_manager.sh test memory-service
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "Memory Service MCP Server"
 The stderr should include "Basic protocol validation passed"
 The stderr should include "READY"
@@ -681,6 +678,13 @@ Describe 'Setup Command Integration'
 BeforeEach 'setup_integration_test_environment'
 AfterEach 'cleanup_integration_test_environment'
 
+It 'appsignal server supports setup command for building'
+When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup appsignal'
+The status should be success
+The stderr should include "AppSignal MCP Server"
+The stderr should include "[SUCCESS]"
+End
+
 It 'context7 server supports setup command for building'
 When run sh -c 'cd "$PWD/tmp/test_home" && export HOME="$PWD" && zsh "$OLDPWD/mcp_manager.sh" setup context7'
 The status should be success
@@ -735,8 +739,6 @@ It 'can test CircleCI server with real token'
 Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test circleci
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "CircleCI MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -747,8 +749,6 @@ It 'can test Heroku server with real token'
 Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test heroku
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "Heroku Platform MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"
@@ -759,8 +759,6 @@ It 'can test SonarQube server with real token'
 Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test sonarqube
 The status should be success
-# Expect temp_logs variable assignments in stdout (zsh behavior)
-The output should include "temp_logs="
 The stderr should include "SonarQube MCP Server"
 # Improved readiness detection should show READY instead of TIMEOUT
 The stderr should include "READY"

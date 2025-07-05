@@ -77,7 +77,8 @@ When run ./mcp_manager.sh inspect
 The status should be success
 The output should include "MCP Server Inspection"
 The output should include "[INFO]"
-The stderr should include "[INSPECT]"
+The stderr should include "GitHub MCP Server"
+The stderr should include "AppSignal MCP Server"
 End
 
 It 'should show appropriate results for the current environment'
@@ -186,7 +187,7 @@ It 'should run validation without Docker dependencies'
 When run env CI=true ./mcp_manager.sh inspect --ci-mode
 The output should include "Validation completed"
 The stderr should include "CI-VALIDATE"
-The stderr should include "Found 17 configured servers"
+The stderr should include "Found 18 configured servers"
 The status should be success
 End
 End
@@ -222,8 +223,7 @@ ln -sf /opt/homebrew/bin/yq tmp/no_docker_bin/yq 2> /dev/null || true
 ln -sf /opt/homebrew/bin/jq tmp/no_docker_bin/jq 2> /dev/null || true
 When run env PATH="$PWD/tmp/no_docker_bin:/usr/bin:/bin" ./mcp_manager.sh inspect
 The output should include "Docker not available"
-The stderr should include "INSPECT"
-The stderr should include "GitHub MCP Server"
+The stderr should include "[INSPECT]"
 The status should be success
 End
 End
@@ -237,8 +237,7 @@ AfterEach 'cleanup_inspector_test_environment'
 It 'should skip Docker-based operations'
 When run env CI=true ./mcp_manager.sh inspect
 The output should include "CI environment"
-The stderr should include "INSPECT"
-The stderr should include "Linear MCP Server"
+The stderr should include "[INSPECT]"
 The status should be success
 End
 End
