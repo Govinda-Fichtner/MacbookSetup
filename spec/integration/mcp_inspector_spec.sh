@@ -77,6 +77,8 @@ When run ./mcp_manager.sh inspect
 The status should be success
 The output should include "MCP Server Inspection"
 The output should include "[INFO]"
+The stderr should include "GitHub MCP Server"
+The stderr should include "AppSignal MCP Server"
 End
 
 It 'should show appropriate results for the current environment'
@@ -84,6 +86,7 @@ When run ./mcp_manager.sh inspect
 The status should be success
 # Test adapts to whether containers are running or not - focus on what we can always test
 The output should include "[INFO]"
+The stderr should include "[INSPECT]"
 End
 End
 
@@ -96,6 +99,7 @@ When run ./mcp_manager.sh inspect
 The status should be success
 The output should include "=== MCP Server Inspection"
 The output should include "[INFO]"
+The stderr should include "[INSPECT]"
 End
 
 It 'should handle Docker availability gracefully'
@@ -103,6 +107,7 @@ When run ./mcp_manager.sh inspect
 The status should be success
 # Should work whether Docker is available or not - test basic structure
 The output should include "MCP Server Inspection"
+The stderr should include "[INSPECT]"
 End
 End
 End
@@ -134,7 +139,7 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should show error for unknown server'
 When run ./mcp_manager.sh inspect nonexistent
-The stderr should include "not found in registry"
+The output should include "not found in registry"
 The status should be failure
 End
 End
@@ -165,9 +170,9 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should validate Cursor and Claude configurations'
 When run ./mcp_manager.sh inspect --validate-config
-The stderr should include "Configuration Validation"
-The output should include "CURSOR"
-The output should include "CLAUDE"
+The output should include "Configuration Validation"
+The stderr should include "CURSOR"
+The stderr should include "CLAUDE"
 The status should be success
 End
 End
@@ -180,7 +185,9 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should run validation without Docker dependencies'
 When run env CI=true ./mcp_manager.sh inspect --ci-mode
-The stderr should include "Validation completed"
+The output should include "Validation completed"
+The stderr should include "CI-VALIDATE"
+The stderr should include "Found 18 configured servers"
 The status should be success
 End
 End
@@ -215,7 +222,8 @@ mkdir -p tmp/no_docker_bin
 ln -sf /opt/homebrew/bin/yq tmp/no_docker_bin/yq 2> /dev/null || true
 ln -sf /opt/homebrew/bin/jq tmp/no_docker_bin/jq 2> /dev/null || true
 When run env PATH="$PWD/tmp/no_docker_bin:/usr/bin:/bin" ./mcp_manager.sh inspect
-The stderr should include "Docker not available"
+The output should include "Docker not available"
+The stderr should include "[INSPECT]"
 The status should be success
 End
 End
@@ -228,7 +236,8 @@ AfterEach 'cleanup_inspector_test_environment'
 
 It 'should skip Docker-based operations'
 When run env CI=true ./mcp_manager.sh inspect
-The stderr should include "CI environment"
+The output should include "CI environment"
+The stderr should include "[INSPECT]"
 The status should be success
 End
 End
