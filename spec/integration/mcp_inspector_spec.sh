@@ -187,7 +187,7 @@ It 'should run validation without Docker dependencies'
 When run env CI=true ./mcp_manager.sh inspect --ci-mode
 The output should include "Validation completed"
 The stderr should include "CI-VALIDATE"
-The stderr should include "Found 18 configured servers"
+The stderr should include "Found 19 configured servers"
 The status should be success
 End
 End
