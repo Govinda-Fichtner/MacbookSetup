@@ -139,6 +139,11 @@ has_real_tokens() {
   test -f "$PWD/.env" && test "$(grep -v "placeholder" "$PWD/.env" | grep -c "=")" -gt 0
 }
 
+# Helper function for Skip if - returns true when real tokens are NOT available
+no_real_tokens() {
+  ! has_real_tokens
+}
+
 Describe 'MCP Manager Integration Tests'
 
 Describe 'Configuration File Generation (Integration)'
@@ -722,7 +727,7 @@ End
 
 Describe 'Real Token Integration Tests'
 It 'can test GitHub server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test github
 The status should be success
 The stderr should include "GitHub MCP Server"
@@ -731,7 +736,7 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test CircleCI server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test circleci
 The status should be success
 The stderr should include "CircleCI MCP Server"
@@ -741,7 +746,7 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test Heroku server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test heroku
 The status should be success
 The stderr should include "Heroku Platform MCP Server"
@@ -751,7 +756,7 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test SonarQube server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test sonarqube
 The status should be success
 The stderr should include "SonarQube MCP Server"
@@ -761,7 +766,7 @@ The stderr should include "VALIDATED"
 End
 
 It 'can test Mailgun server with real token'
-if ! has_real_tokens; then skip "No real .env present"; fi
+Skip if "no real tokens" no_real_tokens
 When run zsh "$PWD/mcp_manager.sh" test mailgun
 The status should be success
 The stderr should include "Mailgun MCP Server"

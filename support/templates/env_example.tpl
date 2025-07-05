@@ -1,5 +1,4 @@
 # MCP Server Environment Variables
-# Generated: {{ timestamp }}
 {% for server in servers %}
 {% if server.env_vars or server.mount_env_var %}
 
